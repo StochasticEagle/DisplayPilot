@@ -33,6 +33,10 @@ dotnet publish src/DisplayPilot.App/DisplayPilot.App.csproj `
 
 Copy the entire publish directory to the test system and run `DisplayPilot.exe`.
 
+Alternatively, open the latest successful **Build** workflow run on GitHub and
+download the `DisplayPilot-win-x64` artifact. Extract the entire archive before
+running `DisplayPilot.exe`; the executable still depends on the files beside it.
+
 ## What to record
 
 Select **Copy diagnostic report** after the scan. For every active path, verify:
