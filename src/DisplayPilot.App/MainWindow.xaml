@@ -76,7 +76,7 @@
                             <StackPanel Spacing="6">
                                 <TextBlock
                                     Style="{StaticResource SubtitleTextBlockStyle}"
-                                    Text="{x:Bind FriendlyName, Mode=OneWay}" />
+                                    Text="{x:Bind FriendlyName, Mode=OneTime}" />
                                 <Grid ColumnSpacing="12">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="Auto" />
@@ -88,7 +88,7 @@
                                     <TextBlock
                                         Grid.Column="1"
                                         FontFamily="Consolas"
-                                        Text="{x:Bind GdiDeviceName, Mode=OneWay}" />
+                                        Text="{x:Bind GdiDeviceName, Mode=OneTime}" />
                                 </Grid>
                                 <TextBlock
                                     FontWeight="SemiBold"
@@ -99,15 +99,15 @@
                                     BorderThickness="0"
                                     FontFamily="Consolas"
                                     IsReadOnly="True"
-                                    Text="{x:Bind DevicePath, Mode=OneWay}"
+                                    Text="{x:Bind DevicePath, Mode=OneTime}"
                                     TextWrapping="Wrap" />
                                 <TextBlock
                                     Margin="0,6,0,0"
                                     FontWeight="SemiBold"
-                                    Text="{x:Bind DdcStatus, Mode=OneWay}" />
+                                    Text="{x:Bind DdcStatus, Mode=OneTime}" />
                                 <TextBlock
                                     Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                    Text="{x:Bind DdcDetails, Mode=OneWay}"
+                                    Text="{x:Bind DdcDetails, Mode=OneTime}"
                                     TextWrapping="Wrap" />
                             </StackPanel>
                         </Border>

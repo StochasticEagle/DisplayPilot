@@ -15,7 +15,7 @@ namespace DisplayPilot.App;
 public sealed partial class MainWindow : Window
 {
     private readonly IMonitorDiscoveryService _monitorDiscovery = new DisplayConfigMonitorDiscovery();
-    private readonly IDdcBrightnessProbeService _ddcProbeService = new DdcBrightnessProbeService();
+    private readonly DdcBrightnessProbeService _ddcProbeService = new();
     private IReadOnlyList<MonitorDisplayInfo> _activeMonitors = [];
     private bool _initialScanStarted;
     private string _diagnosticReport = string.Empty;
