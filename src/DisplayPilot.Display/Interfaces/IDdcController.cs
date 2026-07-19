@@ -3,6 +3,7 @@
 // See the LICENSE file in the project root for more information.
 
 using DisplayPilot.Display.Models;
+using Monitor = DisplayPilot.Display.Models.Monitor;
 
 namespace DisplayPilot.Display.Interfaces;
 
