@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>DisplayPilot.Windows</RootNamespace>
+    <AssemblyName>DisplayPilot.Windows</AssemblyName>
+    <Description>Windows theme, registry, and session integration for DisplayPilot.</Description>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\DisplayPilot.Core\DisplayPilot.Core.csproj" />
+  </ItemGroup>
+</Project>

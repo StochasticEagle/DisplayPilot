@@ -3,9 +3,11 @@
     <Project Path="src/DisplayPilot.App/DisplayPilot.App.csproj" />
     <Project Path="src/DisplayPilot.Core/DisplayPilot.Core.csproj" />
     <Project Path="src/DisplayPilot.Display/DisplayPilot.Display.csproj" />
+    <Project Path="src/DisplayPilot.Windows/DisplayPilot.Windows.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/DisplayPilot.Core.Tests/DisplayPilot.Core.Tests.csproj" />
     <Project Path="tests/DisplayPilot.Display.Tests/DisplayPilot.Display.Tests.csproj" />
+    <Project Path="tests/DisplayPilot.Windows.Tests/DisplayPilot.Windows.Tests.csproj" />
   </Folder>
 </Solution>

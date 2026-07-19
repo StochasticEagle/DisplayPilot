@@ -4,11 +4,14 @@
 using System.ComponentModel;
 using System.Globalization;
 using System.Runtime.InteropServices;
+using System.Security;
 using System.Text;
+using DisplayPilot.Core.Theme;
 using DisplayPilot.Display.Brightness;
 using DisplayPilot.Display.Ddc;
 using DisplayPilot.Display.Discovery;
 using DisplayPilot.Display.Wmi;
+using DisplayPilot.Windows.Theme;
 using Microsoft.UI.Xaml;
 using Windows.ApplicationModel.DataTransfer;
 
@@ -20,9 +23,13 @@ public sealed partial class MainWindow : Window
     private readonly DdcBrightnessProbeService _ddcProbeService = new();
     private readonly WmiBrightnessProbeService _wmiProbeService = new();
     private readonly BrightnessControlService _brightnessControlService = new();
+    private readonly WindowsThemeService _themeService = new();
     private IReadOnlyList<MonitorDisplayInfo> _activeMonitors = [];
     private IReadOnlyList<MonitorDdcProbeInfo> _lastDdcProbes = [];
     private IReadOnlyList<WmiBrightnessProbeResult> _lastWmiProbes = [];
+    private ThemeState? _themeState;
+    private ThemeApplyResult? _lastThemeResult;
+    private BrightnessWriteResult? _lastBrightnessWriteResult;
     private bool _initialScanStarted;
     private string _diagnosticReport = string.Empty;
 
@@ -40,7 +47,23 @@ public sealed partial class MainWindow : Window
         }
 
         _initialScanStarted = true;
+        RefreshThemeStatus();
         await RefreshDisplaysAsync();
+    }
+
+    private void RefreshThemeButton_Click(object sender, RoutedEventArgs e)
+    {
+        RefreshThemeStatus();
+    }
+
+    private async void ApplyLightThemeButton_Click(object sender, RoutedEventArgs e)
+    {
+        await ApplyThemeAsync(ThemeMode.Light);
+    }
+
+    private async void ApplyDarkThemeButton_Click(object sender, RoutedEventArgs e)
+    {
+        await ApplyThemeAsync(ThemeMode.Dark);
     }
 
     private async void RescanButton_Click(object sender, RoutedEventArgs e)
@@ -238,6 +261,7 @@ public sealed partial class MainWindow : Window
                 ddcProbe,
                 wmiProbe,
                 requestedPercent));
+            _lastBrightnessWriteResult = writeResult;
             var refreshed = await Task.Run(() => (
                 Ddc: _ddcProbeService.ProbeBrightness(_activeMonitors),
                 Wmi: _wmiProbeService.ProbeBrightness(_activeMonitors)));
@@ -283,6 +307,96 @@ public sealed partial class MainWindow : Window
             SetBrightnessButton.IsEnabled = CanSetSelectedDisplay();
             CopyReportButton.IsEnabled = true;
         }
+    }
+
+    private async Task ApplyThemeAsync(ThemeMode mode)
+    {
+        SetThemeButtonsEnabled(false);
+        ThemeStatusText.Text = $"Applying {mode.ToString().ToLowerInvariant()} theme to apps and Windows...";
+
+        try
+        {
+            _lastThemeResult = await Task.Run(() => _themeService.Apply(mode));
+            _themeState = _lastThemeResult.After;
+            UpdateThemeStatus(_lastThemeResult.Succeeded
+                ? $"Applied and verified {mode.ToString().ToLowerInvariant()} theme."
+                : $"Windows did not verify the requested {mode.ToString().ToLowerInvariant()} theme.");
+            _diagnosticReport = BuildDiagnosticReport(
+                _activeMonitors,
+                _lastDdcProbes.Count == 0 ? null : _lastDdcProbes,
+                _lastWmiProbes.Count == 0 ? null : _lastWmiProbes,
+                _lastBrightnessWriteResult,
+                error: null);
+        }
+        catch (UnauthorizedAccessException exception)
+        {
+            ReportThemeFailure(exception);
+        }
+        catch (SecurityException exception)
+        {
+            ReportThemeFailure(exception);
+        }
+        catch (IOException exception)
+        {
+            ReportThemeFailure(exception);
+        }
+        finally
+        {
+            SetThemeButtonsEnabled(true);
+        }
+    }
+
+    private void RefreshThemeStatus()
+    {
+        try
+        {
+            _themeState = _themeService.ReadState();
+            UpdateThemeStatus(prefix: null);
+        }
+        catch (UnauthorizedAccessException exception)
+        {
+            ReportThemeFailure(exception);
+        }
+        catch (SecurityException exception)
+        {
+            ReportThemeFailure(exception);
+        }
+        catch (IOException exception)
+        {
+            ReportThemeFailure(exception);
+        }
+    }
+
+    private void UpdateThemeStatus(string? prefix)
+    {
+        if (_themeState is null)
+        {
+            ThemeStatusText.Text = prefix ?? "Theme state unavailable.";
+            return;
+        }
+
+        var state = string.Format(
+            CultureInfo.CurrentCulture,
+            "Apps: {0} · Windows: {1}",
+            _themeState.AppsUseLightTheme ? "Light" : "Dark",
+            _themeState.SystemUsesLightTheme ? "Light" : "Dark");
+        ThemeStatusText.Text = string.IsNullOrWhiteSpace(prefix) ? state : $"{prefix} {state}";
+    }
+
+    private void ReportThemeFailure(Exception exception)
+    {
+        ThemeStatusText.Text = string.Format(
+            CultureInfo.CurrentCulture,
+            "Theme operation failed (0x{0:X8}): {1}",
+            exception.HResult,
+            exception.Message);
+    }
+
+    private void SetThemeButtonsEnabled(bool enabled)
+    {
+        RefreshThemeButton.IsEnabled = enabled;
+        ApplyLightThemeButton.IsEnabled = enabled;
+        ApplyDarkThemeButton.IsEnabled = enabled;
     }
 
     private void UpdateMonitorCards(string? selectedDevicePath)
@@ -332,7 +446,7 @@ public sealed partial class MainWindow : Window
                     result.Status == DdcBrightnessProbeStatus.ReadSucceeded));
     }
 
-    private static string BuildDiagnosticReport(
+    private string BuildDiagnosticReport(
         IReadOnlyList<MonitorDisplayInfo> monitors,
         IReadOnlyList<MonitorDdcProbeInfo>? ddcProbes,
         IReadOnlyList<WmiBrightnessProbeResult>? wmiProbes,
@@ -345,6 +459,10 @@ public sealed partial class MainWindow : Window
         report.Append("OS: ").AppendLine(RuntimeInformation.OSDescription);
         report.Append("Process architecture: ").AppendLine(RuntimeInformation.ProcessArchitecture.ToString());
         report.Append("Display paths: ").AppendLine(monitors.Count.ToString(CultureInfo.InvariantCulture));
+        report.Append("Theme apps: ").AppendLine(_themeState is null ? "Unknown" : _themeState.AppsUseLightTheme ? "Light" : "Dark");
+        report.Append("Theme Windows: ").AppendLine(_themeState is null ? "Unknown" : _themeState.SystemUsesLightTheme ? "Light" : "Dark");
+        report.Append("Last theme request: ").AppendLine(_lastThemeResult?.RequestedMode.ToString() ?? "None");
+        report.Append("Last theme request verified: ").AppendLine(_lastThemeResult?.Succeeded.ToString() ?? "Not applicable");
         report.AppendLine("Privacy: device paths and WMI instance names can identify a local display instance; review before sharing");
         report.AppendLine(ddcProbes is null
             ? "DDC/CI commands issued: no"
