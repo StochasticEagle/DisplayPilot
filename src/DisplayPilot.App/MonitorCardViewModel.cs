@@ -49,16 +49,14 @@ public sealed record MonitorCardViewModel(
     private static string FormatSuccessfulRead(DdcBrightnessProbeResult result)
     {
         var description = DescriptionOrDefault(result);
-        var retryText = result.AttemptCount > 1
-            ? string.Format(CultureInfo.CurrentCulture, " after {0} attempts", result.AttemptCount)
-            : string.Empty;
         return string.Format(
             CultureInfo.CurrentCulture,
-            "{0}: raw {1} of {2} (VCP 0x10{3})",
+            "{0}: raw {1} of {2} (VCP 0x10; handle attempt {3}, read attempt {4})",
             description,
             result.CurrentValue,
             result.MaximumValue,
-            retryText);
+            result.HandleAcquisitionAttempts,
+            result.AttemptCount);
     }
 
     private static string FormatFailure(DdcBrightnessProbeResult result)
@@ -67,16 +65,29 @@ public sealed record MonitorCardViewModel(
         return result.Status switch
         {
             DdcBrightnessProbeStatus.NoPhysicalMonitor =>
-                "Windows exposed no physical monitor handle. This is expected for most VMs.",
+                string.Format(
+                    CultureInfo.CurrentCulture,
+                    "Windows exposed no physical monitor after {0} handle-acquisition attempts. This is expected for most VMs.",
+                    result.HandleAcquisitionAttempts),
             DdcBrightnessProbeStatus.PhysicalMonitorEnumerationFailed =>
-                $"Physical monitor enumeration failed (Win32 error {result.Win32Error}).",
+                string.Format(
+                    CultureInfo.CurrentCulture,
+                    "Physical monitor enumeration failed after {0} attempts (Win32 error {1}).",
+                    result.HandleAcquisitionAttempts,
+                    FormatWin32Error(result.Win32Error)),
+            DdcBrightnessProbeStatus.PhysicalMonitorHandleUnavailable =>
+                string.Format(
+                    CultureInfo.CurrentCulture,
+                    "Windows returned a null physical-monitor handle after {0} attempts (Win32 error {1}).",
+                    result.HandleAcquisitionAttempts,
+                    FormatWin32Error(result.Win32Error)),
             DdcBrightnessProbeStatus.ReadFailed =>
                 string.Format(
                     CultureInfo.CurrentCulture,
                     "{0}: VCP 0x10 read failed after {1} attempts (Win32 error {2}).",
                     description,
                     result.AttemptCount,
-                    result.Win32Error),
+                    FormatWin32Error(result.Win32Error)),
             _ => "Brightness probe returned an unknown result.",
         };
     }
@@ -86,5 +97,12 @@ public sealed record MonitorCardViewModel(
         return string.IsNullOrWhiteSpace(result.PhysicalMonitorDescription)
             ? "Physical monitor"
             : result.PhysicalMonitorDescription;
+    }
+
+    private static string FormatWin32Error(int error)
+    {
+        return error == 0
+            ? "0"
+            : string.Format(CultureInfo.InvariantCulture, "{0} / 0x{1:X8}", error, unchecked((uint)error));
     }
 }

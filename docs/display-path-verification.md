@@ -58,6 +58,8 @@ results are:
   raw current and maximum brightness values.
 - A single button click makes at most three read attempts, separated by a short
   delay, because some otherwise-compatible monitors reject the first VCP request.
+- Physical-monitor handle acquisition also retries up to three times at 200 ms
+  intervals because Windows can transiently return a null handle for a valid monitor.
 - Internal laptop panels may report no readable DDC brightness; their eventual
   brightness path uses WMI rather than DDC/CI.
 - The app must continue to report that no writes were issued.

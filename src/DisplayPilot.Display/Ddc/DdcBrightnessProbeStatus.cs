@@ -7,6 +7,7 @@ public enum DdcBrightnessProbeStatus
 {
     NoPhysicalMonitor,
     PhysicalMonitorEnumerationFailed,
+    PhysicalMonitorHandleUnavailable,
     ReadSucceeded,
     ReadFailed,
 }

@@ -190,8 +190,12 @@ public sealed partial class MainWindow : Window
                 report.Append("Physical description: ").AppendLine(physicalMonitor.PhysicalMonitorDescription);
                 report.Append("Brightness current: ").AppendLine(physicalMonitor.CurrentValue.ToString(CultureInfo.InvariantCulture));
                 report.Append("Brightness maximum: ").AppendLine(physicalMonitor.MaximumValue.ToString(CultureInfo.InvariantCulture));
-                report.Append("Read attempts: ").AppendLine(physicalMonitor.AttemptCount.ToString(CultureInfo.InvariantCulture));
-                report.Append("Win32 error: ").AppendLine(physicalMonitor.Win32Error.ToString(CultureInfo.InvariantCulture));
+                report.Append("Handle acquisition attempts: ").AppendLine(physicalMonitor.HandleAcquisitionAttempts.ToString(CultureInfo.InvariantCulture));
+                report.Append("VCP read attempts: ").AppendLine(physicalMonitor.AttemptCount.ToString(CultureInfo.InvariantCulture));
+                report.Append("Win32 error: ")
+                    .Append(physicalMonitor.Win32Error.ToString(CultureInfo.InvariantCulture))
+                    .Append(" / 0x")
+                    .AppendLine(unchecked((uint)physicalMonitor.Win32Error).ToString("X8", CultureInfo.InvariantCulture));
             }
         }
 
