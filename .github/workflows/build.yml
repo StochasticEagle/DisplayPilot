@@ -1,0 +1,36 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - master
+      - development/**
+  pull_request:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Windows x64
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore
+        run: dotnet restore DisplayPilot.slnx
+
+      - name: Build
+        run: dotnet build DisplayPilot.slnx --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test DisplayPilot.slnx --configuration Release --no-build --logger trx
