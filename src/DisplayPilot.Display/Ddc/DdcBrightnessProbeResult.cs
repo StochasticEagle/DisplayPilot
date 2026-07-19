@@ -9,4 +9,5 @@ public sealed record DdcBrightnessProbeResult(
     DdcBrightnessProbeStatus Status,
     uint CurrentValue,
     uint MaximumValue,
-    int Win32Error);
+    int Win32Error,
+    int AttemptCount = 0);

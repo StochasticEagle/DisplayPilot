@@ -15,6 +15,8 @@ public sealed class WindowsDdcProbeApi : IDdcProbeApi
 {
     private const uint MaximumPhysicalMonitorsPerDisplay = 64;
     private const int ErrorInvalidData = 13;
+    private const int MaximumVcpReadAttempts = 3;
+    private const int VcpReadRetryDelayMilliseconds = 75;
 
     public IReadOnlyList<DdcBrightnessProbeResult> ProbeBrightness()
     {
@@ -119,21 +121,43 @@ public sealed class WindowsDdcProbeApi : IDdcProbeApi
         PhysicalMonitor physicalMonitor)
     {
         var description = physicalMonitor.GetDescription();
-        if (physicalMonitor.Handle != 0
-            && DdcPInvoke.GetVCPFeatureAndVCPFeatureReply(
+        if (physicalMonitor.Handle == 0)
+        {
+            return new DdcBrightnessProbeResult(
+                gdiDeviceName,
+                description,
+                DdcBrightnessProbeStatus.ReadFailed,
+                0,
+                0,
+                ErrorInvalidData,
+                0);
+        }
+
+        var lastError = 0;
+        for (var attempt = 1; attempt <= MaximumVcpReadAttempts; attempt++)
+        {
+            if (DdcPInvoke.GetVCPFeatureAndVCPFeatureReply(
                 physicalMonitor.Handle,
                 NativeConstants.VcpCodeBrightness,
                 0,
                 out var currentValue,
                 out var maximumValue))
-        {
-            return new DdcBrightnessProbeResult(
-                gdiDeviceName,
-                description,
-                DdcBrightnessProbeStatus.ReadSucceeded,
-                currentValue,
-                maximumValue,
-                0);
+            {
+                return new DdcBrightnessProbeResult(
+                    gdiDeviceName,
+                    description,
+                    DdcBrightnessProbeStatus.ReadSucceeded,
+                    currentValue,
+                    maximumValue,
+                    0,
+                    attempt);
+            }
+
+            lastError = Marshal.GetLastPInvokeError();
+            if (attempt < MaximumVcpReadAttempts)
+            {
+                Thread.Sleep(VcpReadRetryDelayMilliseconds);
+            }
         }
 
         return new DdcBrightnessProbeResult(
@@ -142,7 +166,8 @@ public sealed class WindowsDdcProbeApi : IDdcProbeApi
             DdcBrightnessProbeStatus.ReadFailed,
             0,
             0,
-            physicalMonitor.Handle == 0 ? ErrorInvalidData : Marshal.GetLastPInvokeError());
+            lastError,
+            MaximumVcpReadAttempts);
     }
 
     private static DdcBrightnessProbeResult NoPhysicalMonitor(string gdiDeviceName)

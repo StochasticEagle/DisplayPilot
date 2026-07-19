@@ -56,9 +56,13 @@ results are:
   does not expose a DDC/CI channel.
 - A DDC/CI-capable desktop monitor should report `ReadSucceeded`, together with its
   raw current and maximum brightness values.
+- A single button click makes at most three read attempts, separated by a short
+  delay, because some otherwise-compatible monitors reject the first VCP request.
 - Internal laptop panels may report no readable DDC brightness; their eventual
   brightness path uses WMI rather than DDC/CI.
 - The app must continue to report that no writes were issued.
+- If the Windows clipboard is temporarily unavailable, copying the report must show
+  an error and allow another attempt without closing the app.
 
 The current QEMU test baseline is one `QEMU Monitor` at `\\.\DISPLAY1`, with an
 EDID identifier beginning `RHT1234`. The DDC probe should remain attached to that

@@ -55,9 +55,19 @@ public sealed partial class MainWindow : Window
         };
 
         data.SetText(_diagnosticReport);
-        Clipboard.SetContent(data);
-        Clipboard.Flush();
-        CopyReportButton.Content = "Copied";
+        try
+        {
+            Clipboard.SetContent(data);
+            CopyReportButton.Content = "Copied";
+        }
+        catch (COMException exception)
+        {
+            ReportClipboardFailure(exception);
+        }
+        catch (UnauthorizedAccessException exception)
+        {
+            ReportClipboardFailure(exception);
+        }
     }
 
     private async Task RefreshDisplaysAsync()
@@ -180,11 +190,21 @@ public sealed partial class MainWindow : Window
                 report.Append("Physical description: ").AppendLine(physicalMonitor.PhysicalMonitorDescription);
                 report.Append("Brightness current: ").AppendLine(physicalMonitor.CurrentValue.ToString(CultureInfo.InvariantCulture));
                 report.Append("Brightness maximum: ").AppendLine(physicalMonitor.MaximumValue.ToString(CultureInfo.InvariantCulture));
+                report.Append("Read attempts: ").AppendLine(physicalMonitor.AttemptCount.ToString(CultureInfo.InvariantCulture));
                 report.Append("Win32 error: ").AppendLine(physicalMonitor.Win32Error.ToString(CultureInfo.InvariantCulture));
             }
         }
 
         return report.ToString();
+    }
+
+    private void ReportClipboardFailure(Exception exception)
+    {
+        CopyReportButton.Content = "Copy failed — retry";
+        StatusText.Text = string.Format(
+            CultureInfo.CurrentCulture,
+            "Could not open the Windows clipboard (0x{0:X8}). The report remains available; retry copying.",
+            exception.HResult);
     }
 
     private static string GetSystemSummary()

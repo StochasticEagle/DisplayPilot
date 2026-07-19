@@ -49,12 +49,16 @@ public sealed record MonitorCardViewModel(
     private static string FormatSuccessfulRead(DdcBrightnessProbeResult result)
     {
         var description = DescriptionOrDefault(result);
+        var retryText = result.AttemptCount > 1
+            ? string.Format(CultureInfo.CurrentCulture, " after {0} attempts", result.AttemptCount)
+            : string.Empty;
         return string.Format(
             CultureInfo.CurrentCulture,
-            "{0}: raw {1} of {2} (VCP 0x10)",
+            "{0}: raw {1} of {2} (VCP 0x10{3})",
             description,
             result.CurrentValue,
-            result.MaximumValue);
+            result.MaximumValue,
+            retryText);
     }
 
     private static string FormatFailure(DdcBrightnessProbeResult result)
@@ -67,7 +71,12 @@ public sealed record MonitorCardViewModel(
             DdcBrightnessProbeStatus.PhysicalMonitorEnumerationFailed =>
                 $"Physical monitor enumeration failed (Win32 error {result.Win32Error}).",
             DdcBrightnessProbeStatus.ReadFailed =>
-                $"{description}: VCP 0x10 read failed (Win32 error {result.Win32Error}).",
+                string.Format(
+                    CultureInfo.CurrentCulture,
+                    "{0}: VCP 0x10 read failed after {1} attempts (Win32 error {2}).",
+                    description,
+                    result.AttemptCount,
+                    result.Win32Error),
             _ => "Brightness probe returned an unknown result.",
         };
     }
