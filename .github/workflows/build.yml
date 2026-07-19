@@ -27,10 +27,10 @@ jobs:
           dotnet-version: 10.0.x
 
       - name: Restore
-        run: dotnet restore DisplayPilot.slnx -p:Platform=x64
+        run: dotnet restore DisplayPilot.slnx
 
       - name: Build
-        run: dotnet build DisplayPilot.slnx --configuration Release --no-restore -p:Platform=x64
+        run: dotnet build DisplayPilot.slnx --configuration Release --no-restore
 
       - name: Test
-        run: dotnet test DisplayPilot.slnx --configuration Release --no-build -p:Platform=x64 --logger trx
+        run: dotnet test DisplayPilot.slnx --configuration Release --no-build --logger trx
