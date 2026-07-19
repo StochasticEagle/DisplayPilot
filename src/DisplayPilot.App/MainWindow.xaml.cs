@@ -5,6 +5,7 @@ using System.ComponentModel;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text;
+using DisplayPilot.Display.Brightness;
 using DisplayPilot.Display.Ddc;
 using DisplayPilot.Display.Discovery;
 using DisplayPilot.Display.Wmi;
@@ -18,7 +19,10 @@ public sealed partial class MainWindow : Window
     private readonly IMonitorDiscoveryService _monitorDiscovery = new DisplayConfigMonitorDiscovery();
     private readonly DdcBrightnessProbeService _ddcProbeService = new();
     private readonly WmiBrightnessProbeService _wmiProbeService = new();
+    private readonly BrightnessControlService _brightnessControlService = new();
     private IReadOnlyList<MonitorDisplayInfo> _activeMonitors = [];
+    private IReadOnlyList<MonitorDdcProbeInfo> _lastDdcProbes = [];
+    private IReadOnlyList<WmiBrightnessProbeResult> _lastWmiProbes = [];
     private bool _initialScanStarted;
     private string _diagnosticReport = string.Empty;
 
@@ -49,6 +53,18 @@ public sealed partial class MainWindow : Window
         await ProbeDdcBrightnessAsync();
     }
 
+    private async void SetBrightnessButton_Click(object sender, RoutedEventArgs e)
+    {
+        await SetSelectedBrightnessAsync();
+    }
+
+    private void MonitorList_SelectionChanged(
+        object sender,
+        Microsoft.UI.Xaml.Controls.SelectionChangedEventArgs e)
+    {
+        SetBrightnessButton.IsEnabled = CanSetSelectedDisplay();
+    }
+
     private void CopyReportButton_Click(object sender, RoutedEventArgs e)
     {
         var data = new DataPackage
@@ -76,6 +92,7 @@ public sealed partial class MainWindow : Window
     {
         RescanButton.IsEnabled = false;
         ProbeDdcButton.IsEnabled = false;
+        SetBrightnessButton.IsEnabled = false;
         CopyReportButton.IsEnabled = false;
         CopyReportButton.Content = "Copy diagnostic report";
         StatusText.Text = "Scanning active Windows display paths...";
@@ -86,6 +103,8 @@ public sealed partial class MainWindow : Window
             var monitors = await Task.Run(_monitorDiscovery.DiscoverActiveMonitors);
 
             _activeMonitors = monitors;
+            _lastDdcProbes = [];
+            _lastWmiProbes = [];
             MonitorList.ItemsSource = monitors.Select(MonitorCardViewModel.NotProbed).ToArray();
             EmptyState.Visibility = monitors.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
             StatusText.Text = string.Format(
@@ -98,18 +117,22 @@ public sealed partial class MainWindow : Window
                 monitors,
                 ddcProbes: null,
                 wmiProbes: null,
+                writeResult: null,
                 error: null);
         }
         catch (Win32Exception exception)
         {
             MonitorList.ItemsSource = null;
             _activeMonitors = [];
+            _lastDdcProbes = [];
+            _lastWmiProbes = [];
             EmptyState.Visibility = Visibility.Visible;
             StatusText.Text = $"Display discovery failed: {exception.Message}";
             _diagnosticReport = BuildDiagnosticReport(
                 [],
                 ddcProbes: null,
                 wmiProbes: null,
+                writeResult: null,
                 error: exception);
         }
         finally
@@ -124,6 +147,7 @@ public sealed partial class MainWindow : Window
     {
         RescanButton.IsEnabled = false;
         ProbeDdcButton.IsEnabled = false;
+        SetBrightnessButton.IsEnabled = false;
         CopyReportButton.IsEnabled = false;
         CopyReportButton.Content = "Copy diagnostic report";
         StatusText.Text = "Reading external DDC/CI and internal WMI brightness...";
@@ -133,14 +157,9 @@ public sealed partial class MainWindow : Window
             var probes = await Task.Run(() => (
                 Ddc: _ddcProbeService.ProbeBrightness(_activeMonitors),
                 Wmi: _wmiProbeService.ProbeBrightness(_activeMonitors)));
-            MonitorList.ItemsSource = probes.Ddc.Select(ddcProbe =>
-            {
-                var wmiProbe = probes.Wmi.First(candidate => string.Equals(
-                    candidate.Display.DevicePath,
-                    ddcProbe.Display.DevicePath,
-                    StringComparison.OrdinalIgnoreCase));
-                return MonitorCardViewModel.FromProbes(ddcProbe, wmiProbe);
-            }).ToArray();
+            _lastDdcProbes = probes.Ddc;
+            _lastWmiProbes = probes.Wmi;
+            UpdateMonitorCards(selectedDevicePath: null);
 
             var readableCount = _activeMonitors.Count(monitor =>
                 probes.Ddc.Any(probe =>
@@ -160,6 +179,7 @@ public sealed partial class MainWindow : Window
                 _activeMonitors,
                 probes.Ddc,
                 probes.Wmi,
+                writeResult: null,
                 error: null);
         }
         catch (Win32Exception exception)
@@ -169,20 +189,154 @@ public sealed partial class MainWindow : Window
                 _activeMonitors,
                 ddcProbes: null,
                 wmiProbes: null,
+                writeResult: null,
                 error: exception);
         }
         finally
         {
             RescanButton.IsEnabled = true;
             ProbeDdcButton.IsEnabled = _activeMonitors.Count > 0;
+            SetBrightnessButton.IsEnabled = CanSetSelectedDisplay();
             CopyReportButton.IsEnabled = true;
         }
+    }
+
+    private async Task SetSelectedBrightnessAsync()
+    {
+        if (MonitorList.SelectedItem is not MonitorCardViewModel selected)
+        {
+            return;
+        }
+
+        var display = _activeMonitors.First(candidate => string.Equals(
+            candidate.DevicePath,
+            selected.DevicePath,
+            StringComparison.OrdinalIgnoreCase));
+        var ddcProbe = _lastDdcProbes.First(candidate => string.Equals(
+            candidate.Display.DevicePath,
+            display.DevicePath,
+            StringComparison.OrdinalIgnoreCase));
+        var wmiProbe = _lastWmiProbes.First(candidate => string.Equals(
+            candidate.Display.DevicePath,
+            display.DevicePath,
+            StringComparison.OrdinalIgnoreCase));
+        var requestedPercent = double.IsNaN(BrightnessValue.Value)
+            ? 50
+            : Math.Clamp((int)Math.Round(BrightnessValue.Value), 0, 100);
+
+        RescanButton.IsEnabled = false;
+        ProbeDdcButton.IsEnabled = false;
+        SetBrightnessButton.IsEnabled = false;
+        CopyReportButton.IsEnabled = false;
+        StatusText.Text = $"Setting {display.FriendlyName} brightness to {requestedPercent}%...";
+        BrightnessWriteResult? writeResult = null;
+
+        try
+        {
+            writeResult = await Task.Run(() => _brightnessControlService.SetBrightness(
+                display,
+                ddcProbe,
+                wmiProbe,
+                requestedPercent));
+            var refreshed = await Task.Run(() => (
+                Ddc: _ddcProbeService.ProbeBrightness(_activeMonitors),
+                Wmi: _wmiProbeService.ProbeBrightness(_activeMonitors)));
+            _lastDdcProbes = refreshed.Ddc;
+            _lastWmiProbes = refreshed.Wmi;
+            UpdateMonitorCards(display.DevicePath);
+
+            StatusText.Text = writeResult.Succeeded
+                ? string.Format(
+                    CultureInfo.CurrentCulture,
+                    "Set {0} through {1}: requested {2}%, applied {3}%, verified {4}%.",
+                    display.FriendlyName,
+                    writeResult.Provider,
+                    writeResult.RequestedPercent,
+                    writeResult.AppliedPercent,
+                    writeResult.VerifiedPercent)
+                : string.Format(
+                    CultureInfo.CurrentCulture,
+                    "Brightness write did not verify ({0}, error 0x{1:X8}).",
+                    writeResult.Status,
+                    unchecked((uint)writeResult.ErrorCode));
+            _diagnosticReport = BuildDiagnosticReport(
+                _activeMonitors,
+                refreshed.Ddc,
+                refreshed.Wmi,
+                writeResult,
+                error: null);
+        }
+        catch (Win32Exception exception)
+        {
+            StatusText.Text = $"Brightness verification refresh failed: {exception.Message}";
+            _diagnosticReport = BuildDiagnosticReport(
+                _activeMonitors,
+                _lastDdcProbes,
+                _lastWmiProbes,
+                writeResult,
+                exception);
+        }
+        finally
+        {
+            RescanButton.IsEnabled = true;
+            ProbeDdcButton.IsEnabled = _activeMonitors.Count > 0;
+            SetBrightnessButton.IsEnabled = CanSetSelectedDisplay();
+            CopyReportButton.IsEnabled = true;
+        }
+    }
+
+    private void UpdateMonitorCards(string? selectedDevicePath)
+    {
+        var cards = _lastDdcProbes.Select(ddcProbe =>
+        {
+            var wmiProbe = _lastWmiProbes.First(candidate => string.Equals(
+                candidate.Display.DevicePath,
+                ddcProbe.Display.DevicePath,
+                StringComparison.OrdinalIgnoreCase));
+            return MonitorCardViewModel.FromProbes(ddcProbe, wmiProbe);
+        }).ToArray();
+        MonitorList.ItemsSource = cards;
+        var selectedCard = selectedDevicePath is null
+            ? null
+            : cards.FirstOrDefault(card => string.Equals(
+                card.DevicePath,
+                selectedDevicePath,
+                StringComparison.OrdinalIgnoreCase));
+        if (selectedCard is null)
+        {
+            var writableCards = cards.Where(card => HasValidatedWritePath(card.DevicePath)).ToArray();
+            selectedCard = writableCards.Length == 1 ? writableCards[0] : null;
+        }
+
+        MonitorList.SelectedItem = selectedCard;
+    }
+
+    private bool CanSetSelectedDisplay()
+    {
+        if (MonitorList.SelectedItem is not MonitorCardViewModel selected)
+        {
+            return false;
+        }
+
+        return HasValidatedWritePath(selected.DevicePath);
+    }
+
+    private bool HasValidatedWritePath(string devicePath)
+    {
+        return _lastWmiProbes.Any(probe =>
+                string.Equals(probe.Display.DevicePath, devicePath, StringComparison.OrdinalIgnoreCase)
+                && probe.Status == WmiBrightnessProbeStatus.ReadSucceeded)
+            || _lastDdcProbes.Any(probe =>
+                string.Equals(probe.Display.DevicePath, devicePath, StringComparison.OrdinalIgnoreCase)
+                && probe.PhysicalMonitors.Any(result =>
+                    result.Status == DdcBrightnessProbeStatus.ReadSucceeded));
     }
 
     private static string BuildDiagnosticReport(
         IReadOnlyList<MonitorDisplayInfo> monitors,
         IReadOnlyList<MonitorDdcProbeInfo>? ddcProbes,
         IReadOnlyList<WmiBrightnessProbeResult>? wmiProbes,
+        BrightnessWriteResult? writeResult,
         Win32Exception? error)
     {
         var report = new StringBuilder();
@@ -194,10 +348,28 @@ public sealed partial class MainWindow : Window
         report.AppendLine("Privacy: device paths and WMI instance names can identify a local display instance; review before sharing");
         report.AppendLine(ddcProbes is null
             ? "DDC/CI commands issued: no"
-            : "DDC/CI commands issued: read-only brightness VCP 0x10 queries; no writes");
+            : writeResult?.Provider == BrightnessWriteProvider.DdcCi
+                ? "DDC/CI commands issued: brightness VCP 0x10 read, write, and verification read-back"
+                : "DDC/CI commands issued: read-only brightness VCP 0x10 queries; no DDC writes");
         report.AppendLine(wmiProbes is null
             ? "WMI commands issued: no"
-            : "WMI commands issued: read-only WmiMonitorBrightness query; no method calls or writes");
+            : writeResult?.Provider == BrightnessWriteProvider.Wmi
+                ? "WMI commands issued: WmiSetBrightness and read-only verification query"
+                : "WMI commands issued: read-only WmiMonitorBrightness query; no WMI method calls");
+
+        if (writeResult is not null)
+        {
+            report.Append("Brightness write provider: ").AppendLine(writeResult.Provider.ToString());
+            report.Append("Brightness write status: ").AppendLine(writeResult.Status.ToString());
+            report.Append("Brightness requested percent: ").AppendLine(writeResult.RequestedPercent.ToString(CultureInfo.InvariantCulture));
+            report.Append("Brightness applied percent: ").AppendLine(writeResult.AppliedPercent.ToString(CultureInfo.InvariantCulture));
+            report.Append("Brightness verified percent: ").AppendLine(writeResult.VerifiedPercent.ToString(CultureInfo.InvariantCulture));
+            report.Append("Brightness write error: ")
+                .Append(writeResult.ErrorCode.ToString(CultureInfo.InvariantCulture))
+                .Append(" / 0x")
+                .AppendLine(unchecked((uint)writeResult.ErrorCode).ToString("X8", CultureInfo.InvariantCulture));
+            report.Append("Brightness write message: ").AppendLine(writeResult.Message);
+        }
 
         if (error is not null)
         {

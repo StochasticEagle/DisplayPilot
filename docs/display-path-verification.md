@@ -4,8 +4,10 @@ This screen verifies active Windows display-path discovery on a VM and on physic
 Windows 10/11 systems. Its startup scan does not open physical monitor handles or
 send DDC/CI or WMI commands. A separate, explicit button performs a read-only
 brightness VCP 0x10 query per physical monitor and queries the read-only
-`WmiMonitorBrightness` class for internal panels. No control-writing API or WMI
-method is imported or called.
+`WmiMonitorBrightness` class for internal panels. After a successful read, the user
+may select exactly one display and explicitly set brightness. External monitors use
+VCP 0x10; internal panels use `WmiSetBrightness`. Every write is followed by a
+read-back and no other monitor feature is written.
 
 ## Build and run
 
@@ -72,6 +74,22 @@ results are:
 - The app must continue to report that no writes were issued.
 - If the Windows clipboard is temporarily unavailable, copying the report must show
   an error and allow another attempt without closing the app.
+
+## Brightness write verification
+
+Only continue after the selected display has a successful DDC/CI or WMI brightness
+read. If exactly one display has a validated write path, it is selected automatically;
+otherwise select its card. Enter a value from 0 through 100 and select **Set selected**.
+Use non-extreme values first (for example 40, 60, then 50).
+
+- Only the selected display should change.
+- The status line must name the chosen provider and show requested, applied, and
+  verified percentages.
+- DDC/CI percentages are mapped to the monitor's raw maximum before VCP 0x10 is set.
+- WMI requests snap to the nearest level advertised by the panel.
+- A display without a validated read path must never enable the write button.
+- Do not test power, input source, contrast, volume, color temperature, or profiles;
+  those controls are not part of this checkpoint.
 
 The current QEMU test baseline is one `QEMU Monitor` at `\\.\DISPLAY1`, with an
 EDID identifier beginning `RHT1234`. The DDC probe should remain attached to that

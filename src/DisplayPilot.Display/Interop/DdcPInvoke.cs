@@ -48,4 +48,11 @@ internal static partial class DdcPInvoke
         nint vcpCodeType,
         out uint currentValue,
         out uint maximumValue);
+
+    [LibraryImport("Dxva2.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool SetVCPFeature(
+        nint physicalMonitor,
+        byte vcpCode,
+        uint newValue);
 }
