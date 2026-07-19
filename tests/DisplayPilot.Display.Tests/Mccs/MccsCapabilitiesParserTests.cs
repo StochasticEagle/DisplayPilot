@@ -6,7 +6,7 @@ using System.Linq;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using DisplayPilot.Display.Mccs;
 
-namespace PowerDisplay.UnitTests;
+namespace DisplayPilot.Display.Tests.Mccs;
 
 /// <summary>
 /// Unit tests for MccsCapabilitiesParser class.
