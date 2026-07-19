@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/DisplayPilot.App/DisplayPilot.App.csproj" />
     <Project Path="src/DisplayPilot.Core/DisplayPilot.Core.csproj" />
     <Project Path="src/DisplayPilot.Display/DisplayPilot.Display.csproj" />
   </Folder>

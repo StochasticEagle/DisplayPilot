@@ -34,3 +34,19 @@ jobs:
 
       - name: Test
         run: dotnet test DisplayPilot.slnx --configuration Release --no-build --logger trx
+
+      - name: Publish verification app
+        run: >-
+          dotnet publish src/DisplayPilot.App/DisplayPilot.App.csproj
+          --configuration Release
+          --runtime win-x64
+          --self-contained true
+          --no-restore
+          --output artifacts/DisplayPilot-win-x64
+
+      - name: Upload verification app
+        uses: actions/upload-artifact@v4
+        with:
+          name: DisplayPilot-win-x64
+          path: artifacts/DisplayPilot-win-x64
+          if-no-files-found: error
