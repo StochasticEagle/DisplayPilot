@@ -99,7 +99,9 @@
                                     Background="Transparent"
                                     BorderThickness="0"
                                     FontFamily="Consolas"
+                                    IsHitTestVisible="False"
                                     IsReadOnly="True"
+                                    IsTabStop="False"
                                     Text="{x:Bind DevicePath, Mode=OneTime}"
                                     TextWrapping="Wrap" />
                                 <TextBlock
@@ -164,7 +166,7 @@
                     Spacing="8">
                     <NumberBox
                         x:Name="BrightnessValue"
-                        Width="100"
+                        Width="160"
                         Header="Brightness %"
                         Maximum="100"
                         Minimum="0"

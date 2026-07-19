@@ -296,12 +296,19 @@ public sealed partial class MainWindow : Window
             return MonitorCardViewModel.FromProbes(ddcProbe, wmiProbe);
         }).ToArray();
         MonitorList.ItemsSource = cards;
-        MonitorList.SelectedItem = selectedDevicePath is null
+        var selectedCard = selectedDevicePath is null
             ? null
             : cards.FirstOrDefault(card => string.Equals(
                 card.DevicePath,
                 selectedDevicePath,
                 StringComparison.OrdinalIgnoreCase));
+        if (selectedCard is null)
+        {
+            var writableCards = cards.Where(card => HasValidatedWritePath(card.DevicePath)).ToArray();
+            selectedCard = writableCards.Length == 1 ? writableCards[0] : null;
+        }
+
+        MonitorList.SelectedItem = selectedCard;
     }
 
     private bool CanSetSelectedDisplay()
@@ -311,11 +318,16 @@ public sealed partial class MainWindow : Window
             return false;
         }
 
+        return HasValidatedWritePath(selected.DevicePath);
+    }
+
+    private bool HasValidatedWritePath(string devicePath)
+    {
         return _lastWmiProbes.Any(probe =>
-                string.Equals(probe.Display.DevicePath, selected.DevicePath, StringComparison.OrdinalIgnoreCase)
+                string.Equals(probe.Display.DevicePath, devicePath, StringComparison.OrdinalIgnoreCase)
                 && probe.Status == WmiBrightnessProbeStatus.ReadSucceeded)
             || _lastDdcProbes.Any(probe =>
-                string.Equals(probe.Display.DevicePath, selected.DevicePath, StringComparison.OrdinalIgnoreCase)
+                string.Equals(probe.Display.DevicePath, devicePath, StringComparison.OrdinalIgnoreCase)
                 && probe.PhysicalMonitors.Any(result =>
                     result.Status == DdcBrightnessProbeStatus.ReadSucceeded));
     }

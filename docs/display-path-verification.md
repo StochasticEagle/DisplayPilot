@@ -78,7 +78,8 @@ results are:
 ## Brightness write verification
 
 Only continue after the selected display has a successful DDC/CI or WMI brightness
-read. Select its card, enter a value from 0 through 100, and select **Set selected**.
+read. If exactly one display has a validated write path, it is selected automatically;
+otherwise select its card. Enter a value from 0 through 100 and select **Set selected**.
 Use non-extreme values first (for example 40, 60, then 50).
 
 - Only the selected display should change.
