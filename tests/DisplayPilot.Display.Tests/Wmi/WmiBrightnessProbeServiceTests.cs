@@ -3,6 +3,7 @@
 
 using DisplayPilot.Display.Discovery;
 using DisplayPilot.Display.Wmi;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace DisplayPilot.Display.Tests.Wmi;
 
