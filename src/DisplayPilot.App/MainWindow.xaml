@@ -56,15 +56,16 @@
             Margin="24,0,24,12"
             IsClosable="False"
             IsOpen="True"
-            Message="Startup reads display topology only. The brightness button explicitly queries external monitors through DDC/CI and internal panels through WMI; no monitor setting is changed."
-            Severity="Informational"
-            Title="Read-only hardware check" />
+            Message="Read brightness first, select one validated display, then explicitly set 0–100%. DisplayPilot writes only brightness and immediately reads it back for verification."
+            Severity="Warning"
+            Title="Brightness write verification" />
 
         <Grid Grid.Row="2" Padding="24,0,24,12">
             <ListView
                 x:Name="MonitorList"
                 HorizontalContentAlignment="Stretch"
-                SelectionMode="None">
+                SelectionChanged="MonitorList_SelectionChanged"
+                SelectionMode="Single">
                 <ListView.ItemTemplate>
                     <DataTemplate x:DataType="local:MonitorCardViewModel">
                         <Border
@@ -156,13 +157,33 @@
                         Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                 </StackPanel>
 
-                <Button
-                    x:Name="CopyReportButton"
+                <StackPanel
                     Grid.Column="1"
                     VerticalAlignment="Center"
-                    Click="CopyReportButton_Click"
-                    Content="Copy diagnostic report"
-                    IsEnabled="False" />
+                    Orientation="Horizontal"
+                    Spacing="8">
+                    <NumberBox
+                        x:Name="BrightnessValue"
+                        Width="100"
+                        Header="Brightness %"
+                        Maximum="100"
+                        Minimum="0"
+                        SmallChange="1"
+                        SpinButtonPlacementMode="Inline"
+                        Value="50" />
+                    <Button
+                        x:Name="SetBrightnessButton"
+                        VerticalAlignment="Bottom"
+                        Click="SetBrightnessButton_Click"
+                        Content="Set selected"
+                        IsEnabled="False" />
+                    <Button
+                        x:Name="CopyReportButton"
+                        VerticalAlignment="Bottom"
+                        Click="CopyReportButton_Click"
+                        Content="Copy diagnostic report"
+                        IsEnabled="False" />
+                </StackPanel>
             </Grid>
         </Border>
     </Grid>
