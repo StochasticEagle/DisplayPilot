@@ -264,7 +264,7 @@ namespace DisplayPilot.Display.Mccs
         /// Parse VCP entries: vcp_entry*
         /// vcp_entry ::= hex_byte [ '(' hex_list ')' ]
         /// </summary>
-        private Dictionary<byte, VcpCodeInfo> ParseVcpEntries(string content)
+        private static Dictionary<byte, VcpCodeInfo> ParseVcpEntries(string content)
         {
             var vcpCodes = new Dictionary<byte, VcpCodeInfo>();
             var parser = new VcpEntryParser(content);
@@ -323,7 +323,7 @@ namespace DisplayPilot.Display.Mccs
         /// <summary>
         /// Parse vcpname entries: hex_byte '(' name ')'
         /// </summary>
-        private void ParseVcpNames(string content, VcpCapabilities capabilities)
+        private static void ParseVcpNames(string content, VcpCapabilities capabilities)
         {
             // vcpname format: F0(Custom Name 1) F1(Custom Name 2)
             var parser = new VcpNameParser(content);
