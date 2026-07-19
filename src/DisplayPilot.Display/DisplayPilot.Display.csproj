@@ -5,4 +5,7 @@
     <Description>Monitor capability parsing and Windows display-control infrastructure for DisplayPilot.</Description>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="System.Management" />
+  </ItemGroup>
 </Project>
