@@ -209,7 +209,7 @@ namespace DisplayPilot.Display.Mccs
         /// <summary>
         /// Apply a parsed segment to the capabilities object.
         /// </summary>
-        private void ApplySegment(VcpCapabilities capabilities, ParsedSegment segment)
+        private static void ApplySegment(VcpCapabilities capabilities, ParsedSegment segment)
         {
             switch (segment.Name.ToLowerInvariant())
             {
