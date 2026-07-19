@@ -5,7 +5,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using PowerDisplay.Models;
+using DisplayPilot.Display.Models;
 
 namespace DisplayPilot.Display.Mccs
 {
