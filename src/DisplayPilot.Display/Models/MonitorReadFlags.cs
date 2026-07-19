@@ -6,8 +6,10 @@ using System;
 
 namespace DisplayPilot.Display.Models
 {
+#pragma warning disable CA1711 // The Flags suffix accurately describes this bit-field enum.
     [Flags]
     public enum MonitorReadFlags
+#pragma warning restore CA1711
     {
         None = 0,
         Brightness = 1 << 0,
