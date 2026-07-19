@@ -3,5 +3,6 @@
     <RootNamespace>DisplayPilot.Display</RootNamespace>
     <AssemblyName>DisplayPilot.Display</AssemblyName>
     <Description>Monitor capability parsing and Windows display-control infrastructure for DisplayPilot.</Description>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 </Project>
