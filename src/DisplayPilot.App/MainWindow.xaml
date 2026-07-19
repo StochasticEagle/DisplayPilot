@@ -46,7 +46,7 @@
                 <Button
                     x:Name="ProbeDdcButton"
                     Click="ProbeDdcButton_Click"
-                    Content="Read brightness (VCP 0x10)"
+                    Content="Read brightness (DDC + WMI)"
                     IsEnabled="False" />
             </StackPanel>
         </Grid>
@@ -56,7 +56,7 @@
             Margin="24,0,24,12"
             IsClosable="False"
             IsOpen="True"
-            Message="Startup reads display topology only. The brightness button explicitly sends one read-only VCP 0x10 query per physical monitor; no monitor setting is changed."
+            Message="Startup reads display topology only. The brightness button explicitly queries external monitors through DDC/CI and internal panels through WMI; no monitor setting is changed."
             Severity="Informational"
             Title="Read-only hardware check" />
 

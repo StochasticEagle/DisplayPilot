@@ -2,8 +2,10 @@
 
 This screen verifies active Windows display-path discovery on a VM and on physical
 Windows 10/11 systems. Its startup scan does not open physical monitor handles or
-send DDC/CI commands. A separate, explicit button performs one read-only brightness
-VCP 0x10 query per physical monitor. No control-writing API is imported or called.
+send DDC/CI or WMI commands. A separate, explicit button performs a read-only
+brightness VCP 0x10 query per physical monitor and queries the read-only
+`WmiMonitorBrightness` class for internal panels. No control-writing API or WMI
+method is imported or called.
 
 ## Build and run
 
@@ -49,7 +51,7 @@ Select **Copy diagnostic report** after the scan. For every active path, verify:
 - The stable device path is non-empty and begins with `\\?\DISPLAY#`.
 - Rescanning produces the same device path when the topology has not changed.
 
-Then select **Read brightness (VCP 0x10)** and copy the report again. Expected
+Then select **Read brightness (DDC + WMI)** and copy the report again. Expected
 results are:
 
 - Most VMs report `NoPhysicalMonitor` or `ReadFailed` because their virtual display
@@ -60,8 +62,13 @@ results are:
   delay, because some otherwise-compatible monitors reject the first VCP request.
 - Physical-monitor handle acquisition also retries up to three times at 200 ms
   intervals because Windows can transiently return a null handle for a valid monitor.
-- Internal laptop panels may report no readable DDC brightness; their eventual
-  brightness path uses WMI rather than DDC/CI.
+- An active internal laptop panel should report `ReadSucceeded` through WMI with
+  its current percentage and advertised brightness-level count, even when its DDC
+  probe reports a protocol error.
+- External monitors normally report no matching `WmiMonitorBrightness` instance;
+  their brightness path remains DDC/CI.
+- WMI instances are correlated to display paths with the full PnP instance identity,
+  so identical panel models with different UIDs are not conflated.
 - The app must continue to report that no writes were issued.
 - If the Windows clipboard is temporarily unavailable, copying the report must show
   an error and allow another attempt without closing the app.

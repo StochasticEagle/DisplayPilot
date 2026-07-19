@@ -1,6 +1,7 @@
 using System.Globalization;
 using DisplayPilot.Display.Ddc;
 using DisplayPilot.Display.Discovery;
+using DisplayPilot.Display.Wmi;
 
 namespace DisplayPilot.App;
 
@@ -17,32 +18,53 @@ public sealed record MonitorCardViewModel(
             display.DevicePath,
             display.GdiDeviceName,
             display.FriendlyName,
-            "DDC/CI: not probed",
-            "Select Read brightness (VCP 0x10) to perform an explicit read-only hardware query.");
+            "Brightness: not probed",
+            "Select Read brightness (DDC + WMI) to perform explicit read-only hardware queries.");
     }
 
-    public static MonitorCardViewModel FromProbe(MonitorDdcProbeInfo probe)
+    public static MonitorCardViewModel FromProbes(
+        MonitorDdcProbeInfo ddcProbe,
+        WmiBrightnessProbeResult wmiProbe)
     {
-        var successfulReads = probe.PhysicalMonitors
+        var successfulReads = ddcProbe.PhysicalMonitors
             .Where(result => result.Status == DdcBrightnessProbeStatus.ReadSucceeded)
             .ToArray();
 
         if (successfulReads.Length > 0)
         {
             return new MonitorCardViewModel(
-                probe.Display.DevicePath,
-                probe.Display.GdiDeviceName,
-                probe.Display.FriendlyName,
-                "DDC/CI: brightness is readable",
+                ddcProbe.Display.DevicePath,
+                ddcProbe.Display.GdiDeviceName,
+                ddcProbe.Display.FriendlyName,
+                "Brightness is readable through DDC/CI",
                 string.Join(Environment.NewLine, successfulReads.Select(FormatSuccessfulRead)));
         }
 
-        var details = string.Join(Environment.NewLine, probe.PhysicalMonitors.Select(FormatFailure));
+        if (wmiProbe.Status == WmiBrightnessProbeStatus.ReadSucceeded)
+        {
+            return new MonitorCardViewModel(
+                ddcProbe.Display.DevicePath,
+                ddcProbe.Display.GdiDeviceName,
+                ddcProbe.Display.FriendlyName,
+                "Brightness is readable through WMI",
+                string.Format(
+                    CultureInfo.CurrentCulture,
+                    "Internal panel: {0}% ({1} advertised brightness levels)",
+                    wmiProbe.CurrentBrightness,
+                    wmiProbe.LevelCount));
+        }
+
+        var ddcDetails = string.Join(
+            Environment.NewLine,
+            ddcProbe.PhysicalMonitors.Select(FormatFailure));
+        var details = string.Join(
+            Environment.NewLine,
+            new[] { ddcDetails, FormatWmiFailure(wmiProbe) }.Where(value => !string.IsNullOrWhiteSpace(value)));
         return new MonitorCardViewModel(
-            probe.Display.DevicePath,
-            probe.Display.GdiDeviceName,
-            probe.Display.FriendlyName,
-            "DDC/CI: brightness read unavailable",
+            ddcProbe.Display.DevicePath,
+            ddcProbe.Display.GdiDeviceName,
+            ddcProbe.Display.FriendlyName,
+            "Brightness read unavailable",
             details);
     }
 
@@ -104,5 +126,22 @@ public sealed record MonitorCardViewModel(
         return error == 0
             ? "0"
             : string.Format(CultureInfo.InvariantCulture, "{0} / 0x{1:X8}", error, unchecked((uint)error));
+    }
+
+    private static string FormatWmiFailure(WmiBrightnessProbeResult result)
+    {
+        return result.Status switch
+        {
+            WmiBrightnessProbeStatus.NotAvailable =>
+                "WMI: no matching WmiMonitorBrightness instance was exposed for this display.",
+            WmiBrightnessProbeStatus.Inactive =>
+                "WMI: the matching brightness instance is currently inactive.",
+            WmiBrightnessProbeStatus.QueryFailed =>
+                string.Format(
+                    CultureInfo.CurrentCulture,
+                    "WMI brightness query failed (error {0}).",
+                    FormatWin32Error(result.ErrorCode)),
+            _ => string.Empty,
+        };
     }
 }
