@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>DisplayPilot.Core</RootNamespace>
+    <AssemblyName>DisplayPilot.Core</AssemblyName>
+    <Description>Platform-independent domain logic for DisplayPilot.</Description>
+  </PropertyGroup>
+</Project>
