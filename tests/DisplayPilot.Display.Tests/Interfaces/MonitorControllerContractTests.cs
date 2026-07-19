@@ -1,6 +1,7 @@
 using DisplayPilot.Display.Interfaces;
 using DisplayPilot.Display.Models;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Monitor = DisplayPilot.Display.Models.Monitor;
 
 namespace DisplayPilot.Display.Tests.Interfaces;
 
