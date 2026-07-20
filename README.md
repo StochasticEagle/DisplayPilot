@@ -7,3 +7,5 @@ internal panels, with an explicit write and immediate read-back verification. Se
 [Display-path verification](docs/display-path-verification.md)
 for build, run, and test instructions. Manual Windows light/dark theme detection and
 switching are described in [Theme verification](docs/theme-verification.md).
+The read-only fixed-hours evaluator is covered by
+[Custom theme schedule verification](docs/custom-theme-schedule-verification.md).
