@@ -11,6 +11,7 @@ using DisplayPilot.Display.Brightness;
 using DisplayPilot.Display.Ddc;
 using DisplayPilot.Display.Discovery;
 using DisplayPilot.Display.Wmi;
+using DisplayPilot.Windows.Settings;
 using DisplayPilot.Windows.Theme;
 using Microsoft.UI.Xaml;
 using Windows.ApplicationModel.DataTransfer;
@@ -24,6 +25,7 @@ public sealed partial class MainWindow : Window
     private readonly WmiBrightnessProbeService _wmiProbeService = new();
     private readonly BrightnessControlService _brightnessControlService = new();
     private readonly WindowsThemeService _themeService = new();
+    private readonly JsonThemeScheduleSettingsStore _themeScheduleSettingsStore = new();
     private IReadOnlyList<MonitorDisplayInfo> _activeMonitors = [];
     private IReadOnlyList<MonitorDdcProbeInfo> _lastDdcProbes = [];
     private IReadOnlyList<WmiBrightnessProbeResult> _lastWmiProbes = [];
@@ -31,6 +33,8 @@ public sealed partial class MainWindow : Window
     private ThemeApplyResult? _lastThemeResult;
     private CustomThemeSchedule? _customThemeSchedule;
     private ThemeScheduleEvaluation? _lastScheduleEvaluation;
+    private bool _scheduleWasLoadedFromDisk;
+    private string? _scheduleSettingsError;
     private BrightnessWriteResult? _lastBrightnessWriteResult;
     private bool _initialScanStarted;
     private string _diagnosticReport = string.Empty;
@@ -38,8 +42,7 @@ public sealed partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
-        LightScheduleTimePicker.Time = new TimeSpan(7, 0, 0);
-        DarkScheduleTimePicker.Time = new TimeSpan(19, 0, 0);
+        LoadScheduleSettings();
         RefreshSchedulePreview();
         SystemText.Text = GetSystemSummary();
     }
@@ -74,6 +77,11 @@ public sealed partial class MainWindow : Window
     private void PreviewScheduleButton_Click(object sender, RoutedEventArgs e)
     {
         RefreshSchedulePreview();
+    }
+
+    private void SaveScheduleButton_Click(object sender, RoutedEventArgs e)
+    {
+        SaveScheduleSettings();
     }
 
     private async void RescanButton_Click(object sender, RoutedEventArgs e)
@@ -391,7 +399,9 @@ public sealed partial class MainWindow : Window
             var remainingMinutes = (int)Math.Ceiling(_lastScheduleEvaluation.TimeUntilNextTransition.TotalMinutes);
             ScheduleStatusText.Text = string.Format(
                 CultureInfo.CurrentCulture,
-                "Now: {0}. Next: {1} at {2} ({3} minute(s)). Preview only; no automatic theme change.",
+                "Selected: Light {0} · Dark {1}. Now: {2}. Next: {3} at {4} ({5} minute(s)). Preview only; no automatic theme change.",
+                _customThemeSchedule.LightTime.ToString("HH:mm", CultureInfo.InvariantCulture),
+                _customThemeSchedule.DarkTime.ToString("HH:mm", CultureInfo.InvariantCulture),
                 _lastScheduleEvaluation.ActiveMode,
                 _lastScheduleEvaluation.NextMode,
                 FormatTime(_lastScheduleEvaluation.NextTransitionTime),
@@ -405,6 +415,81 @@ public sealed partial class MainWindow : Window
             ScheduleStatusText.Text = exception.Message;
             RefreshDiagnosticReport();
         }
+    }
+
+    private void LoadScheduleSettings()
+    {
+        try
+        {
+            var result = _themeScheduleSettingsStore.Load();
+            LightScheduleTimePicker.Time = result.Schedule.LightTime.ToTimeSpan();
+            DarkScheduleTimePicker.Time = result.Schedule.DarkTime.ToTimeSpan();
+            _scheduleWasLoadedFromDisk = result.WasLoadedFromDisk;
+            _scheduleSettingsError = null;
+            SchedulePersistenceStatusText.Text = result.WasLoadedFromDisk
+                ? "Loaded the saved per-user schedule."
+                : "Using the default schedule; select Save schedule to persist it.";
+        }
+        catch (IOException exception)
+        {
+            ReportScheduleLoadFailure(exception);
+        }
+        catch (UnauthorizedAccessException exception)
+        {
+            ReportScheduleLoadFailure(exception);
+        }
+        catch (SecurityException exception)
+        {
+            ReportScheduleLoadFailure(exception);
+        }
+    }
+
+    private void ReportScheduleLoadFailure(Exception exception)
+    {
+        var defaults = JsonThemeScheduleSettingsStore.CreateDefault();
+        LightScheduleTimePicker.Time = defaults.LightTime.ToTimeSpan();
+        DarkScheduleTimePicker.Time = defaults.DarkTime.ToTimeSpan();
+        _scheduleWasLoadedFromDisk = false;
+        _scheduleSettingsError = exception.GetType().Name;
+        SchedulePersistenceStatusText.Text = "Saved schedule could not be loaded; using safe defaults.";
+    }
+
+    private void SaveScheduleSettings()
+    {
+        try
+        {
+            var schedule = new CustomThemeSchedule(
+                TimeOnly.FromTimeSpan(LightScheduleTimePicker.Time),
+                TimeOnly.FromTimeSpan(DarkScheduleTimePicker.Time));
+            _themeScheduleSettingsStore.Save(schedule);
+            _scheduleWasLoadedFromDisk = true;
+            _scheduleSettingsError = null;
+            SchedulePersistenceStatusText.Text = "Saved the per-user schedule.";
+            RefreshSchedulePreview();
+        }
+        catch (ArgumentException)
+        {
+            RefreshSchedulePreview();
+        }
+        catch (IOException exception)
+        {
+            ReportScheduleSaveFailure(exception);
+        }
+        catch (UnauthorizedAccessException exception)
+        {
+            ReportScheduleSaveFailure(exception);
+        }
+        catch (SecurityException exception)
+        {
+            ReportScheduleSaveFailure(exception);
+        }
+    }
+
+    private void ReportScheduleSaveFailure(Exception exception)
+    {
+        _scheduleSettingsError = exception.GetType().Name;
+        SchedulePersistenceStatusText.Text = "Schedule settings could not be saved.";
+        RefreshDiagnosticReport();
     }
 
     private void RefreshDiagnosticReport()
@@ -520,6 +605,8 @@ public sealed partial class MainWindow : Window
         report.Append("Schedule dark time: ").AppendLine(_customThemeSchedule is null ? "Invalid" : _customThemeSchedule.DarkTime.ToString("HH:mm", CultureInfo.InvariantCulture));
         report.Append("Schedule preview mode: ").AppendLine(_lastScheduleEvaluation?.ActiveMode.ToString() ?? "Unavailable");
         report.Append("Schedule next mode: ").AppendLine(_lastScheduleEvaluation?.NextMode.ToString() ?? "Unavailable");
+        report.Append("Schedule persisted: ").AppendLine(_scheduleWasLoadedFromDisk.ToString(CultureInfo.InvariantCulture));
+        report.Append("Schedule settings error: ").AppendLine(_scheduleSettingsError ?? "None");
         report.Append("Schedule automatic writes enabled: false").AppendLine();
         report.AppendLine("Privacy: device paths and WMI instance names can identify a local display instance; review before sharing");
         report.AppendLine(ddcProbes is null
