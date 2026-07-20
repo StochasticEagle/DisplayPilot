@@ -75,5 +75,5 @@ public sealed class CustomThemeScheduleEvaluatorTests
     }
 
     private static ThemeScheduleEvaluation Evaluate(CustomThemeSchedule schedule, int hour, int minute) =>
-        new CustomThemeScheduleEvaluator().Evaluate(schedule, new TimeOnly(hour, minute));
+        CustomThemeScheduleEvaluator.Evaluate(schedule, new TimeOnly(hour, minute));
 }

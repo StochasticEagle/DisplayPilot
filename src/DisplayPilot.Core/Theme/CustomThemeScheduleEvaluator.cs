@@ -9,7 +9,7 @@ namespace DisplayPilot.Core.Theme;
 /// </summary>
 public sealed class CustomThemeScheduleEvaluator
 {
-    public ThemeScheduleEvaluation Evaluate(CustomThemeSchedule schedule, TimeOnly now)
+    public static ThemeScheduleEvaluation Evaluate(CustomThemeSchedule schedule, TimeOnly now)
     {
         ArgumentNullException.ThrowIfNull(schedule);
 

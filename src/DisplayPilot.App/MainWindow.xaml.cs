@@ -384,7 +384,7 @@ public sealed partial class MainWindow : Window
             _customThemeSchedule = new CustomThemeSchedule(
                 TimeOnly.FromTimeSpan(LightScheduleTimePicker.Time),
                 TimeOnly.FromTimeSpan(DarkScheduleTimePicker.Time));
-            _lastScheduleEvaluation = new CustomThemeScheduleEvaluator().Evaluate(
+            _lastScheduleEvaluation = CustomThemeScheduleEvaluator.Evaluate(
                 _customThemeSchedule,
                 TimeOnly.FromDateTime(DateTime.Now));
 
