@@ -115,20 +115,22 @@
                         Spacing="12">
                         <TimePicker
                             x:Name="LightScheduleTimePicker"
-                            Width="160"
+                            Width="200"
                             ClockIdentifier="24HourClock"
                             Header="Light starts" />
                         <TimePicker
                             x:Name="DarkScheduleTimePicker"
-                            Width="160"
+                            Width="200"
                             ClockIdentifier="24HourClock"
                             Header="Dark starts" />
+                    </StackPanel>
+                    <StackPanel
+                        Orientation="Horizontal"
+                        Spacing="12">
                         <Button
-                            VerticalAlignment="Bottom"
                             Click="PreviewScheduleButton_Click"
                             Content="Preview schedule" />
                         <Button
-                            VerticalAlignment="Bottom"
                             Click="SaveScheduleButton_Click"
                             Content="Save schedule" />
                     </StackPanel>

@@ -399,7 +399,9 @@ public sealed partial class MainWindow : Window
             var remainingMinutes = (int)Math.Ceiling(_lastScheduleEvaluation.TimeUntilNextTransition.TotalMinutes);
             ScheduleStatusText.Text = string.Format(
                 CultureInfo.CurrentCulture,
-                "Now: {0}. Next: {1} at {2} ({3} minute(s)). Preview only; no automatic theme change.",
+                "Selected: Light {0} · Dark {1}. Now: {2}. Next: {3} at {4} ({5} minute(s)). Preview only; no automatic theme change.",
+                _customThemeSchedule.LightTime.ToString("HH:mm", CultureInfo.InvariantCulture),
+                _customThemeSchedule.DarkTime.ToString("HH:mm", CultureInfo.InvariantCulture),
                 _lastScheduleEvaluation.ActiveMode,
                 _lastScheduleEvaluation.NextMode,
                 FormatTime(_lastScheduleEvaluation.NextTransitionTime),
