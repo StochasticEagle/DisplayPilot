@@ -9,5 +9,5 @@ public interface IThemeScheduleSettingsStore
 {
     ThemeScheduleSettingsLoadResult Load();
 
-    void Save(CustomThemeSchedule schedule);
+    void Save(CustomThemeSchedule schedule, bool automationEnabled);
 }

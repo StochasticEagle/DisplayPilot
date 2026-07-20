@@ -124,6 +124,11 @@
                             ClockIdentifier="24HourClock"
                             Header="Dark starts" />
                     </StackPanel>
+                    <ToggleSwitch
+                        x:Name="ScheduleAutomationToggle"
+                        Header="Automatic switching"
+                        OffContent="Off"
+                        OnContent="On while DisplayPilot is running" />
                     <StackPanel
                         Orientation="Horizontal"
                         Spacing="12">

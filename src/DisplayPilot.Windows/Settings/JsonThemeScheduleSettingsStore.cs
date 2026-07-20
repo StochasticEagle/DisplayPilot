@@ -9,7 +9,8 @@ namespace DisplayPilot.Windows.Settings;
 
 public sealed class JsonThemeScheduleSettingsStore : IThemeScheduleSettingsStore
 {
-    private const int CurrentVersion = 1;
+    private const int CurrentVersion = 2;
+    private const int FirstSupportedVersion = 1;
     private const int MinutesPerDay = 24 * 60;
     private static readonly JsonSerializerOptions SerializerOptions = new()
     {
@@ -37,7 +38,10 @@ public sealed class JsonThemeScheduleSettingsStore : IThemeScheduleSettingsStore
     {
         if (!File.Exists(_filePath))
         {
-            return new ThemeScheduleSettingsLoadResult(CreateDefault(), WasLoadedFromDisk: false);
+            return new ThemeScheduleSettingsLoadResult(
+                CreateDefault(),
+                WasLoadedFromDisk: false,
+                AutomationEnabled: false);
         }
 
         var json = File.ReadAllText(_filePath, Encoding.UTF8);
@@ -51,7 +55,7 @@ public sealed class JsonThemeScheduleSettingsStore : IThemeScheduleSettingsStore
             throw new InvalidDataException("The theme schedule settings file is not valid JSON.", exception);
         }
 
-        if (stored is null || stored.Version != CurrentVersion)
+        if (stored is null || stored.Version is < FirstSupportedVersion or > CurrentVersion)
         {
             throw new InvalidDataException("The theme schedule settings version is not supported.");
         }
@@ -67,7 +71,8 @@ public sealed class JsonThemeScheduleSettingsStore : IThemeScheduleSettingsStore
                 new CustomThemeSchedule(
                     TimeOnly.FromTimeSpan(TimeSpan.FromMinutes(stored.LightMinutes)),
                     TimeOnly.FromTimeSpan(TimeSpan.FromMinutes(stored.DarkMinutes))),
-                WasLoadedFromDisk: true);
+                WasLoadedFromDisk: true,
+                AutomationEnabled: stored.Version >= 2 && stored.AutomationEnabled);
         }
         catch (ArgumentException exception)
         {
@@ -75,7 +80,7 @@ public sealed class JsonThemeScheduleSettingsStore : IThemeScheduleSettingsStore
         }
     }
 
-    public void Save(CustomThemeSchedule schedule)
+    public void Save(CustomThemeSchedule schedule, bool automationEnabled)
     {
         ArgumentNullException.ThrowIfNull(schedule);
 
@@ -88,6 +93,7 @@ public sealed class JsonThemeScheduleSettingsStore : IThemeScheduleSettingsStore
             Version = CurrentVersion,
             LightMinutes = ToMinuteOfDay(schedule.LightTime),
             DarkMinutes = ToMinuteOfDay(schedule.DarkTime),
+            AutomationEnabled = automationEnabled,
         };
         var json = JsonSerializer.Serialize(stored, SerializerOptions);
         var temporaryPath = _filePath + ".tmp";
@@ -109,5 +115,7 @@ public sealed class JsonThemeScheduleSettingsStore : IThemeScheduleSettingsStore
         public int LightMinutes { get; init; }
 
         public int DarkMinutes { get; init; }
+
+        public bool AutomationEnabled { get; init; }
     }
 }

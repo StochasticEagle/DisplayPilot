@@ -42,6 +42,7 @@ public sealed class JsonThemeScheduleSettingsStoreTests
         Assert.IsFalse(result.WasLoadedFromDisk);
         Assert.AreEqual(new TimeOnly(7, 0), result.Schedule.LightTime);
         Assert.AreEqual(new TimeOnly(19, 0), result.Schedule.DarkTime);
+        Assert.IsFalse(result.AutomationEnabled);
         Assert.IsFalse(File.Exists(_settingsPath));
     }
 
@@ -51,12 +52,30 @@ public sealed class JsonThemeScheduleSettingsStoreTests
         var store = new JsonThemeScheduleSettingsStore(_settingsPath);
         var expected = new CustomThemeSchedule(new TimeOnly(6, 45), new TimeOnly(22, 15));
 
-        store.Save(expected);
+        store.Save(expected, automationEnabled: true);
         var result = store.Load();
 
         Assert.IsTrue(result.WasLoadedFromDisk);
         Assert.AreEqual(expected, result.Schedule);
-        StringAssert.Contains(File.ReadAllText(_settingsPath, Encoding.UTF8), "\"version\": 1");
+        Assert.IsTrue(result.AutomationEnabled);
+        StringAssert.Contains(File.ReadAllText(_settingsPath, Encoding.UTF8), "\"version\": 2");
+    }
+
+    [TestMethod]
+    public void VersionOneScheduleMigratesWithAutomationDisabled()
+    {
+        Directory.CreateDirectory(_testDirectory);
+        File.WriteAllText(
+            _settingsPath,
+            "{\"version\":1,\"lightMinutes\":405,\"darkMinutes\":1335}",
+            Encoding.UTF8);
+
+        var result = new JsonThemeScheduleSettingsStore(_settingsPath).Load();
+
+        Assert.IsTrue(result.WasLoadedFromDisk);
+        Assert.AreEqual(new TimeOnly(6, 45), result.Schedule.LightTime);
+        Assert.AreEqual(new TimeOnly(22, 15), result.Schedule.DarkTime);
+        Assert.IsFalse(result.AutomationEnabled);
     }
 
     [TestMethod]
