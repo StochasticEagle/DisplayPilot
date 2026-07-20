@@ -29,6 +29,8 @@ public sealed partial class MainWindow : Window
     private IReadOnlyList<WmiBrightnessProbeResult> _lastWmiProbes = [];
     private ThemeState? _themeState;
     private ThemeApplyResult? _lastThemeResult;
+    private CustomThemeSchedule? _customThemeSchedule;
+    private ThemeScheduleEvaluation? _lastScheduleEvaluation;
     private BrightnessWriteResult? _lastBrightnessWriteResult;
     private bool _initialScanStarted;
     private string _diagnosticReport = string.Empty;
@@ -36,6 +38,9 @@ public sealed partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        LightScheduleTimePicker.Time = new TimeSpan(7, 0, 0);
+        DarkScheduleTimePicker.Time = new TimeSpan(19, 0, 0);
+        RefreshSchedulePreview();
         SystemText.Text = GetSystemSummary();
     }
 
@@ -64,6 +69,11 @@ public sealed partial class MainWindow : Window
     private async void ApplyDarkThemeButton_Click(object sender, RoutedEventArgs e)
     {
         await ApplyThemeAsync(ThemeMode.Dark);
+    }
+
+    private void PreviewScheduleButton_Click(object sender, RoutedEventArgs e)
+    {
+        RefreshSchedulePreview();
     }
 
     private async void RescanButton_Click(object sender, RoutedEventArgs e)
@@ -367,6 +377,49 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    private void RefreshSchedulePreview()
+    {
+        try
+        {
+            _customThemeSchedule = new CustomThemeSchedule(
+                TimeOnly.FromTimeSpan(LightScheduleTimePicker.Time),
+                TimeOnly.FromTimeSpan(DarkScheduleTimePicker.Time));
+            _lastScheduleEvaluation = new CustomThemeScheduleEvaluator().Evaluate(
+                _customThemeSchedule,
+                TimeOnly.FromDateTime(DateTime.Now));
+
+            var remainingMinutes = (int)Math.Ceiling(_lastScheduleEvaluation.TimeUntilNextTransition.TotalMinutes);
+            ScheduleStatusText.Text = string.Format(
+                CultureInfo.CurrentCulture,
+                "Now: {0}. Next: {1} at {2} ({3} minute(s)). Preview only; no automatic theme change.",
+                _lastScheduleEvaluation.ActiveMode,
+                _lastScheduleEvaluation.NextMode,
+                FormatTime(_lastScheduleEvaluation.NextTransitionTime),
+                remainingMinutes);
+            RefreshDiagnosticReport();
+        }
+        catch (ArgumentException exception)
+        {
+            _customThemeSchedule = null;
+            _lastScheduleEvaluation = null;
+            ScheduleStatusText.Text = exception.Message;
+            RefreshDiagnosticReport();
+        }
+    }
+
+    private void RefreshDiagnosticReport()
+    {
+        _diagnosticReport = BuildDiagnosticReport(
+            _activeMonitors,
+            _lastDdcProbes.Count == 0 ? null : _lastDdcProbes,
+            _lastWmiProbes.Count == 0 ? null : _lastWmiProbes,
+            _lastBrightnessWriteResult,
+            error: null);
+    }
+
+    private static string FormatTime(TimeOnly time) =>
+        DateTime.Today.Add(time.ToTimeSpan()).ToString("t", CultureInfo.CurrentCulture);
+
     private void UpdateThemeStatus(string? prefix)
     {
         if (_themeState is null)
@@ -463,6 +516,11 @@ public sealed partial class MainWindow : Window
         report.Append("Theme Windows: ").AppendLine(_themeState is null ? "Unknown" : _themeState.SystemUsesLightTheme ? "Light" : "Dark");
         report.Append("Last theme request: ").AppendLine(_lastThemeResult?.RequestedMode.ToString() ?? "None");
         report.Append("Last theme request verified: ").AppendLine(_lastThemeResult?.Succeeded.ToString() ?? "Not applicable");
+        report.Append("Schedule light time: ").AppendLine(_customThemeSchedule is null ? "Invalid" : _customThemeSchedule.LightTime.ToString("HH:mm", CultureInfo.InvariantCulture));
+        report.Append("Schedule dark time: ").AppendLine(_customThemeSchedule is null ? "Invalid" : _customThemeSchedule.DarkTime.ToString("HH:mm", CultureInfo.InvariantCulture));
+        report.Append("Schedule preview mode: ").AppendLine(_lastScheduleEvaluation?.ActiveMode.ToString() ?? "Unavailable");
+        report.Append("Schedule next mode: ").AppendLine(_lastScheduleEvaluation?.NextMode.ToString() ?? "Unavailable");
+        report.Append("Schedule automatic writes enabled: false").AppendLine();
         report.AppendLine("Privacy: device paths and WMI instance names can identify a local display instance; review before sharing");
         report.AppendLine(ddcProbes is null
             ? "DDC/CI commands issued: no"

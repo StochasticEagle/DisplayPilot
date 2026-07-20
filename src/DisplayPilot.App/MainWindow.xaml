@@ -93,6 +93,44 @@
                 </Grid>
             </Border>
 
+            <Border
+                Margin="24,0,24,12"
+                Padding="16,12"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1"
+                CornerRadius="8">
+                <StackPanel Spacing="10">
+                    <StackPanel Spacing="3">
+                        <TextBlock
+                            FontWeight="SemiBold"
+                            Text="Custom theme schedule preview" />
+                        <TextBlock
+                            x:Name="ScheduleStatusText"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Text="Choose different light and dark transition times."
+                            TextWrapping="Wrap" />
+                    </StackPanel>
+                    <StackPanel
+                        Orientation="Horizontal"
+                        Spacing="12">
+                        <TimePicker
+                            x:Name="LightScheduleTimePicker"
+                            Width="160"
+                            ClockIdentifier="24HourClock"
+                            Header="Light starts" />
+                        <TimePicker
+                            x:Name="DarkScheduleTimePicker"
+                            Width="160"
+                            ClockIdentifier="24HourClock"
+                            Header="Dark starts" />
+                        <Button
+                            VerticalAlignment="Bottom"
+                            Click="PreviewScheduleButton_Click"
+                            Content="Preview schedule" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
             <InfoBar
                 Margin="24,0,24,12"
                 IsClosable="False"
