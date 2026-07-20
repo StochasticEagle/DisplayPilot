@@ -11,6 +11,7 @@ using DisplayPilot.Display.Brightness;
 using DisplayPilot.Display.Ddc;
 using DisplayPilot.Display.Discovery;
 using DisplayPilot.Display.Wmi;
+using DisplayPilot.Windows.Scheduling;
 using DisplayPilot.Windows.Settings;
 using DisplayPilot.Windows.Theme;
 using Microsoft.UI.Xaml;
@@ -18,7 +19,7 @@ using Windows.ApplicationModel.DataTransfer;
 
 namespace DisplayPilot.App;
 
-public sealed partial class MainWindow : Window
+public sealed partial class MainWindow : Window, IDisposable
 {
     private readonly IMonitorDiscoveryService _monitorDiscovery = new DisplayConfigMonitorDiscovery();
     private readonly DdcBrightnessProbeService _ddcProbeService = new();
@@ -26,10 +27,7 @@ public sealed partial class MainWindow : Window
     private readonly BrightnessControlService _brightnessControlService = new();
     private readonly WindowsThemeService _themeService = new();
     private readonly JsonThemeScheduleSettingsStore _themeScheduleSettingsStore = new();
-    private readonly DispatcherTimer _themeScheduleTimer = new()
-    {
-        Interval = TimeSpan.FromSeconds(30),
-    };
+    private readonly WindowsBoundaryTimer _themeScheduleTimer = new();
     private IReadOnlyList<MonitorDisplayInfo> _activeMonitors = [];
     private IReadOnlyList<MonitorDdcProbeInfo> _lastDdcProbes = [];
     private IReadOnlyList<WmiBrightnessProbeResult> _lastWmiProbes = [];
@@ -50,7 +48,9 @@ public sealed partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
-        _themeScheduleTimer.Tick += ThemeScheduleTimer_Tick;
+        _themeScheduleTimer.Elapsed += ThemeScheduleTimer_Elapsed;
+        Activated += MainWindow_Activated;
+        Closed += MainWindow_Closed;
         LoadScheduleSettings();
         RefreshSchedulePreview();
         SystemText.Text = GetSystemSummary();
@@ -65,8 +65,8 @@ public sealed partial class MainWindow : Window
 
         _initialScanStarted = true;
         RefreshThemeStatus();
-        UpdateThemeScheduleTimer();
         await EvaluateAndApplyScheduleAsync();
+        UpdateThemeScheduleTimer();
         await RefreshDisplaysAsync();
     }
 
@@ -101,6 +101,7 @@ public sealed partial class MainWindow : Window
         if (SaveScheduleSettings())
         {
             await EvaluateAndApplyScheduleAsync();
+            UpdateThemeScheduleTimer();
         }
     }
 
@@ -518,7 +519,6 @@ public sealed partial class MainWindow : Window
             SchedulePersistenceStatusText.Text = _scheduleAutomationEnabled
                 ? "Saved the schedule; automatic switching is enabled while the app runs."
                 : "Saved the schedule; automatic switching is disabled.";
-            UpdateThemeScheduleTimer();
             RefreshSchedulePreview();
             return true;
         }
@@ -551,9 +551,38 @@ public sealed partial class MainWindow : Window
         RefreshDiagnosticReport();
     }
 
-    private async void ThemeScheduleTimer_Tick(object? sender, object e)
+    private void ThemeScheduleTimer_Elapsed(object? sender, EventArgs e)
     {
+        _ = DispatcherQueue.TryEnqueue(async () =>
+        {
+            await EvaluateAndApplyScheduleAsync();
+            UpdateThemeScheduleTimer();
+        });
+    }
+
+    private async void MainWindow_Activated(object sender, WindowActivatedEventArgs args)
+    {
+        if (!_initialScanStarted || args.WindowActivationState == WindowActivationState.Deactivated)
+        {
+            return;
+        }
+
         await EvaluateAndApplyScheduleAsync();
+        UpdateThemeScheduleTimer();
+    }
+
+    private void MainWindow_Closed(object sender, WindowEventArgs args)
+    {
+        Dispose();
+    }
+
+    public void Dispose()
+    {
+        Activated -= MainWindow_Activated;
+        Closed -= MainWindow_Closed;
+        _themeScheduleTimer.Elapsed -= ThemeScheduleTimer_Elapsed;
+        _themeScheduleTimer.Dispose();
+        GC.SuppressFinalize(this);
     }
 
     private async Task EvaluateAndApplyScheduleAsync()
@@ -630,19 +659,29 @@ public sealed partial class MainWindow : Window
             CultureInfo.CurrentCulture,
             "Manual theme override is active until {0:t}.",
             _manualScheduleOverrideUntil);
+        UpdateThemeScheduleTimer();
         RefreshDiagnosticReport();
     }
 
     private void UpdateThemeScheduleTimer()
     {
-        if (_scheduleAutomationEnabled && _initialScanStarted)
+        if (!_scheduleAutomationEnabled || !_initialScanStarted || _savedThemeSchedule is null)
         {
-            _themeScheduleTimer.Start();
+            _themeScheduleTimer.Cancel();
+            return;
         }
-        else
+
+        if (_themeOperationRunning)
         {
-            _themeScheduleTimer.Stop();
+            _themeScheduleTimer.Arm(DateTimeOffset.Now.AddSeconds(1));
+            return;
         }
+
+        var now = DateTimeOffset.Now;
+        var evaluation = CustomThemeScheduleEvaluator.Evaluate(
+            _savedThemeSchedule,
+            TimeOnly.FromDateTime(now.LocalDateTime));
+        _themeScheduleTimer.Arm(now.Add(evaluation.TimeUntilNextTransition));
     }
 
     private void RefreshDiagnosticReport()
@@ -763,7 +802,8 @@ public sealed partial class MainWindow : Window
         report.Append("Schedule persisted: ").AppendLine(_scheduleWasLoadedFromDisk.ToString(CultureInfo.InvariantCulture));
         report.Append("Schedule settings error: ").AppendLine(_scheduleSettingsError ?? "None");
         report.Append("Schedule automatic writes enabled: ").AppendLine(_scheduleAutomationEnabled.ToString(CultureInfo.InvariantCulture));
-        report.Append("Schedule timer active: ").AppendLine(_themeScheduleTimer.IsEnabled.ToString(CultureInfo.InvariantCulture));
+        report.Append("Schedule timer active: ").AppendLine(_themeScheduleTimer.IsArmed.ToString(CultureInfo.InvariantCulture));
+        report.Append("Schedule timer due: ").AppendLine(_themeScheduleTimer.DueTime?.ToString("O", CultureInfo.InvariantCulture) ?? "None");
         report.Append("Schedule manual override until: ").AppendLine(_manualScheduleOverrideUntil?.ToString("O", CultureInfo.InvariantCulture) ?? "None");
         report.AppendLine("Privacy: device paths and WMI instance names can identify a local display instance; review before sharing");
         report.AppendLine(ddcProbes is null
