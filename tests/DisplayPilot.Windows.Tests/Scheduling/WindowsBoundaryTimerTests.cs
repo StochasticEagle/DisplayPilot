@@ -2,6 +2,7 @@
 // Licensed under the MIT license. See the LICENSE file in the project root.
 
 using DisplayPilot.Windows.Scheduling;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace DisplayPilot.Windows.Tests.Scheduling;
 
