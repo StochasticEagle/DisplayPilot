@@ -25,7 +25,7 @@ public sealed partial class MainWindow : Window
     private readonly WmiBrightnessProbeService _wmiProbeService = new();
     private readonly BrightnessControlService _brightnessControlService = new();
     private readonly WindowsThemeService _themeService = new();
-    private readonly IThemeScheduleSettingsStore _themeScheduleSettingsStore = new JsonThemeScheduleSettingsStore();
+    private readonly JsonThemeScheduleSettingsStore _themeScheduleSettingsStore = new();
     private IReadOnlyList<MonitorDisplayInfo> _activeMonitors = [];
     private IReadOnlyList<MonitorDdcProbeInfo> _lastDdcProbes = [];
     private IReadOnlyList<WmiBrightnessProbeResult> _lastWmiProbes = [];
