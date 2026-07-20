@@ -31,7 +31,7 @@
                     Text="DisplayPilot" />
                 <TextBlock
                     Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                    Text="Active display-path verification" />
+                    Text="Windows theme and display verification" />
             </StackPanel>
 
             <StackPanel
@@ -51,14 +51,56 @@
             </StackPanel>
         </Grid>
 
-        <InfoBar
-            Grid.Row="1"
-            Margin="24,0,24,12"
-            IsClosable="False"
-            IsOpen="True"
-            Message="Read brightness first, select one validated display, then explicitly set 0–100%. DisplayPilot writes only brightness and immediately reads it back for verification."
-            Severity="Warning"
-            Title="Brightness write verification" />
+        <StackPanel Grid.Row="1">
+            <Border
+                Margin="24,0,24,12"
+                Padding="16,12"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1"
+                CornerRadius="8">
+                <Grid ColumnSpacing="16">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Spacing="3">
+                        <TextBlock
+                            FontWeight="SemiBold"
+                            Text="Windows theme" />
+                        <TextBlock
+                            x:Name="ThemeStatusText"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Text="Reading current app and system theme..." />
+                    </StackPanel>
+                    <StackPanel
+                        Grid.Column="1"
+                        VerticalAlignment="Center"
+                        Orientation="Horizontal"
+                        Spacing="8">
+                        <Button
+                            x:Name="RefreshThemeButton"
+                            Click="RefreshThemeButton_Click"
+                            Content="Refresh" />
+                        <Button
+                            x:Name="ApplyLightThemeButton"
+                            Click="ApplyLightThemeButton_Click"
+                            Content="Light" />
+                        <Button
+                            x:Name="ApplyDarkThemeButton"
+                            Click="ApplyDarkThemeButton_Click"
+                            Content="Dark" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <InfoBar
+                Margin="24,0,24,12"
+                IsClosable="False"
+                IsOpen="True"
+                Message="Read brightness first, select one validated display, then explicitly set 0–100%. DisplayPilot writes only brightness and immediately reads it back for verification."
+                Severity="Warning"
+                Title="Brightness write verification" />
+        </StackPanel>
 
         <Grid Grid.Row="2" Padding="24,0,24,12">
             <ListView

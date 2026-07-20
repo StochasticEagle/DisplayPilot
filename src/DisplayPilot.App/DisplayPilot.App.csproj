@@ -13,6 +13,8 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.WindowsAppSDK" />
+    <ProjectReference Include="..\DisplayPilot.Core\DisplayPilot.Core.csproj" />
     <ProjectReference Include="..\DisplayPilot.Display\DisplayPilot.Display.csproj" />
+    <ProjectReference Include="..\DisplayPilot.Windows\DisplayPilot.Windows.csproj" />
   </ItemGroup>
 </Project>
