@@ -71,7 +71,10 @@ public sealed class CustomThemeScheduleEvaluatorTests
     public void EqualTransitionTimesAreRejected()
     {
         Assert.ThrowsExactly<ArgumentException>(() =>
-            new CustomThemeSchedule(new TimeOnly(7, 0), new TimeOnly(7, 0)));
+        {
+            var schedule = new CustomThemeSchedule(new TimeOnly(7, 0), new TimeOnly(7, 0));
+            Assert.IsNotNull(schedule);
+        });
     }
 
     private static ThemeScheduleEvaluation Evaluate(CustomThemeSchedule schedule, int hour, int minute) =>
