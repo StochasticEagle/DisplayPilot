@@ -127,7 +127,16 @@
                             VerticalAlignment="Bottom"
                             Click="PreviewScheduleButton_Click"
                             Content="Preview schedule" />
+                        <Button
+                            VerticalAlignment="Bottom"
+                            Click="SaveScheduleButton_Click"
+                            Content="Save schedule" />
                     </StackPanel>
+                    <TextBlock
+                        x:Name="SchedulePersistenceStatusText"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Text="Schedule settings have not been loaded."
+                        TextWrapping="Wrap" />
                 </StackPanel>
             </Border>
 
