@@ -12,7 +12,8 @@ JSON schema and stores minute-of-day values without device identifiers.
 - Invalid, unsupported, or ambiguous saved settings fall back to safe defaults.
 - DST or time-zone changes occurring exactly on a schedule boundary are intentionally
   out of scope; evaluation uses the current local wall-clock time.
-- No timer, background task, startup task, or automatic theme write is included.
+- Automatic switching is stored separately and remains disabled unless explicitly
+  enabled and saved; see the fixed-theme automation verification checkpoint.
 - Loading, previewing, and saving a schedule do not issue DDC/CI or WMI commands.
 
 ## Windows test

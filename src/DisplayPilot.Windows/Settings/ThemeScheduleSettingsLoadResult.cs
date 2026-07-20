@@ -7,4 +7,5 @@ namespace DisplayPilot.Windows.Settings;
 
 public sealed record ThemeScheduleSettingsLoadResult(
     CustomThemeSchedule Schedule,
-    bool WasLoadedFromDisk);
+    bool WasLoadedFromDisk,
+    bool AutomationEnabled);

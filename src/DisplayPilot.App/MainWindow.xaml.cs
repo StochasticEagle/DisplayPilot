@@ -11,6 +11,7 @@ using DisplayPilot.Display.Brightness;
 using DisplayPilot.Display.Ddc;
 using DisplayPilot.Display.Discovery;
 using DisplayPilot.Display.Wmi;
+using DisplayPilot.Windows.Scheduling;
 using DisplayPilot.Windows.Settings;
 using DisplayPilot.Windows.Theme;
 using Microsoft.UI.Xaml;
@@ -18,7 +19,7 @@ using Windows.ApplicationModel.DataTransfer;
 
 namespace DisplayPilot.App;
 
-public sealed partial class MainWindow : Window
+public sealed partial class MainWindow : Window, IDisposable
 {
     private readonly IMonitorDiscoveryService _monitorDiscovery = new DisplayConfigMonitorDiscovery();
     private readonly DdcBrightnessProbeService _ddcProbeService = new();
@@ -26,22 +27,30 @@ public sealed partial class MainWindow : Window
     private readonly BrightnessControlService _brightnessControlService = new();
     private readonly WindowsThemeService _themeService = new();
     private readonly JsonThemeScheduleSettingsStore _themeScheduleSettingsStore = new();
+    private readonly WindowsBoundaryTimer _themeScheduleTimer = new();
     private IReadOnlyList<MonitorDisplayInfo> _activeMonitors = [];
     private IReadOnlyList<MonitorDdcProbeInfo> _lastDdcProbes = [];
     private IReadOnlyList<WmiBrightnessProbeResult> _lastWmiProbes = [];
     private ThemeState? _themeState;
     private ThemeApplyResult? _lastThemeResult;
     private CustomThemeSchedule? _customThemeSchedule;
+    private CustomThemeSchedule? _savedThemeSchedule;
     private ThemeScheduleEvaluation? _lastScheduleEvaluation;
     private bool _scheduleWasLoadedFromDisk;
+    private bool _scheduleAutomationEnabled;
+    private DateTimeOffset? _manualScheduleOverrideUntil;
     private string? _scheduleSettingsError;
     private BrightnessWriteResult? _lastBrightnessWriteResult;
+    private bool _themeOperationRunning;
     private bool _initialScanStarted;
     private string _diagnosticReport = string.Empty;
 
     public MainWindow()
     {
         InitializeComponent();
+        _themeScheduleTimer.Elapsed += ThemeScheduleTimer_Elapsed;
+        Activated += MainWindow_Activated;
+        Closed += MainWindow_Closed;
         LoadScheduleSettings();
         RefreshSchedulePreview();
         SystemText.Text = GetSystemSummary();
@@ -56,6 +65,8 @@ public sealed partial class MainWindow : Window
 
         _initialScanStarted = true;
         RefreshThemeStatus();
+        await EvaluateAndApplyScheduleAsync();
+        UpdateThemeScheduleTimer();
         await RefreshDisplaysAsync();
     }
 
@@ -66,12 +77,18 @@ public sealed partial class MainWindow : Window
 
     private async void ApplyLightThemeButton_Click(object sender, RoutedEventArgs e)
     {
-        await ApplyThemeAsync(ThemeMode.Light);
+        if (await ApplyThemeAsync(ThemeMode.Light, isScheduledChange: false))
+        {
+            ActivateManualScheduleOverride(ThemeMode.Light);
+        }
     }
 
     private async void ApplyDarkThemeButton_Click(object sender, RoutedEventArgs e)
     {
-        await ApplyThemeAsync(ThemeMode.Dark);
+        if (await ApplyThemeAsync(ThemeMode.Dark, isScheduledChange: false))
+        {
+            ActivateManualScheduleOverride(ThemeMode.Dark);
+        }
     }
 
     private void PreviewScheduleButton_Click(object sender, RoutedEventArgs e)
@@ -79,9 +96,13 @@ public sealed partial class MainWindow : Window
         RefreshSchedulePreview();
     }
 
-    private void SaveScheduleButton_Click(object sender, RoutedEventArgs e)
+    private async void SaveScheduleButton_Click(object sender, RoutedEventArgs e)
     {
-        SaveScheduleSettings();
+        if (SaveScheduleSettings())
+        {
+            await EvaluateAndApplyScheduleAsync();
+            UpdateThemeScheduleTimer();
+        }
     }
 
     private async void RescanButton_Click(object sender, RoutedEventArgs e)
@@ -327,17 +348,29 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private async Task ApplyThemeAsync(ThemeMode mode)
+    private async Task<bool> ApplyThemeAsync(ThemeMode mode, bool isScheduledChange)
     {
+        if (_themeOperationRunning)
+        {
+            return false;
+        }
+
+        _themeOperationRunning = true;
         SetThemeButtonsEnabled(false);
-        ThemeStatusText.Text = $"Applying {mode.ToString().ToLowerInvariant()} theme to apps and Windows...";
+        ThemeStatusText.Text = isScheduledChange
+            ? $"Schedule is applying {mode.ToString().ToLowerInvariant()} theme to apps and Windows..."
+            : $"Applying {mode.ToString().ToLowerInvariant()} theme to apps and Windows...";
+        var succeeded = false;
 
         try
         {
             _lastThemeResult = await Task.Run(() => _themeService.Apply(mode));
             _themeState = _lastThemeResult.After;
+            succeeded = _lastThemeResult.Succeeded;
             UpdateThemeStatus(_lastThemeResult.Succeeded
-                ? $"Applied and verified {mode.ToString().ToLowerInvariant()} theme."
+                ? isScheduledChange
+                    ? $"Schedule applied and verified {mode.ToString().ToLowerInvariant()} theme."
+                    : $"Applied and verified {mode.ToString().ToLowerInvariant()} theme."
                 : $"Windows did not verify the requested {mode.ToString().ToLowerInvariant()} theme.");
             _diagnosticReport = BuildDiagnosticReport(
                 _activeMonitors,
@@ -360,8 +393,11 @@ public sealed partial class MainWindow : Window
         }
         finally
         {
+            _themeOperationRunning = false;
             SetThemeButtonsEnabled(true);
         }
+
+        return succeeded;
     }
 
     private void RefreshThemeStatus()
@@ -397,15 +433,19 @@ public sealed partial class MainWindow : Window
                 TimeOnly.FromDateTime(DateTime.Now));
 
             var remainingMinutes = (int)Math.Ceiling(_lastScheduleEvaluation.TimeUntilNextTransition.TotalMinutes);
+            var automationStatus = _scheduleAutomationEnabled
+                ? "Automatic switching is enabled while DisplayPilot is running."
+                : "Preview only; automatic switching is disabled.";
             ScheduleStatusText.Text = string.Format(
                 CultureInfo.CurrentCulture,
-                "Selected: Light {0} · Dark {1}. Now: {2}. Next: {3} at {4} ({5} minute(s)). Preview only; no automatic theme change.",
+                "Selected: Light {0} · Dark {1}. Now: {2}. Next: {3} at {4} ({5} minute(s)). {6}",
                 _customThemeSchedule.LightTime.ToString("HH:mm", CultureInfo.InvariantCulture),
                 _customThemeSchedule.DarkTime.ToString("HH:mm", CultureInfo.InvariantCulture),
                 _lastScheduleEvaluation.ActiveMode,
                 _lastScheduleEvaluation.NextMode,
                 FormatTime(_lastScheduleEvaluation.NextTransitionTime),
-                remainingMinutes);
+                remainingMinutes,
+                automationStatus);
             RefreshDiagnosticReport();
         }
         catch (ArgumentException exception)
@@ -424,10 +464,15 @@ public sealed partial class MainWindow : Window
             var result = _themeScheduleSettingsStore.Load();
             LightScheduleTimePicker.Time = result.Schedule.LightTime.ToTimeSpan();
             DarkScheduleTimePicker.Time = result.Schedule.DarkTime.ToTimeSpan();
+            _savedThemeSchedule = result.Schedule;
             _scheduleWasLoadedFromDisk = result.WasLoadedFromDisk;
+            _scheduleAutomationEnabled = result.AutomationEnabled;
+            ScheduleAutomationToggle.IsOn = result.AutomationEnabled;
             _scheduleSettingsError = null;
             SchedulePersistenceStatusText.Text = result.WasLoadedFromDisk
-                ? "Loaded the saved per-user schedule."
+                ? result.AutomationEnabled
+                    ? "Loaded the saved schedule; automatic switching is enabled while the app runs."
+                    : "Loaded the saved per-user schedule; automatic switching is disabled."
                 : "Using the default schedule; select Save schedule to persist it.";
         }
         catch (IOException exception)
@@ -449,39 +494,53 @@ public sealed partial class MainWindow : Window
         var defaults = JsonThemeScheduleSettingsStore.CreateDefault();
         LightScheduleTimePicker.Time = defaults.LightTime.ToTimeSpan();
         DarkScheduleTimePicker.Time = defaults.DarkTime.ToTimeSpan();
+        _savedThemeSchedule = defaults;
         _scheduleWasLoadedFromDisk = false;
+        _scheduleAutomationEnabled = false;
+        ScheduleAutomationToggle.IsOn = false;
         _scheduleSettingsError = exception.GetType().Name;
         SchedulePersistenceStatusText.Text = "Saved schedule could not be loaded; using safe defaults.";
     }
 
-    private void SaveScheduleSettings()
+    private bool SaveScheduleSettings()
     {
         try
         {
             var schedule = new CustomThemeSchedule(
                 TimeOnly.FromTimeSpan(LightScheduleTimePicker.Time),
                 TimeOnly.FromTimeSpan(DarkScheduleTimePicker.Time));
-            _themeScheduleSettingsStore.Save(schedule);
+            var automationEnabled = ScheduleAutomationToggle.IsOn;
+            _themeScheduleSettingsStore.Save(schedule, automationEnabled);
+            _savedThemeSchedule = schedule;
+            _scheduleAutomationEnabled = automationEnabled;
             _scheduleWasLoadedFromDisk = true;
+            _manualScheduleOverrideUntil = null;
             _scheduleSettingsError = null;
-            SchedulePersistenceStatusText.Text = "Saved the per-user schedule.";
+            SchedulePersistenceStatusText.Text = _scheduleAutomationEnabled
+                ? "Saved the schedule; automatic switching is enabled while the app runs."
+                : "Saved the schedule; automatic switching is disabled.";
             RefreshSchedulePreview();
+            return true;
         }
         catch (ArgumentException)
         {
             RefreshSchedulePreview();
+            return false;
         }
         catch (IOException exception)
         {
             ReportScheduleSaveFailure(exception);
+            return false;
         }
         catch (UnauthorizedAccessException exception)
         {
             ReportScheduleSaveFailure(exception);
+            return false;
         }
         catch (SecurityException exception)
         {
             ReportScheduleSaveFailure(exception);
+            return false;
         }
     }
 
@@ -490,6 +549,139 @@ public sealed partial class MainWindow : Window
         _scheduleSettingsError = exception.GetType().Name;
         SchedulePersistenceStatusText.Text = "Schedule settings could not be saved.";
         RefreshDiagnosticReport();
+    }
+
+    private void ThemeScheduleTimer_Elapsed(object? sender, EventArgs e)
+    {
+        _ = DispatcherQueue.TryEnqueue(async () =>
+        {
+            await EvaluateAndApplyScheduleAsync();
+            UpdateThemeScheduleTimer();
+        });
+    }
+
+    private async void MainWindow_Activated(object sender, WindowActivatedEventArgs args)
+    {
+        if (!_initialScanStarted || args.WindowActivationState == WindowActivationState.Deactivated)
+        {
+            return;
+        }
+
+        await EvaluateAndApplyScheduleAsync();
+        UpdateThemeScheduleTimer();
+    }
+
+    private void MainWindow_Closed(object sender, WindowEventArgs args)
+    {
+        Dispose();
+    }
+
+    public void Dispose()
+    {
+        Activated -= MainWindow_Activated;
+        Closed -= MainWindow_Closed;
+        _themeScheduleTimer.Elapsed -= ThemeScheduleTimer_Elapsed;
+        _themeScheduleTimer.Dispose();
+        GC.SuppressFinalize(this);
+    }
+
+    private async Task EvaluateAndApplyScheduleAsync()
+    {
+        if (!_scheduleAutomationEnabled || _themeOperationRunning)
+        {
+            return;
+        }
+
+        var now = DateTimeOffset.Now;
+        if (_manualScheduleOverrideUntil is not null && now < _manualScheduleOverrideUntil)
+        {
+            SchedulePersistenceStatusText.Text = string.Format(
+                CultureInfo.CurrentCulture,
+                "Manual theme override is active until {0:t}.",
+                _manualScheduleOverrideUntil);
+            return;
+        }
+
+        if (_manualScheduleOverrideUntil is not null)
+        {
+            _manualScheduleOverrideUntil = null;
+            SchedulePersistenceStatusText.Text = "The schedule boundary ended the manual override.";
+        }
+
+        if (_savedThemeSchedule is null)
+        {
+            return;
+        }
+
+        var scheduledEvaluation = CustomThemeScheduleEvaluator.Evaluate(
+            _savedThemeSchedule,
+            TimeOnly.FromDateTime(now.LocalDateTime));
+
+        RefreshThemeStatus();
+        if (_themeState is null)
+        {
+            return;
+        }
+
+        var shouldBeLight = scheduledEvaluation.ActiveMode == ThemeMode.Light;
+        if (_themeState.AppsUseLightTheme != shouldBeLight ||
+            _themeState.SystemUsesLightTheme != shouldBeLight)
+        {
+            _ = await ApplyThemeAsync(scheduledEvaluation.ActiveMode, isScheduledChange: true);
+        }
+    }
+
+    private void ActivateManualScheduleOverride(ThemeMode appliedMode)
+    {
+        if (!_scheduleAutomationEnabled)
+        {
+            return;
+        }
+
+        if (_savedThemeSchedule is null)
+        {
+            _manualScheduleOverrideUntil = null;
+            return;
+        }
+
+        var now = DateTimeOffset.Now;
+        var scheduledEvaluation = CustomThemeScheduleEvaluator.Evaluate(
+            _savedThemeSchedule,
+            TimeOnly.FromDateTime(now.LocalDateTime));
+        if (appliedMode == scheduledEvaluation.ActiveMode)
+        {
+            _manualScheduleOverrideUntil = null;
+            return;
+        }
+
+        _manualScheduleOverrideUntil = now.Add(scheduledEvaluation.TimeUntilNextTransition);
+        SchedulePersistenceStatusText.Text = string.Format(
+            CultureInfo.CurrentCulture,
+            "Manual theme override is active until {0:t}.",
+            _manualScheduleOverrideUntil);
+        UpdateThemeScheduleTimer();
+        RefreshDiagnosticReport();
+    }
+
+    private void UpdateThemeScheduleTimer()
+    {
+        if (!_scheduleAutomationEnabled || !_initialScanStarted || _savedThemeSchedule is null)
+        {
+            _themeScheduleTimer.Cancel();
+            return;
+        }
+
+        if (_themeOperationRunning)
+        {
+            _themeScheduleTimer.Arm(DateTimeOffset.Now.AddSeconds(1));
+            return;
+        }
+
+        var now = DateTimeOffset.Now;
+        var evaluation = CustomThemeScheduleEvaluator.Evaluate(
+            _savedThemeSchedule,
+            TimeOnly.FromDateTime(now.LocalDateTime));
+        _themeScheduleTimer.Arm(now.Add(evaluation.TimeUntilNextTransition));
     }
 
     private void RefreshDiagnosticReport()
@@ -603,11 +795,16 @@ public sealed partial class MainWindow : Window
         report.Append("Last theme request verified: ").AppendLine(_lastThemeResult?.Succeeded.ToString() ?? "Not applicable");
         report.Append("Schedule light time: ").AppendLine(_customThemeSchedule is null ? "Invalid" : _customThemeSchedule.LightTime.ToString("HH:mm", CultureInfo.InvariantCulture));
         report.Append("Schedule dark time: ").AppendLine(_customThemeSchedule is null ? "Invalid" : _customThemeSchedule.DarkTime.ToString("HH:mm", CultureInfo.InvariantCulture));
+        report.Append("Saved schedule light time: ").AppendLine(_savedThemeSchedule?.LightTime.ToString("HH:mm", CultureInfo.InvariantCulture) ?? "Unavailable");
+        report.Append("Saved schedule dark time: ").AppendLine(_savedThemeSchedule?.DarkTime.ToString("HH:mm", CultureInfo.InvariantCulture) ?? "Unavailable");
         report.Append("Schedule preview mode: ").AppendLine(_lastScheduleEvaluation?.ActiveMode.ToString() ?? "Unavailable");
         report.Append("Schedule next mode: ").AppendLine(_lastScheduleEvaluation?.NextMode.ToString() ?? "Unavailable");
         report.Append("Schedule persisted: ").AppendLine(_scheduleWasLoadedFromDisk.ToString(CultureInfo.InvariantCulture));
         report.Append("Schedule settings error: ").AppendLine(_scheduleSettingsError ?? "None");
-        report.Append("Schedule automatic writes enabled: false").AppendLine();
+        report.Append("Schedule automatic writes enabled: ").AppendLine(_scheduleAutomationEnabled.ToString(CultureInfo.InvariantCulture));
+        report.Append("Schedule timer active: ").AppendLine(_themeScheduleTimer.IsArmed.ToString(CultureInfo.InvariantCulture));
+        report.Append("Schedule timer due: ").AppendLine(_themeScheduleTimer.DueTime?.ToString("O", CultureInfo.InvariantCulture) ?? "None");
+        report.Append("Schedule manual override until: ").AppendLine(_manualScheduleOverrideUntil?.ToString("O", CultureInfo.InvariantCulture) ?? "None");
         report.AppendLine("Privacy: device paths and WMI instance names can identify a local display instance; review before sharing");
         report.AppendLine(ddcProbes is null
             ? "DDC/CI commands issued: no"

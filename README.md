@@ -11,3 +11,5 @@ The read-only fixed-hours evaluator is covered by
 [Custom theme schedule verification](docs/custom-theme-schedule-verification.md).
 Per-user schedule saving is covered by
 [Theme schedule persistence verification](docs/theme-schedule-persistence-verification.md).
+Opt-in switching while the app is open is covered by
+[Fixed theme automation verification](docs/fixed-theme-automation-verification.md).
