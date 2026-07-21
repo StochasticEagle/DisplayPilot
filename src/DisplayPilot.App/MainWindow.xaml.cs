@@ -48,6 +48,7 @@ public sealed partial class MainWindow : Window, IDisposable
     public MainWindow()
     {
         InitializeComponent();
+        this.AppWindow.Resize(new global::Windows.Graphics.SizeInt32(900, 860)); // Set initial window size
         _themeScheduleTimer.Elapsed += ThemeScheduleTimer_Elapsed;
         Activated += MainWindow_Activated;
         Closed += MainWindow_Closed;
