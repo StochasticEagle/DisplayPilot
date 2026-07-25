@@ -32,7 +32,10 @@ public sealed partial class NotificationAreaIcon : IDisposable
     private const uint ExitCommand = 2;
     private const uint DefaultApplicationIcon = 32512;
     private const uint ExtendedWindowStyleToolWindow = 0x00000080;
-    private const uint WindowStyleOverlapped = 0x00CF0000;
+    private const uint WindowStylePopup = 0x80000000;
+    private const uint SetWindowPositionShowWindow = 0x00000040;
+    private const int HideWindow = 0;
+    private static readonly nint TopmostWindow = new(-1);
     private const uint NonClientCreate = 0x0081;
     private const uint NonClientDestroy = 0x0082;
     private const uint NullMessage = 0x0000;
@@ -84,7 +87,7 @@ public sealed partial class NotificationAreaIcon : IDisposable
             ExtendedWindowStyleToolWindow,
             NotificationWindowClassName,
             "DisplayPilot.NotificationArea",
-            WindowStyleOverlapped,
+            WindowStylePopup,
             0,
             0,
             0,
@@ -384,19 +387,34 @@ public sealed partial class NotificationAreaIcon : IDisposable
                 return;
             }
 
-            if (!SetForegroundWindow(_ownerWindow))
-            {
-                RecordContextMenuStage(
-                    "SetForegroundWindow failed",
-                    Marshal.GetLastPInvokeError());
-            }
-
             var x = (int)unchecked((short)((ulong)packedCoordinates & 0xffff));
             var y = (int)unchecked((short)(((ulong)packedCoordinates >> 16) & 0xffff));
             if (x == 0 && y == 0 && GetCursorPosition(out var cursor))
             {
                 x = cursor.X;
                 y = cursor.Y;
+            }
+
+            if (!SetWindowPosition(
+                    _messageWindow,
+                    TopmostWindow,
+                    x,
+                    y,
+                    1,
+                    1,
+                    SetWindowPositionShowWindow))
+            {
+                RecordContextMenuStage(
+                    "SetWindowPos failed",
+                    Marshal.GetLastPInvokeError());
+                return;
+            }
+
+            if (!SetForegroundWindow(_messageWindow))
+            {
+                RecordContextMenuStage(
+                    "SetForegroundWindow failed",
+                    Marshal.GetLastPInvokeError());
             }
 
             RecordContextMenuStage("TrackPopupMenu");
@@ -422,6 +440,7 @@ public sealed partial class NotificationAreaIcon : IDisposable
         }
         finally
         {
+            _ = ShowWindow(_messageWindow, HideWindow);
             _ = DestroyMenu(menu);
             SetFocusToNotificationArea();
         }
@@ -573,6 +592,21 @@ public sealed partial class NotificationAreaIcon : IDisposable
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool SetForegroundWindow(nint window);
+
+    [LibraryImport("user32.dll", EntryPoint = "SetWindowPos", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool SetWindowPosition(
+        nint window,
+        nint insertAfter,
+        int x,
+        int y,
+        int width,
+        int height,
+        uint flags);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool ShowWindow(nint window, int command);
 
     [LibraryImport("user32.dll", EntryPoint = "PostMessageW", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
