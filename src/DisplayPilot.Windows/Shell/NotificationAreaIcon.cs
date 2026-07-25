@@ -384,7 +384,7 @@ public sealed partial class NotificationAreaIcon : IDisposable
                 return;
             }
 
-            if (!SetForegroundWindow(_messageWindow))
+            if (!SetForegroundWindow(_ownerWindow))
             {
                 RecordContextMenuStage(
                     "SetForegroundWindow failed",
