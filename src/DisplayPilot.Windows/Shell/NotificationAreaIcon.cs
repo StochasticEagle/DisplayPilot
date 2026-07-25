@@ -23,6 +23,7 @@ public sealed partial class NotificationAreaIcon : IDisposable
     private const uint NotifySelect = 0x0400;
     private const uint NotifyKeySelect = 0x0401;
     private const uint ContextMenu = 0x007B;
+    private const uint RightButtonDown = 0x0204;
     private const uint RightButtonUp = 0x0205;
     private const uint MenuString = 0x00000000;
     private const uint TrackRightButton = 0x00000002;
@@ -35,6 +36,8 @@ public sealed partial class NotificationAreaIcon : IDisposable
     private const uint WindowStyleOverlapped = 0x00CF0000;
     private const uint NonClientCreate = 0x0081;
     private const uint NonClientDestroy = 0x0082;
+    private const uint NullMessage = 0x0000;
+    private const int NotificationHistoryLimit = 12;
     private const int WindowUserData = -21;
     private const string NotificationWindowClassName = "DisplayPilot.NotificationAreaWindow";
 
@@ -51,6 +54,11 @@ public sealed partial class NotificationAreaIcon : IDisposable
     private uint _lastNotificationCode;
     private DateTimeOffset? _lastCallbackUtc;
     private uint _lastMenuCommand;
+    private readonly Queue<uint> _recentNotificationCodes = new();
+    private long _contextMenuRequestCount;
+    private string _lastContextMenuStage = "None";
+    private int _lastContextMenuError;
+    private long _ignoreRightButtonUpUntil;
 
     public NotificationAreaIcon(nint window)
     {
@@ -130,7 +138,11 @@ public sealed partial class NotificationAreaIcon : IDisposable
                 _callbackCount,
                 _lastNotificationCode,
                 _lastCallbackUtc,
-                _lastMenuCommand);
+                _lastMenuCommand,
+                _contextMenuRequestCount,
+                _lastContextMenuStage,
+                _lastContextMenuError,
+                _recentNotificationCodes.ToArray());
         }
     }
 
@@ -327,9 +339,21 @@ public sealed partial class NotificationAreaIcon : IDisposable
         {
             ShowContextMenu(wParam);
         }
+        else if (notification == RightButtonDown)
+        {
+            _ignoreRightButtonUpUntil = long.MaxValue;
+            ShowContextMenu(0);
+            _ignoreRightButtonUpUntil =
+                Environment.TickCount64 + Math.Max(GetDoubleClickTime(), 1000u);
+        }
         else if (notification == RightButtonUp)
         {
-            ShowContextMenu(0);
+            if (Environment.TickCount64 > _ignoreRightButtonUpUntil)
+            {
+                ShowContextMenu(0);
+            }
+
+            _ignoreRightButtonUpUntil = 0;
         }
 
         return 0;
@@ -351,18 +375,34 @@ public sealed partial class NotificationAreaIcon : IDisposable
 
     private void ShowContextMenu(nuint packedCoordinates)
     {
+        RecordContextMenuStage("CreatePopupMenu", requestStarted: true);
         var menu = CreatePopupMenu();
         if (menu == 0)
         {
+            RecordContextMenuStage(
+                "CreatePopupMenu failed",
+                Marshal.GetLastPInvokeError());
             return;
         }
 
         uint command = 0;
         try
         {
-            _ = AppendMenu(menu, MenuString, AdvancedCommand, "Advanced");
-            _ = AppendMenu(menu, MenuString, ExitCommand, "Exit");
-            _ = SetForegroundWindow(_messageWindow);
+            if (!AppendMenu(menu, MenuString, AdvancedCommand, "Advanced") ||
+                !AppendMenu(menu, MenuString, ExitCommand, "Exit"))
+            {
+                RecordContextMenuStage(
+                    "AppendMenu failed",
+                    Marshal.GetLastPInvokeError());
+                return;
+            }
+
+            if (!SetForegroundWindow(_messageWindow))
+            {
+                RecordContextMenuStage(
+                    "SetForegroundWindow failed",
+                    Marshal.GetLastPInvokeError());
+            }
 
             var x = (int)unchecked((short)((ulong)packedCoordinates & 0xffff));
             var y = (int)unchecked((short)(((ulong)packedCoordinates >> 16) & 0xffff));
@@ -372,6 +412,7 @@ public sealed partial class NotificationAreaIcon : IDisposable
                 y = cursor.Y;
             }
 
+            RecordContextMenuStage("TrackPopupMenu");
             command = TrackPopupMenu(
                 menu,
                 TrackRightButton | TrackReturnCommand | TrackNoNotify,
@@ -380,7 +421,12 @@ public sealed partial class NotificationAreaIcon : IDisposable
                 0,
                 _messageWindow,
                 0);
+            var trackError = Marshal.GetLastPInvokeError();
+            _ = PostMessage(_messageWindow, NullMessage, 0, 0);
             RecordMenuCommand(command);
+            RecordContextMenuStage(
+                command == 0 ? "Menu canceled or failed" : "Command selected",
+                command == 0 ? trackError : 0);
             switch (command)
             {
                 case AdvancedCommand:
@@ -422,6 +468,11 @@ public sealed partial class NotificationAreaIcon : IDisposable
             _callbackCount++;
             _lastNotificationCode = notificationCode;
             _lastCallbackUtc = DateTimeOffset.UtcNow;
+            _recentNotificationCodes.Enqueue(notificationCode);
+            while (_recentNotificationCodes.Count > NotificationHistoryLimit)
+            {
+                _ = _recentNotificationCodes.Dequeue();
+            }
         }
     }
 
@@ -430,6 +481,23 @@ public sealed partial class NotificationAreaIcon : IDisposable
         lock (_syncRoot)
         {
             _lastMenuCommand = command;
+        }
+    }
+
+    private void RecordContextMenuStage(
+        string stage,
+        int errorCode = 0,
+        bool requestStarted = false)
+    {
+        lock (_syncRoot)
+        {
+            if (requestStarted)
+            {
+                _contextMenuRequestCount++;
+            }
+
+            _lastContextMenuStage = stage;
+            _lastContextMenuError = errorCode;
         }
     }
 
@@ -511,6 +579,10 @@ public sealed partial class NotificationAreaIcon : IDisposable
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool SetForegroundWindow(nint window);
 
+    [LibraryImport("user32.dll", EntryPoint = "PostMessageW", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool PostMessage(nint window, uint message, nuint wParam, nint lParam);
+
     [LibraryImport("user32.dll")]
     private static partial uint GetDoubleClickTime();
 
@@ -585,4 +657,8 @@ public readonly record struct NotificationAreaIconDiagnostics(
     long CallbackCount,
     uint LastNotificationCode,
     DateTimeOffset? LastCallbackUtc,
-    uint LastMenuCommand);
+    uint LastMenuCommand,
+    long ContextMenuRequestCount,
+    string LastContextMenuStage,
+    int LastContextMenuError,
+    IReadOnlyList<uint> RecentNotificationCodes);
