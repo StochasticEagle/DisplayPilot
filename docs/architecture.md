@@ -7,8 +7,10 @@ theme automation with monitor management.
 
 - `DisplayPilot.Core`: scheduling, profiles, settings models, and domain logic.
 - `DisplayPilot.Display`: monitor discovery and control through DDC/CI and WMI.
-- `DisplayPilot.Windows`: Windows theme, Night Light, registry, and session integration.
-- `DisplayPilot.App`: WinUI 3 tray flyout and settings interface.
+- `DisplayPilot.Windows`: Windows theme, notification-area shell integration,
+  registry, scheduling, and session integration.
+- `DisplayPilot.App`: compact WinUI 3 notification-area flyout and Advanced
+  verification/settings interface.
 - `DisplayPilot.Core.Tests`: platform-independent unit tests.
 
 ## Constraints

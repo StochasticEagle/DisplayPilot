@@ -1,0 +1,10 @@
+// Copyright (c) 2026 Aaron
+// Licensed under the MIT license. See the LICENSE file in the project root.
+
+namespace DisplayPilot.Windows.Shell;
+
+public readonly record struct NotificationAreaBounds(
+    int Left,
+    int Top,
+    int Right,
+    int Bottom);
