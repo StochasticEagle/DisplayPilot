@@ -29,6 +29,7 @@ public sealed partial class MainWindow : Window, IDisposable
     private const int CompactHeight = 520;
     private const int AdvancedWidth = 900;
     private const int AdvancedHeight = 860;
+    private const int BrightnessChangeDelayMilliseconds = 150;
     private static readonly long CompactReopenDelayMilliseconds =
         NotificationAreaIcon.ActivationGuardDurationMilliseconds;
     private readonly IMonitorDiscoveryService _monitorDiscovery = new DisplayConfigMonitorDiscovery();
@@ -38,6 +39,8 @@ public sealed partial class MainWindow : Window, IDisposable
     private readonly WindowsThemeService _themeService = new();
     private readonly JsonThemeScheduleSettingsStore _themeScheduleSettingsStore = new();
     private readonly WindowsBoundaryTimer _themeScheduleTimer = new();
+    private readonly Dictionary<string, int> _compactBrightnessValues =
+        new(StringComparer.OrdinalIgnoreCase);
     private IReadOnlyList<MonitorDisplayInfo> _activeMonitors = [];
     private IReadOnlyList<MonitorDdcProbeInfo> _lastDdcProbes = [];
     private IReadOnlyList<WmiBrightnessProbeResult> _lastWmiProbes = [];
@@ -55,6 +58,9 @@ public sealed partial class MainWindow : Window, IDisposable
     private bool _displayOperationRunning;
     private bool _initialScanStarted;
     private bool _updatingCompactControls;
+    private CancellationTokenSource? _brightnessChangeCancellation;
+    private string? _pendingBrightnessDevicePath;
+    private int _pendingBrightnessPercent;
     private bool _isCompactMode = true;
     private long _compactShowBlockedUntil;
     private bool _exitRequested;
@@ -193,13 +199,58 @@ public sealed partial class MainWindow : Window, IDisposable
         await ProbeDdcBrightnessAsync();
     }
 
-    private async void CompactSetBrightnessButton_Click(object sender, RoutedEventArgs e)
+    private async void CompactBrightnessSlider_ValueChanged(
+        object sender,
+        Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
     {
-        if (sender is Button { Tag: CompactMonitorViewModel monitor })
+        if (_updatingCompactControls ||
+            sender is not Slider { Tag: CompactMonitorViewModel monitor } ||
+            !monitor.IsBrightnessAvailable)
         {
-            await SetBrightnessAsync(
-                monitor.DevicePath,
-                Math.Clamp((int)Math.Round(monitor.BrightnessPercent), 0, 100));
+            return;
+        }
+
+        var requestedPercent = Math.Clamp((int)Math.Round(e.NewValue), 0, 100);
+        if ((_compactBrightnessValues.TryGetValue(monitor.DevicePath, out var currentPercent) &&
+             currentPercent == requestedPercent) ||
+            (_pendingBrightnessDevicePath is not null &&
+             string.Equals(
+                 _pendingBrightnessDevicePath,
+                 monitor.DevicePath,
+                 StringComparison.OrdinalIgnoreCase) &&
+             _pendingBrightnessPercent == requestedPercent))
+        {
+            return;
+        }
+
+        _compactBrightnessValues[monitor.DevicePath] = requestedPercent;
+        _pendingBrightnessDevicePath = monitor.DevicePath;
+        _pendingBrightnessPercent = requestedPercent;
+        _brightnessChangeCancellation?.Cancel();
+        _brightnessChangeCancellation?.Dispose();
+        var cancellation = new CancellationTokenSource();
+        _brightnessChangeCancellation = cancellation;
+
+        try
+        {
+            await Task.Delay(BrightnessChangeDelayMilliseconds, cancellation.Token);
+            while (_displayOperationRunning)
+            {
+                await Task.Delay(50, cancellation.Token);
+            }
+
+            await SetBrightnessAsync(monitor.DevicePath, requestedPercent);
+            if (ReferenceEquals(_brightnessChangeCancellation, cancellation))
+            {
+                _pendingBrightnessDevicePath = null;
+                _brightnessChangeCancellation = null;
+                cancellation.Dispose();
+                UpdateCompactMonitorCards();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // A newer slider value superseded this write.
         }
     }
 
@@ -502,7 +553,6 @@ public sealed partial class MainWindow : Window, IDisposable
         ProbeDdcButton.IsEnabled = false;
         SetBrightnessButton.IsEnabled = false;
         CompactReadBrightnessButton.IsEnabled = false;
-        CompactMonitorList.IsEnabled = false;
         CopyReportButton.IsEnabled = false;
         StatusText.Text = $"Setting {display.FriendlyName} brightness to {requestedPercent}%...";
         CompactStatusText.Text = $"Setting {display.FriendlyName} to {requestedPercent}%...";
@@ -522,7 +572,15 @@ public sealed partial class MainWindow : Window, IDisposable
             _lastDdcProbes = refreshed.Ddc;
             _lastWmiProbes = refreshed.Wmi;
             UpdateMonitorCards(display.DevicePath);
-            UpdateCompactMonitorCards();
+            if (_pendingBrightnessDevicePath is null ||
+                !string.Equals(
+                    _pendingBrightnessDevicePath,
+                    display.DevicePath,
+                    StringComparison.OrdinalIgnoreCase) ||
+                _pendingBrightnessPercent == requestedPercent)
+            {
+                UpdateCompactMonitorCards();
+            }
 
             StatusText.Text = writeResult.Succeeded
                 ? string.Format(
@@ -867,6 +925,8 @@ public sealed partial class MainWindow : Window, IDisposable
         }
 
         _disposed = true;
+        _brightnessChangeCancellation?.Cancel();
+        _brightnessChangeCancellation?.Dispose();
         Activated -= MainWindow_Activated;
         AppWindow.Closing -= AppWindow_Closing;
         Closed -= MainWindow_Closed;
@@ -1178,7 +1238,7 @@ public sealed partial class MainWindow : Window, IDisposable
 
     private void UpdateCompactMonitorCards()
     {
-        CompactMonitorList.ItemsSource = _activeMonitors.Select(display =>
+        var cards = _activeMonitors.Select(display =>
         {
             var wmiProbe = _lastWmiProbes.FirstOrDefault(candidate => string.Equals(
                 candidate.Display.DevicePath,
@@ -1190,7 +1250,7 @@ public sealed partial class MainWindow : Window, IDisposable
                     display.DevicePath,
                     display.FriendlyName,
                     isBrightnessAvailable: true,
-                    wmiProbe.CurrentBrightness,
+                    GetCompactBrightness(display.DevicePath, wmiProbe.CurrentBrightness),
                     "Internal display · WMI");
             }
 
@@ -1211,7 +1271,7 @@ public sealed partial class MainWindow : Window, IDisposable
                     display.DevicePath,
                     display.FriendlyName,
                     isBrightnessAvailable: true,
-                    percent,
+                    GetCompactBrightness(display.DevicePath, percent),
                     "External display · DDC/CI");
             }
 
@@ -1224,6 +1284,34 @@ public sealed partial class MainWindow : Window, IDisposable
                     ? "Brightness has not been read yet"
                     : "Brightness control unavailable");
         }).ToArray();
+
+        _compactBrightnessValues.Clear();
+        foreach (var card in cards)
+        {
+            _compactBrightnessValues[card.DevicePath] =
+                Math.Clamp((int)Math.Round(card.BrightnessPercent), 0, 100);
+        }
+
+        _updatingCompactControls = true;
+        try
+        {
+            CompactMonitorList.ItemsSource = cards;
+        }
+        finally
+        {
+            _updatingCompactControls = false;
+        }
+    }
+
+    private double GetCompactBrightness(string devicePath, double verifiedPercent)
+    {
+        return _pendingBrightnessDevicePath is not null &&
+               string.Equals(
+                   _pendingBrightnessDevicePath,
+                   devicePath,
+                   StringComparison.OrdinalIgnoreCase)
+            ? _pendingBrightnessPercent
+            : Math.Round(verifiedPercent);
     }
 
     private void UpdateCompactScheduleStatus()
