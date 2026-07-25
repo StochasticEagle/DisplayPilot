@@ -24,13 +24,11 @@ public sealed partial class NotificationAreaIcon : IDisposable
     private const uint NotifyKeySelect = 0x0401;
     private const uint ContextMenu = 0x007B;
     private const uint MenuString = 0x00000000;
-    private const uint MenuSeparator = 0x00000800;
     private const uint TrackRightButton = 0x00000002;
     private const uint TrackReturnCommand = 0x00000100;
     private const uint TrackNoNotify = 0x00000080;
-    private const uint OpenCommand = 1;
-    private const uint AdvancedCommand = 2;
-    private const uint ExitCommand = 3;
+    private const uint AdvancedCommand = 1;
+    private const uint ExitCommand = 2;
     private const uint DefaultApplicationIcon = 32512;
     private const uint ExtendedWindowStyleToolWindow = 0x00000080;
     private const uint WindowStylePopup = 0x80000000;
@@ -115,8 +113,6 @@ public sealed partial class NotificationAreaIcon : IDisposable
     }
 
     public event EventHandler? PrimaryInvoked;
-
-    public event EventHandler? OpenInvoked;
 
     public event EventHandler? AdvancedInvoked;
 
@@ -317,11 +313,9 @@ public sealed partial class NotificationAreaIcon : IDisposable
         uint command = 0;
         try
         {
-            _ = AppendMenu(menu, MenuString, OpenCommand, "Open DisplayPilot");
             _ = AppendMenu(menu, MenuString, AdvancedCommand, "Advanced");
-            _ = AppendMenu(menu, MenuSeparator, 0, string.Empty);
             _ = AppendMenu(menu, MenuString, ExitCommand, "Exit");
-            _ = SetForegroundWindow(_ownerWindow);
+            _ = SetForegroundWindow(_messageWindow);
 
             var x = (int)unchecked((short)((ulong)packedCoordinates & 0xffff));
             var y = (int)unchecked((short)(((ulong)packedCoordinates >> 16) & 0xffff));
@@ -337,14 +331,11 @@ public sealed partial class NotificationAreaIcon : IDisposable
                 x,
                 y,
                 0,
-                _ownerWindow,
+                _messageWindow,
                 0);
             RecordMenuCommand(command);
             switch (command)
             {
-                case OpenCommand:
-                    OpenInvoked?.Invoke(this, EventArgs.Empty);
-                    break;
                 case AdvancedCommand:
                     AdvancedInvoked?.Invoke(this, EventArgs.Empty);
                     break;
