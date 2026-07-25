@@ -30,7 +30,7 @@ public sealed partial class MainWindow : Window, IDisposable
     private const int AdvancedWidth = 900;
     private const int AdvancedHeight = 860;
     private static readonly long CompactReopenDelayMilliseconds =
-        Math.Max(GetDoubleClickTime(), 1u);
+        NotificationAreaIcon.ActivationGuardDurationMilliseconds;
     private readonly IMonitorDiscoveryService _monitorDiscovery = new DisplayConfigMonitorDiscovery();
     private readonly DdcBrightnessProbeService _ddcProbeService = new();
     private readonly WmiBrightnessProbeService _wmiProbeService = new();
@@ -966,9 +966,6 @@ public sealed partial class MainWindow : Window, IDisposable
         _exitRequested = true;
         Close();
     }
-
-    [LibraryImport("user32.dll")]
-    private static partial uint GetDoubleClickTime();
 
     private async Task EvaluateAndApplyScheduleAsync()
     {

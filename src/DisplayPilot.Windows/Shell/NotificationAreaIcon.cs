@@ -94,6 +94,9 @@ public sealed partial class NotificationAreaIcon : IDisposable
 
     public event EventHandler? ExitInvoked;
 
+    public static uint ActivationGuardDurationMilliseconds =>
+        Math.Max(GetDoubleClickTime(), 1u);
+
     public bool TryBringWindowToForeground()
     {
         return !_disposed && SetForegroundWindow(_window);
@@ -388,6 +391,9 @@ public sealed partial class NotificationAreaIcon : IDisposable
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool SetForegroundWindow(nint window);
+
+    [LibraryImport("user32.dll")]
+    private static partial uint GetDoubleClickTime();
 
     [LibraryImport("user32.dll", EntryPoint = "GetCursorPos")]
     [return: MarshalAs(UnmanagedType.Bool)]
