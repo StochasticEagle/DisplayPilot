@@ -22,7 +22,6 @@ public sealed partial class NotificationAreaIcon : IDisposable
     private const uint NotifyIconShowTip = 0x00000080;
     private const uint NotifySelect = 0x0400;
     private const uint NotifyKeySelect = 0x0401;
-    private const uint LeftButtonUp = 0x0202;
     private const uint ContextMenu = 0x007B;
     private const uint MenuString = 0x00000000;
     private const uint MenuSeparator = 0x00000800;
@@ -94,6 +93,11 @@ public sealed partial class NotificationAreaIcon : IDisposable
     public event EventHandler? AdvancedInvoked;
 
     public event EventHandler? ExitInvoked;
+
+    public bool TryBringWindowToForeground()
+    {
+        return !_disposed && SetForegroundWindow(_window);
+    }
 
     public bool TryGetBounds(out NotificationAreaBounds bounds)
     {
@@ -231,7 +235,7 @@ public sealed partial class NotificationAreaIcon : IDisposable
         }
 
         var notification = unchecked((uint)(long)lParam) & 0xffff;
-        if (notification is NotifySelect or NotifyKeySelect or LeftButtonUp)
+        if (notification is NotifySelect or NotifyKeySelect)
         {
             icon.PrimaryInvoked?.Invoke(icon, EventArgs.Empty);
         }
@@ -265,6 +269,7 @@ public sealed partial class NotificationAreaIcon : IDisposable
             return;
         }
 
+        uint command = 0;
         try
         {
             _ = AppendMenu(menu, MenuString, OpenCommand, "Open DisplayPilot");
@@ -281,7 +286,7 @@ public sealed partial class NotificationAreaIcon : IDisposable
                 y = cursor.Y;
             }
 
-            var command = TrackPopupMenu(
+            command = TrackPopupMenu(
                 menu,
                 TrackRightButton | TrackReturnCommand | TrackNoNotify,
                 x,
@@ -305,7 +310,10 @@ public sealed partial class NotificationAreaIcon : IDisposable
         finally
         {
             _ = DestroyMenu(menu);
-            SetFocusToNotificationArea();
+            if (command == 0)
+            {
+                SetFocusToNotificationArea();
+            }
         }
     }
 

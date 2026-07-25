@@ -27,7 +27,7 @@ window remains available as the **Advanced** interface.
 1. Launch DisplayPilot and confirm no window appears and one DisplayPilot icon
    is present in the notification area.
 2. Select the icon and confirm the compact flyout opens next to it without a
-   taskbar or Alt+Tab entry.
+   taskbar or Alt+Tab entry and is brought to the foreground.
 3. Select the icon again, then open the flyout and click elsewhere; confirm both
    actions hide the flyout while the process remains active.
 4. Confirm each readable display shows its current brightness. Move a slider,
@@ -36,7 +36,8 @@ window remains available as the **Advanced** interface.
    the Advanced UI reflects the same state.
 6. Select **Advanced**, verify the existing display, schedule, brightness, and
    diagnostic controls, then close the window and confirm the icon remains.
-7. Use the icon's **Advanced** command and confirm the full interface returns.
+7. Use the icon's **Open DisplayPilot** and **Advanced** commands and confirm
+   the compact and full interfaces return respectively.
 8. Restart Windows Explorer and confirm the DisplayPilot icon returns without
    creating a duplicate.
 9. Use the icon's **Exit** command and confirm the icon and process both close.

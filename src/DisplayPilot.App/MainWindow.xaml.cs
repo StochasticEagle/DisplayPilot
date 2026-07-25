@@ -29,6 +29,8 @@ public sealed partial class MainWindow : Window, IDisposable
     private const int CompactHeight = 520;
     private const int AdvancedWidth = 900;
     private const int AdvancedHeight = 860;
+    private static readonly long CompactReopenDelayMilliseconds =
+        Math.Max(GetDoubleClickTime(), 1u);
     private readonly IMonitorDiscoveryService _monitorDiscovery = new DisplayConfigMonitorDiscovery();
     private readonly DdcBrightnessProbeService _ddcProbeService = new();
     private readonly WmiBrightnessProbeService _wmiProbeService = new();
@@ -54,6 +56,7 @@ public sealed partial class MainWindow : Window, IDisposable
     private bool _initialScanStarted;
     private bool _updatingCompactControls;
     private bool _isCompactMode = true;
+    private long _compactShowBlockedUntil;
     private bool _exitRequested;
     private bool _disposed;
     private NotificationAreaIcon? _notificationAreaIcon;
@@ -114,7 +117,12 @@ public sealed partial class MainWindow : Window, IDisposable
     {
         if (AppWindow.IsVisible)
         {
-            AppWindow.Hide();
+            HideCompactViewAndBlockImmediateReopen();
+            return;
+        }
+
+        if (Environment.TickCount64 < _compactShowBlockedUntil)
+        {
             return;
         }
 
@@ -156,7 +164,7 @@ public sealed partial class MainWindow : Window, IDisposable
 
     private void HideCompactButton_Click(object sender, RoutedEventArgs e)
     {
-        AppWindow.Hide();
+        HideCompactViewAndBlockImmediateReopen();
     }
 
     private async void CompactReadBrightnessButton_Click(object sender, RoutedEventArgs e)
@@ -798,7 +806,7 @@ public sealed partial class MainWindow : Window, IDisposable
         {
             if (_isCompactMode && AppWindow.IsVisible)
             {
-                AppWindow.Hide();
+                HideCompactViewAndBlockImmediateReopen();
             }
 
             return;
@@ -861,6 +869,13 @@ public sealed partial class MainWindow : Window, IDisposable
         PositionCompactWindow();
         AppWindow.Show();
         Activate();
+        _ = _notificationAreaIcon?.TryBringWindowToForeground();
+    }
+
+    private void HideCompactViewAndBlockImmediateReopen()
+    {
+        _compactShowBlockedUntil = Environment.TickCount64 + CompactReopenDelayMilliseconds;
+        AppWindow.Hide();
     }
 
     private void ShowAdvancedView()
@@ -951,6 +966,9 @@ public sealed partial class MainWindow : Window, IDisposable
         _exitRequested = true;
         Close();
     }
+
+    [LibraryImport("user32.dll")]
+    private static partial uint GetDoubleClickTime();
 
     private async Task EvaluateAndApplyScheduleAsync()
     {
