@@ -42,8 +42,11 @@ public sealed class CompactMonitorViewModel : INotifyPropertyChanged
 
             _brightnessPercent = value;
             OnPropertyChanged();
+            OnPropertyChanged(nameof(BrightnessText));
         }
     }
+
+    public string BrightnessText => $"{BrightnessPercent:F0}%";
 
     public string Status { get; }
 

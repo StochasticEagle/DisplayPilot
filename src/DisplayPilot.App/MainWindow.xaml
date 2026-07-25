@@ -100,7 +100,7 @@
                                             <TextBlock
                                                 Grid.Column="1"
                                                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                                Text="{x:Bind BrightnessPercent, Mode=OneWay, StringFormat='{}{0:F0}%'}" />
+                                                Text="{x:Bind BrightnessText, Mode=OneWay}" />
                                             <Slider
                                                 Grid.Row="1"
                                                 Minimum="0"
