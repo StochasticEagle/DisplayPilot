@@ -23,6 +23,7 @@ public sealed partial class NotificationAreaIcon : IDisposable
     private const uint NotifySelect = 0x0400;
     private const uint NotifyKeySelect = 0x0401;
     private const uint ContextMenu = 0x007B;
+    private const uint RightButtonUp = 0x0205;
     private const uint MenuString = 0x00000000;
     private const uint TrackRightButton = 0x00000002;
     private const uint TrackReturnCommand = 0x00000100;
@@ -283,6 +284,10 @@ public sealed partial class NotificationAreaIcon : IDisposable
         else if (notification == ContextMenu)
         {
             icon.ShowContextMenu(wParam);
+        }
+        else if (notification == RightButtonUp)
+        {
+            icon.ShowContextMenu(0);
         }
 
         return 0;
