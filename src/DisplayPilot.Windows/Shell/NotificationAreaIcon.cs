@@ -32,14 +32,21 @@ public sealed partial class NotificationAreaIcon : IDisposable
     private const uint AdvancedCommand = 2;
     private const uint ExitCommand = 3;
     private const uint DefaultApplicationIcon = 32512;
+    private const uint ExtendedWindowStyleToolWindow = 0x00000080;
+    private const uint WindowStylePopup = 0x80000000;
     private const nuint SubclassIdentifier = 0x44504E41;
 
     private readonly object _syncRoot = new();
-    private readonly nint _window;
+    private readonly nint _ownerWindow;
+    private readonly nint _messageWindow;
     private readonly uint _taskbarCreatedMessage;
     private GCHandle _selfHandle;
     private bool _disposed;
     private bool _iconAdded;
+    private long _callbackCount;
+    private uint _lastNotificationCode;
+    private DateTimeOffset? _lastCallbackUtc;
+    private uint _lastMenuCommand;
 
     public NotificationAreaIcon(nint window)
     {
@@ -48,9 +55,27 @@ public sealed partial class NotificationAreaIcon : IDisposable
             throw new ArgumentException("A valid window handle is required.", nameof(window));
         }
 
-        _window = window;
+        _ownerWindow = window;
         _taskbarCreatedMessage = RegisterWindowMessage("TaskbarCreated");
         if (_taskbarCreatedMessage == 0)
+        {
+            throw new Win32Exception(Marshal.GetLastPInvokeError());
+        }
+
+        _messageWindow = CreateWindowEx(
+            ExtendedWindowStyleToolWindow,
+            "STATIC",
+            "DisplayPilot.NotificationArea",
+            WindowStylePopup,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0);
+        if (_messageWindow == 0)
         {
             throw new Win32Exception(Marshal.GetLastPInvokeError());
         }
@@ -60,13 +85,15 @@ public sealed partial class NotificationAreaIcon : IDisposable
         unsafe
         {
             if (!SetWindowSubclass(
-                    _window,
+                    _messageWindow,
                     &SubclassProcedure,
                     SubclassIdentifier,
                     unchecked((nuint)GCHandle.ToIntPtr(_selfHandle))))
             {
+                var error = Marshal.GetLastPInvokeError();
                 _selfHandle.Free();
-                throw new Win32Exception(Marshal.GetLastPInvokeError());
+                _ = DestroyWindow(_messageWindow);
+                throw new Win32Exception(error);
             }
         }
 
@@ -78,10 +105,11 @@ public sealed partial class NotificationAreaIcon : IDisposable
         {
             unsafe
             {
-                _ = RemoveWindowSubclass(_window, &SubclassProcedure, SubclassIdentifier);
+                _ = RemoveWindowSubclass(_messageWindow, &SubclassProcedure, SubclassIdentifier);
             }
 
             _selfHandle.Free();
+            _ = DestroyWindow(_messageWindow);
             throw;
         }
     }
@@ -99,7 +127,19 @@ public sealed partial class NotificationAreaIcon : IDisposable
 
     public bool TryBringWindowToForeground()
     {
-        return !_disposed && SetForegroundWindow(_window);
+        return !_disposed && SetForegroundWindow(_ownerWindow);
+    }
+
+    public NotificationAreaIconDiagnostics GetDiagnostics()
+    {
+        lock (_syncRoot)
+        {
+            return new NotificationAreaIconDiagnostics(
+                _callbackCount,
+                _lastNotificationCode,
+                _lastCallbackUtc,
+                _lastMenuCommand);
+        }
     }
 
     public bool TryGetBounds(out NotificationAreaBounds bounds)
@@ -107,7 +147,7 @@ public sealed partial class NotificationAreaIcon : IDisposable
         var identifier = new NotifyIconIdentifier
         {
             CbSize = (uint)Marshal.SizeOf<NotifyIconIdentifier>(),
-            Window = _window,
+            Window = _messageWindow,
             IconIdentifier = IconIdentifier,
         };
 
@@ -139,10 +179,11 @@ public sealed partial class NotificationAreaIcon : IDisposable
 
             unsafe
             {
-                _ = RemoveWindowSubclass(_window, &SubclassProcedure, SubclassIdentifier);
+                _ = RemoveWindowSubclass(_messageWindow, &SubclassProcedure, SubclassIdentifier);
             }
 
             _selfHandle.Free();
+            _ = DestroyWindow(_messageWindow);
         }
 
         GC.SuppressFinalize(this);
@@ -189,7 +230,7 @@ public sealed partial class NotificationAreaIcon : IDisposable
         var data = new NotifyIconData
         {
             CbSize = (uint)sizeof(NotifyIconData),
-            Window = _window,
+            Window = _messageWindow,
             IconIdentifier = IconIdentifier,
             Flags = NotifyIconMessage | NotifyIconImage | NotifyIconTip | NotifyIconShowTip,
             CallbackMessage = CallbackMessage,
@@ -238,6 +279,7 @@ public sealed partial class NotificationAreaIcon : IDisposable
         }
 
         var notification = unchecked((uint)(long)lParam) & 0xffff;
+        icon.RecordNotification(notification);
         if (notification is NotifySelect or NotifyKeySelect)
         {
             icon.PrimaryInvoked?.Invoke(icon, EventArgs.Empty);
@@ -279,7 +321,7 @@ public sealed partial class NotificationAreaIcon : IDisposable
             _ = AppendMenu(menu, MenuString, AdvancedCommand, "Advanced");
             _ = AppendMenu(menu, MenuSeparator, 0, string.Empty);
             _ = AppendMenu(menu, MenuString, ExitCommand, "Exit");
-            _ = SetForegroundWindow(_window);
+            _ = SetForegroundWindow(_ownerWindow);
 
             var x = (int)unchecked((short)((ulong)packedCoordinates & 0xffff));
             var y = (int)unchecked((short)(((ulong)packedCoordinates >> 16) & 0xffff));
@@ -295,8 +337,9 @@ public sealed partial class NotificationAreaIcon : IDisposable
                 x,
                 y,
                 0,
-                _window,
+                _ownerWindow,
                 0);
+            RecordMenuCommand(command);
             switch (command)
             {
                 case OpenCommand:
@@ -334,6 +377,24 @@ public sealed partial class NotificationAreaIcon : IDisposable
         }
     }
 
+    private void RecordNotification(uint notificationCode)
+    {
+        lock (_syncRoot)
+        {
+            _callbackCount++;
+            _lastNotificationCode = notificationCode;
+            _lastCallbackUtc = DateTimeOffset.UtcNow;
+        }
+    }
+
+    private void RecordMenuCommand(uint command)
+    {
+        lock (_syncRoot)
+        {
+            _lastMenuCommand = command;
+        }
+    }
+
     [LibraryImport("shell32.dll", EntryPoint = "Shell_NotifyIconW", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static unsafe partial bool ShellNotifyIcon(uint message, NotifyIconData* data);
@@ -348,6 +409,25 @@ public sealed partial class NotificationAreaIcon : IDisposable
 
     [LibraryImport("user32.dll", EntryPoint = "RegisterWindowMessageW", StringMarshalling = StringMarshalling.Utf16)]
     private static partial uint RegisterWindowMessage(string message);
+
+    [LibraryImport("user32.dll", EntryPoint = "CreateWindowExW", StringMarshalling = StringMarshalling.Utf16, SetLastError = true)]
+    private static partial nint CreateWindowEx(
+        uint extendedStyle,
+        string className,
+        string windowName,
+        uint style,
+        int x,
+        int y,
+        int width,
+        int height,
+        nint parent,
+        nint menu,
+        nint instance,
+        nint parameter);
+
+    [LibraryImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool DestroyWindow(nint window);
 
     [LibraryImport("comctl32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -444,3 +524,9 @@ public sealed partial class NotificationAreaIcon : IDisposable
         internal int Y;
     }
 }
+
+public readonly record struct NotificationAreaIconDiagnostics(
+    long CallbackCount,
+    uint LastNotificationCode,
+    DateTimeOffset? LastCallbackUtc,
+    uint LastMenuCommand);

@@ -113,7 +113,12 @@ public sealed partial class MainWindow : Window, IDisposable
         await InitializeAsync();
     }
 
-    private async void NotificationAreaIcon_PrimaryInvoked(object? sender, EventArgs e)
+    private void NotificationAreaIcon_PrimaryInvoked(object? sender, EventArgs e)
+    {
+        _ = DispatcherQueue.TryEnqueue(HandleNotificationAreaPrimaryInvocation);
+    }
+
+    private void HandleNotificationAreaPrimaryInvocation()
     {
         if (AppWindow.IsVisible)
         {
@@ -127,29 +132,45 @@ public sealed partial class MainWindow : Window, IDisposable
         }
 
         ShowCompactView();
-        if (_activeMonitors.Count > 0 && _lastDdcProbes.Count == 0 && _lastWmiProbes.Count == 0)
-        {
-            await ProbeDdcBrightnessAsync();
-        }
+        RefreshDiagnosticReport();
+        QueueInitialBrightnessProbe();
     }
 
     private void NotificationAreaIcon_AdvancedInvoked(object? sender, EventArgs e)
     {
-        ShowAdvancedView();
+        _ = DispatcherQueue.TryEnqueue(() =>
+        {
+            ShowAdvancedView();
+            RefreshDiagnosticReport();
+        });
     }
 
-    private async void NotificationAreaIcon_OpenInvoked(object? sender, EventArgs e)
+    private void NotificationAreaIcon_OpenInvoked(object? sender, EventArgs e)
     {
-        ShowCompactView();
-        if (_activeMonitors.Count > 0 && _lastDdcProbes.Count == 0 && _lastWmiProbes.Count == 0)
+        _ = DispatcherQueue.TryEnqueue(() =>
         {
-            await ProbeDdcBrightnessAsync();
-        }
+            ShowCompactView();
+            RefreshDiagnosticReport();
+            QueueInitialBrightnessProbe();
+        });
     }
 
     private void NotificationAreaIcon_ExitInvoked(object? sender, EventArgs e)
     {
-        ExitApplication();
+        _ = DispatcherQueue.TryEnqueue(ExitApplication);
+    }
+
+    private void QueueInitialBrightnessProbe()
+    {
+        if (_activeMonitors.Count > 0 && _lastDdcProbes.Count == 0 && _lastWmiProbes.Count == 0)
+        {
+            _ = DispatcherQueue.TryEnqueue(ProbeInitialBrightness);
+        }
+    }
+
+    private async void ProbeInitialBrightness()
+    {
+        await ProbeDdcBrightnessAsync();
     }
 
     private void ShowAdvancedButton_Click(object sender, RoutedEventArgs e)
@@ -1268,11 +1289,24 @@ public sealed partial class MainWindow : Window, IDisposable
         Win32Exception? error)
     {
         var report = new StringBuilder();
+        var notificationDiagnostics = _notificationAreaIcon?.GetDiagnostics();
         report.AppendLine("DisplayPilot active display-path report");
         report.Append("Captured: ").AppendLine(DateTimeOffset.Now.ToString("O", CultureInfo.InvariantCulture));
         report.Append("OS: ").AppendLine(RuntimeInformation.OSDescription);
         report.Append("Process architecture: ").AppendLine(RuntimeInformation.ProcessArchitecture.ToString());
         report.Append("Notification-area icon active: ").AppendLine((_notificationAreaIcon is not null).ToString(CultureInfo.InvariantCulture));
+        report.Append("Notification callbacks: ").AppendLine(
+            (notificationDiagnostics?.CallbackCount ?? 0).ToString(CultureInfo.InvariantCulture));
+        report.Append("Last notification code: ").AppendLine(
+            notificationDiagnostics is null
+                ? "None"
+                : $"0x{notificationDiagnostics.Value.LastNotificationCode:X4}");
+        report.Append("Last notification callback UTC: ").AppendLine(
+            notificationDiagnostics?.LastCallbackUtc?.ToString("O", CultureInfo.InvariantCulture) ?? "None");
+        report.Append("Last notification menu command: ").AppendLine(
+            notificationDiagnostics is null
+                ? "None"
+                : notificationDiagnostics.Value.LastMenuCommand.ToString(CultureInfo.InvariantCulture));
         report.Append("Window mode: ").AppendLine(_isCompactMode ? "Compact" : "Advanced");
         report.Append("Window visible: ").AppendLine(AppWindow.IsVisible.ToString(CultureInfo.InvariantCulture));
         report.Append("Display paths: ").AppendLine(monitors.Count.ToString(CultureInfo.InvariantCulture));

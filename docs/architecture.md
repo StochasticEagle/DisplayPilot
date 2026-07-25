@@ -21,6 +21,9 @@ theme automation with monitor management.
 - Per-user operation without a required Windows service.
 - No dependency on the PowerToys runner or PowerToys Settings application.
 - Hardware operations remain capability-driven because DDC/CI implementations vary.
+- Notification-area callbacks use a dedicated hidden Win32 window. Native
+  callbacks queue commands onto the WinUI dispatcher and never mutate the
+  flyout directly from the shell callback.
 
 ## Extraction policy
 

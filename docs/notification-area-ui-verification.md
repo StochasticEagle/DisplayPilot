@@ -38,8 +38,10 @@ window remains available as the **Advanced** interface.
    diagnostic controls, then close the window and confirm the icon remains.
 7. Use the icon's **Open DisplayPilot** and **Advanced** commands and confirm
    the compact and full interfaces return respectively.
-8. Restart Windows Explorer and confirm the DisplayPilot icon returns without
+8. Copy the diagnostic report and confirm **Notification callbacks** is greater
+   than zero and **Last notification code** is not `None`.
+9. Restart Windows Explorer and confirm the DisplayPilot icon returns without
    creating a duplicate.
-9. Use the icon's **Exit** command and confirm the icon and process both close.
-10. Repeat on Windows 10 and Windows 11, including a non-100% display scale if
+10. Use the icon's **Exit** command and confirm the icon and process both close.
+11. Repeat on Windows 10 and Windows 11, including a non-100% display scale if
     available.
