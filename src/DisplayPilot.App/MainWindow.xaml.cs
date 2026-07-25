@@ -331,6 +331,7 @@ public sealed partial class MainWindow : Window, IDisposable
 
     private void CopyReportButton_Click(object sender, RoutedEventArgs e)
     {
+        RefreshDiagnosticReport();
         var data = new DataPackage
         {
             RequestedOperation = DataPackageOperation.Copy,
@@ -1383,6 +1384,20 @@ public sealed partial class MainWindow : Window, IDisposable
             notificationDiagnostics is null
                 ? "None"
                 : notificationDiagnostics.Value.LastMenuCommand.ToString(CultureInfo.InvariantCulture));
+        report.Append("Recent notification codes: ").AppendLine(
+            notificationDiagnostics is null
+                ? "None"
+                : string.Join(
+                    ", ",
+                    notificationDiagnostics.Value.RecentNotificationCodes.Select(code => $"0x{code:X4}")));
+        report.Append("Context-menu requests: ").AppendLine(
+            (notificationDiagnostics?.ContextMenuRequestCount ?? 0).ToString(CultureInfo.InvariantCulture));
+        report.Append("Last context-menu stage: ").AppendLine(
+            notificationDiagnostics?.LastContextMenuStage ?? "None");
+        report.Append("Last context-menu error: ").AppendLine(
+            notificationDiagnostics is null
+                ? "None"
+                : $"0x{unchecked((uint)notificationDiagnostics.Value.LastContextMenuError):X8}");
         report.Append("Window mode: ").AppendLine(_isCompactMode ? "Compact" : "Advanced");
         report.Append("Window visible: ").AppendLine(AppWindow.IsVisible.ToString(CultureInfo.InvariantCulture));
         report.Append("Display paths: ").AppendLine(monitors.Count.ToString(CultureInfo.InvariantCulture));
