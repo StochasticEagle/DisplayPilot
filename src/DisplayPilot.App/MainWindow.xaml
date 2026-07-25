@@ -103,19 +103,14 @@
                                                 Text="{x:Bind BrightnessText, Mode=OneWay}" />
                                             <Slider
                                                 Grid.Row="1"
+                                                Grid.ColumnSpan="2"
                                                 Minimum="0"
                                                 Maximum="100"
                                                 IsEnabled="{x:Bind IsBrightnessAvailable, Mode=OneTime}"
                                                 StepFrequency="1"
+                                                Tag="{x:Bind}"
+                                                ValueChanged="CompactBrightnessSlider_ValueChanged"
                                                 Value="{x:Bind BrightnessPercent, Mode=TwoWay}" />
-                                            <Button
-                                                Grid.Row="1"
-                                                Grid.Column="1"
-                                                VerticalAlignment="Center"
-                                                Click="CompactSetBrightnessButton_Click"
-                                                Content="Set"
-                                                IsEnabled="{x:Bind IsBrightnessAvailable, Mode=OneTime}"
-                                                Tag="{x:Bind}" />
                                             <TextBlock
                                                 Grid.Row="2"
                                                 Grid.ColumnSpan="2"
@@ -197,6 +192,7 @@
         <!-- Existing full interface, retained as Advanced -->
         <Grid
             x:Name="AdvancedView"
+            VerticalAlignment="Stretch"
             Visibility="Collapsed">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -237,7 +233,11 @@
         </Grid>
 
         <!-- Main Workspace (Two-Column Layout) -->
-        <Grid Grid.Row="1" Padding="24,0,24,12" ColumnSpacing="24">
+        <Grid
+            Grid.Row="1"
+            Padding="24,0,24,12"
+            ColumnSpacing="24"
+            VerticalAlignment="Stretch">
             <Grid.ColumnDefinitions>
                 <!-- Left Column: Main Display List Content -->
                 <ColumnDefinition Width="*" />
@@ -246,12 +246,15 @@
             </Grid.ColumnDefinitions>
 
             <!-- Main Display List Content (Left Column) -->
-            <Grid Grid.Column="0">
+            <Grid
+                Grid.Column="0"
+                VerticalAlignment="Stretch">
                 <ListView
                     x:Name="MonitorList"
                     HorizontalContentAlignment="Stretch"
                     SelectionChanged="MonitorList_SelectionChanged"
-                    SelectionMode="Single">
+                    SelectionMode="Single"
+                    VerticalAlignment="Stretch">
                     <ListView.ItemTemplate>
                         <DataTemplate x:DataType="local:MonitorCardViewModel">
                             <Border
