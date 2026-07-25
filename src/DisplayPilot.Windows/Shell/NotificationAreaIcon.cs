@@ -399,7 +399,7 @@ public sealed partial class NotificationAreaIcon : IDisposable
     [return: MarshalAs(UnmanagedType.Bool)]
     private static unsafe partial bool ShellNotifyIcon(uint message, NotifyIconData* data);
 
-    [LibraryImport("shell32.dll")]
+    [LibraryImport("shell32.dll", EntryPoint = "Shell_NotifyIconGetRect")]
     private static partial int ShellNotifyIconGetRect(
         in NotifyIconIdentifier identifier,
         out NativeRect iconLocation);
