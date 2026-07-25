@@ -88,7 +88,6 @@ public sealed partial class MainWindow : Window, IDisposable
             var window = WinRT.Interop.WindowNative.GetWindowHandle(this);
             _notificationAreaIcon = new NotificationAreaIcon(window);
             _notificationAreaIcon.PrimaryInvoked += NotificationAreaIcon_PrimaryInvoked;
-            _notificationAreaIcon.OpenInvoked += NotificationAreaIcon_OpenInvoked;
             _notificationAreaIcon.AdvancedInvoked += NotificationAreaIcon_AdvancedInvoked;
             _notificationAreaIcon.ExitInvoked += NotificationAreaIcon_ExitInvoked;
             return true;
@@ -148,16 +147,6 @@ public sealed partial class MainWindow : Window, IDisposable
         {
             ShowAdvancedView();
             RefreshDiagnosticReport();
-        });
-    }
-
-    private void NotificationAreaIcon_OpenInvoked(object? sender, EventArgs e)
-    {
-        _ = DispatcherQueue.TryEnqueue(() =>
-        {
-            ShowCompactView();
-            RefreshDiagnosticReport();
-            QueueInitialBrightnessProbe();
         });
     }
 
@@ -934,7 +923,6 @@ public sealed partial class MainWindow : Window, IDisposable
         if (_notificationAreaIcon is not null)
         {
             _notificationAreaIcon.PrimaryInvoked -= NotificationAreaIcon_PrimaryInvoked;
-            _notificationAreaIcon.OpenInvoked -= NotificationAreaIcon_OpenInvoked;
             _notificationAreaIcon.AdvancedInvoked -= NotificationAreaIcon_AdvancedInvoked;
             _notificationAreaIcon.ExitInvoked -= NotificationAreaIcon_ExitInvoked;
             _notificationAreaIcon.Dispose();
