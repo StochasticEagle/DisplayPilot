@@ -32,14 +32,19 @@ public sealed partial class NotificationAreaIcon : IDisposable
     private const uint ExitCommand = 2;
     private const uint DefaultApplicationIcon = 32512;
     private const uint ExtendedWindowStyleToolWindow = 0x00000080;
-    private const uint WindowStylePopup = 0x80000000;
-    private const nuint SubclassIdentifier = 0x44504E41;
+    private const uint WindowStyleOverlapped = 0x00CF0000;
+    private const uint NonClientCreate = 0x0081;
+    private const uint NonClientDestroy = 0x0082;
+    private const int WindowUserData = -21;
+    private const string NotificationWindowClassName = "DisplayPilot.NotificationAreaWindow";
 
     private readonly object _syncRoot = new();
     private readonly nint _ownerWindow;
+    private readonly nint _moduleHandle;
     private readonly nint _messageWindow;
     private readonly uint _taskbarCreatedMessage;
     private GCHandle _selfHandle;
+    private bool _windowClassRegistered;
     private bool _disposed;
     private bool _iconAdded;
     private long _callbackCount;
@@ -55,45 +60,39 @@ public sealed partial class NotificationAreaIcon : IDisposable
         }
 
         _ownerWindow = window;
+        _moduleHandle = GetModuleHandle(null);
+        if (_moduleHandle == 0)
+        {
+            throw new Win32Exception(Marshal.GetLastPInvokeError());
+        }
+
         _taskbarCreatedMessage = RegisterWindowMessage("TaskbarCreated");
         if (_taskbarCreatedMessage == 0)
         {
             throw new Win32Exception(Marshal.GetLastPInvokeError());
         }
 
+        RegisterNotificationWindowClass();
+        _selfHandle = GCHandle.Alloc(this);
         _messageWindow = CreateWindowEx(
             ExtendedWindowStyleToolWindow,
-            "STATIC",
+            NotificationWindowClassName,
             "DisplayPilot.NotificationArea",
-            WindowStylePopup,
+            WindowStyleOverlapped,
             0,
             0,
             0,
             0,
             0,
             0,
-            0,
-            0);
+            _moduleHandle,
+            GCHandle.ToIntPtr(_selfHandle));
         if (_messageWindow == 0)
         {
-            throw new Win32Exception(Marshal.GetLastPInvokeError());
-        }
-
-        _selfHandle = GCHandle.Alloc(this);
-
-        unsafe
-        {
-            if (!SetWindowSubclass(
-                    _messageWindow,
-                    &SubclassProcedure,
-                    SubclassIdentifier,
-                    unchecked((nuint)GCHandle.ToIntPtr(_selfHandle))))
-            {
-                var error = Marshal.GetLastPInvokeError();
-                _selfHandle.Free();
-                _ = DestroyWindow(_messageWindow);
-                throw new Win32Exception(error);
-            }
+            var error = Marshal.GetLastPInvokeError();
+            _selfHandle.Free();
+            UnregisterNotificationWindowClass();
+            throw new Win32Exception(error);
         }
 
         try
@@ -102,13 +101,9 @@ public sealed partial class NotificationAreaIcon : IDisposable
         }
         catch (Win32Exception)
         {
-            unsafe
-            {
-                _ = RemoveWindowSubclass(_messageWindow, &SubclassProcedure, SubclassIdentifier);
-            }
-
-            _selfHandle.Free();
             _ = DestroyWindow(_messageWindow);
+            _selfHandle.Free();
+            UnregisterNotificationWindowClass();
             throw;
         }
     }
@@ -173,14 +168,9 @@ public sealed partial class NotificationAreaIcon : IDisposable
 
             _disposed = true;
             DeleteIcon();
-
-            unsafe
-            {
-                _ = RemoveWindowSubclass(_messageWindow, &SubclassProcedure, SubclassIdentifier);
-            }
-
-            _selfHandle.Free();
             _ = DestroyWindow(_messageWindow);
+            _selfHandle.Free();
+            UnregisterNotificationWindowClass();
         }
 
         GC.SuppressFinalize(this);
@@ -248,46 +238,98 @@ public sealed partial class NotificationAreaIcon : IDisposable
         return data;
     }
 
+    private unsafe void RegisterNotificationWindowClass()
+    {
+        fixed (char* className = NotificationWindowClassName)
+        {
+            var windowClass = new WindowClassEx
+            {
+                CbSize = (uint)sizeof(WindowClassEx),
+                WindowProcedure = (nint)(delegate* unmanaged[Stdcall]<nint, uint, nuint, nint, nint>)&NotificationWindowProcedure,
+                Instance = _moduleHandle,
+                ClassName = className,
+            };
+            if (RegisterClassEx(&windowClass) == 0)
+            {
+                throw new Win32Exception(Marshal.GetLastPInvokeError());
+            }
+        }
+
+        _windowClassRegistered = true;
+    }
+
+    private void UnregisterNotificationWindowClass()
+    {
+        if (!_windowClassRegistered)
+        {
+            return;
+        }
+
+        _ = UnregisterClass(NotificationWindowClassName, _moduleHandle);
+        _windowClassRegistered = false;
+    }
+
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvStdcall)])]
-    private static nint SubclassProcedure(
+    private static nint NotificationWindowProcedure(
         nint window,
         uint message,
         nuint wParam,
-        nint lParam,
-        nuint subclassIdentifier,
-        nuint referenceData)
+        nint lParam)
     {
-        _ = subclassIdentifier;
-        var handle = GCHandle.FromIntPtr(unchecked((nint)referenceData));
-        if (handle.Target is not NotificationAreaIcon icon)
+        var referenceData = message == NonClientCreate
+            ? Marshal.ReadIntPtr(lParam)
+            : GetWindowLongPtr(window, WindowUserData);
+        if (message == NonClientCreate)
         {
-            return DefSubclassProc(window, message, wParam, lParam);
+            _ = SetWindowLongPtr(window, WindowUserData, referenceData);
         }
 
-        if (message == icon._taskbarCreatedMessage)
+        if (referenceData == 0)
         {
-            icon.RestoreAfterExplorerRestart();
+            return DefWindowProc(window, message, wParam, lParam);
+        }
+
+        var handle = GCHandle.FromIntPtr(referenceData);
+        if (handle.Target is not NotificationAreaIcon icon)
+        {
+            return DefWindowProc(window, message, wParam, lParam);
+        }
+
+        var result = icon.ProcessWindowMessage(window, message, wParam, lParam);
+        if (message == NonClientDestroy)
+        {
+            _ = SetWindowLongPtr(window, WindowUserData, 0);
+        }
+
+        return result;
+    }
+
+    private nint ProcessWindowMessage(nint window, uint message, nuint wParam, nint lParam)
+    {
+        if (message == _taskbarCreatedMessage)
+        {
+            RestoreAfterExplorerRestart();
             return 0;
         }
 
         if (message != CallbackMessage)
         {
-            return DefSubclassProc(window, message, wParam, lParam);
+            return DefWindowProc(window, message, wParam, lParam);
         }
 
         var notification = unchecked((uint)(long)lParam) & 0xffff;
-        icon.RecordNotification(notification);
+        RecordNotification(notification);
         if (notification is NotifySelect or NotifyKeySelect)
         {
-            icon.PrimaryInvoked?.Invoke(icon, EventArgs.Empty);
+            PrimaryInvoked?.Invoke(this, EventArgs.Empty);
         }
         else if (notification == ContextMenu)
         {
-            icon.ShowContextMenu(wParam);
+            ShowContextMenu(wParam);
         }
         else if (notification == RightButtonUp)
         {
-            icon.ShowContextMenu(0);
+            ShowContextMenu(0);
         }
 
         return 0;
@@ -406,6 +448,16 @@ public sealed partial class NotificationAreaIcon : IDisposable
     [LibraryImport("user32.dll", EntryPoint = "RegisterWindowMessageW", StringMarshalling = StringMarshalling.Utf16)]
     private static partial uint RegisterWindowMessage(string message);
 
+    [LibraryImport("kernel32.dll", EntryPoint = "GetModuleHandleW", StringMarshalling = StringMarshalling.Utf16, SetLastError = true)]
+    private static partial nint GetModuleHandle(string? moduleName);
+
+    [LibraryImport("user32.dll", EntryPoint = "RegisterClassExW", SetLastError = true)]
+    private static unsafe partial ushort RegisterClassEx(WindowClassEx* windowClass);
+
+    [LibraryImport("user32.dll", EntryPoint = "UnregisterClassW", StringMarshalling = StringMarshalling.Utf16, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool UnregisterClass(string className, nint instance);
+
     [LibraryImport("user32.dll", EntryPoint = "CreateWindowExW", StringMarshalling = StringMarshalling.Utf16, SetLastError = true)]
     private static partial nint CreateWindowEx(
         uint extendedStyle,
@@ -425,23 +477,14 @@ public sealed partial class NotificationAreaIcon : IDisposable
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool DestroyWindow(nint window);
 
-    [LibraryImport("comctl32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static unsafe partial bool SetWindowSubclass(
-        nint window,
-        delegate* unmanaged[Stdcall]<nint, uint, nuint, nint, nuint, nuint, nint> subclassProcedure,
-        nuint subclassIdentifier,
-        nuint referenceData);
+    [LibraryImport("user32.dll", EntryPoint = "DefWindowProcW")]
+    private static partial nint DefWindowProc(nint window, uint message, nuint wParam, nint lParam);
 
-    [LibraryImport("comctl32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static unsafe partial bool RemoveWindowSubclass(
-        nint window,
-        delegate* unmanaged[Stdcall]<nint, uint, nuint, nint, nuint, nuint, nint> subclassProcedure,
-        nuint subclassIdentifier);
+    [LibraryImport("user32.dll", EntryPoint = "GetWindowLongPtrW", SetLastError = true)]
+    private static partial nint GetWindowLongPtr(nint window, int index);
 
-    [LibraryImport("comctl32.dll")]
-    private static partial nint DefSubclassProc(nint window, uint message, nuint wParam, nint lParam);
+    [LibraryImport("user32.dll", EntryPoint = "SetWindowLongPtrW", SetLastError = true)]
+    private static partial nint SetWindowLongPtr(nint window, int index, nint newValue);
 
     [LibraryImport("user32.dll")]
     private static partial nint CreatePopupMenu();
@@ -474,6 +517,23 @@ public sealed partial class NotificationAreaIcon : IDisposable
     [LibraryImport("user32.dll", EntryPoint = "GetCursorPos")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool GetCursorPosition(out NativePoint point);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private unsafe struct WindowClassEx
+    {
+        internal uint CbSize;
+        internal uint Style;
+        internal nint WindowProcedure;
+        internal int ClassExtraBytes;
+        internal int WindowExtraBytes;
+        internal nint Instance;
+        internal nint Icon;
+        internal nint Cursor;
+        internal nint BackgroundBrush;
+        internal char* MenuName;
+        internal char* ClassName;
+        internal nint SmallIcon;
+    }
 
     [StructLayout(LayoutKind.Sequential)]
     private struct NotifyIconIdentifier
