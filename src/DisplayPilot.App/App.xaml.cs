@@ -17,7 +17,7 @@ public partial class App : Application
         Program.ActivationRedirected += Program_ActivationRedirected;
     }
 
-    protected override async void OnLaunched(LaunchActivatedEventArgs args)
+    protected override async void OnLaunched(Microsoft.UI.Xaml.LaunchActivatedEventArgs args)
     {
         var startupLaunch = IsStartupLaunch(args.Arguments);
         var window = new MainWindow();
