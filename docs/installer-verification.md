@@ -6,8 +6,7 @@ Test the Release installer artifact on Windows 10 and Windows 11 x64.
 
 1. Download `DisplayPilot-Setup-win-x64.exe` from the workflow artifacts.
 2. Run the installer and approve the prerequisite elevation request.
-3. Confirm that DisplayPilot is installed in the current user's AppData
-   Programs directory.
+3. Confirm that DisplayPilot is installed under Program Files.
 4. Confirm that the .NET 10 Desktop, Windows App SDK 2.3, and Microsoft Visual
    C++ runtimes are installed system-wide rather than under AppData.
 5. Confirm that the Start menu shortcut uses the DisplayPilot icon.
@@ -26,7 +25,7 @@ Test the Release installer artifact on Windows 10 and Windows 11 x64.
 
 Repeat the installation with the installer option cleared:
 
-1. Confirm that the existing startup registration is removed.
+1. Confirm that the existing Startup-folder shortcut is removed.
 2. Sign out and sign in.
 3. Confirm that DisplayPilot does not start automatically.
 
@@ -43,6 +42,6 @@ Repeat the installation with the installer option cleared:
 1. Enable **Start DisplayPilot when I sign in**.
 2. Uninstall DisplayPilot from Windows Settings.
 3. Confirm that the application files, Start menu shortcut, and DisplayPilot
-   startup registration are removed.
+   Startup-folder shortcut are removed.
 4. Confirm that the shared system runtimes remain available for other
    applications.
