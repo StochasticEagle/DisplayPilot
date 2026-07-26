@@ -30,11 +30,13 @@ Source: "..\artifacts\DisplayPilot-win-x64\*"; DestDir: "{app}"; Flags: ignoreve
 Source: "..\artifacts\installer\DisplayPilot-Prerequisites.exe"; Flags: dontcopy
 
 [Tasks]
-Name: "startup"; Description: "Start DisplayPilot when I sign in"; GroupDescription: "Startup:"; Flags: unchecked
+Name: "startup"; Description: "Start DisplayPilot when users sign in"; GroupDescription: "Startup:"
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
-Name: "{userstartup}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Parameters: "--startup"; WorkingDir: "{app}"; IconFilename: "{app}\{#MyAppExeName}"; Tasks: startup
+
+[Registry]
+Root: HKLM64; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "DisplayPilot"; ValueData: """{app}\{#MyAppExeName}"" --startup"; Tasks: startup; Flags: uninsdeletevalue
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "Launch {#MyAppName}"; Flags: nowait postinstall skipifsilent
@@ -70,5 +72,8 @@ procedure CurStepChanged(CurStep: TSetupStep);
 begin
   if (CurStep = ssPostInstall) and
      (not WizardIsTaskSelected('startup')) then
-    DeleteFile(ExpandConstant('{userstartup}\{#MyAppName}.lnk'));
+    RegDeleteValue(
+      HKLM64,
+      'Software\Microsoft\Windows\CurrentVersion\Run',
+      'DisplayPilot');
 end;

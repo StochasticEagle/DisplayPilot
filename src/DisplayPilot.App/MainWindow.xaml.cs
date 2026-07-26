@@ -61,7 +61,6 @@ public sealed partial class MainWindow : Window, IDisposable
     private bool _displayOperationRunning;
     private bool _initialScanStarted;
     private bool _updatingCompactControls;
-    private bool _updatingStartupControl;
     private CancellationTokenSource? _brightnessChangeCancellation;
     private string? _pendingBrightnessDevicePath;
     private int _pendingBrightnessPercent;
@@ -248,29 +247,15 @@ public sealed partial class MainWindow : Window, IDisposable
         await ProbeDdcBrightnessAsync();
     }
 
-    private void StartAtLoginToggle_Toggled(object sender, RoutedEventArgs e)
+    private async void OpenStartupSettingsButton_Click(
+        object sender,
+        RoutedEventArgs e)
     {
-        if (_updatingStartupControl)
-        {
-            return;
-        }
-
         try
         {
-            WindowsStartupService.SetEnabled(StartAtLoginToggle.IsOn);
+            await Windows.System.Launcher.LaunchUriAsync(
+                new Uri("ms-settings:startupapps"));
             RefreshStartupRegistration();
-        }
-        catch (UnauthorizedAccessException exception)
-        {
-            ReportStartupRegistrationFailure(exception);
-        }
-        catch (SecurityException exception)
-        {
-            ReportStartupRegistrationFailure(exception);
-        }
-        catch (IOException exception)
-        {
-            ReportStartupRegistrationFailure(exception);
         }
         catch (InvalidOperationException exception)
         {
@@ -1288,25 +1273,20 @@ public sealed partial class MainWindow : Window, IDisposable
 
     private void RefreshStartupRegistration()
     {
-        _updatingStartupControl = true;
         try
         {
             var registration = WindowsStartupService.ReadRegistration();
             _startupRegistrationStatus = registration.Status;
             _startupRegistrationError = null;
-            StartAtLoginToggle.IsEnabled =
-                registration.Status != StartupRegistrationStatus.Unavailable;
-            StartAtLoginToggle.IsOn =
-                registration.Status == StartupRegistrationStatus.Enabled;
             StartupStatusText.Text = registration.Status switch
             {
-                StartupRegistrationStatus.Enabled =>
-                    "DisplayPilot will start in the notification area when you sign in.",
+                StartupRegistrationStatus.MachineRegistered =>
+                    "DisplayPilot is registered for all users. Use Windows Startup settings to enable or disable it for this account.",
                 StartupRegistrationStatus.Disabled =>
-                    "DisplayPilot will not start automatically.",
+                    "DisplayPilot is not registered to start automatically. Reinstall it to enable machine-wide startup.",
                 StartupRegistrationStatus.DifferentExecutable =>
-                    "A startup entry points to a different DisplayPilot executable. Turn this on to replace it.",
-                _ => "The current executable path is unavailable.",
+                    "The machine-wide startup entry points to a different DisplayPilot executable. Reinstall DisplayPilot to repair it.",
+                _ => "The machine-wide startup registration is unavailable.",
             };
         }
         catch (UnauthorizedAccessException exception)
@@ -1321,19 +1301,14 @@ public sealed partial class MainWindow : Window, IDisposable
         {
             ReportStartupRegistrationFailure(exception);
         }
-        finally
-        {
-            _updatingStartupControl = false;
-        }
     }
 
     private void ReportStartupRegistrationFailure(Exception exception)
     {
         _startupRegistrationStatus = StartupRegistrationStatus.Unavailable;
         _startupRegistrationError = exception.GetType().Name;
-        StartAtLoginToggle.IsEnabled = false;
         StartupStatusText.Text =
-            $"Startup registration could not be changed: {exception.Message}";
+            $"Startup registration could not be read: {exception.Message}";
     }
 
     private void SetThemeButtonsEnabled(bool enabled)

@@ -431,17 +431,19 @@
                         BorderThickness="1"
                         CornerRadius="8">
                         <StackPanel Spacing="8">
-                            <ToggleSwitch
-                                x:Name="StartAtLoginToggle"
-                                Header="Start DisplayPilot when I sign in"
-                                OffContent="Off"
-                                OnContent="On"
-                                Toggled="StartAtLoginToggle_Toggled" />
+                            <TextBlock
+                                FontWeight="SemiBold"
+                                Text="Start DisplayPilot at sign-in" />
                             <TextBlock
                                 x:Name="StartupStatusText"
                                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                 Text="Reading startup registration..."
                                 TextWrapping="Wrap" />
+                            <Button
+                                x:Name="OpenStartupSettingsButton"
+                                Click="OpenStartupSettingsButton_Click"
+                                Content="Open Windows Startup settings"
+                                HorizontalAlignment="Left" />
                         </StackPanel>
                     </Border>
 
