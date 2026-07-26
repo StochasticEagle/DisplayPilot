@@ -42,7 +42,6 @@ public sealed partial class MainWindow : Window, IDisposable
     private readonly WindowsThemeService _themeService = new();
     private readonly JsonThemeScheduleSettingsStore _themeScheduleSettingsStore = new();
     private readonly WindowsBoundaryTimer _themeScheduleTimer = new();
-    private readonly WindowsStartupService _startupService = new();
     private readonly Dictionary<string, int> _compactBrightnessValues =
         new(StringComparer.OrdinalIgnoreCase);
     private IReadOnlyList<MonitorDisplayInfo> _activeMonitors = [];
@@ -258,7 +257,7 @@ public sealed partial class MainWindow : Window, IDisposable
 
         try
         {
-            _startupService.SetEnabled(StartAtLoginToggle.IsOn);
+            WindowsStartupService.SetEnabled(StartAtLoginToggle.IsOn);
             RefreshStartupRegistration();
         }
         catch (UnauthorizedAccessException exception)
@@ -1292,7 +1291,7 @@ public sealed partial class MainWindow : Window, IDisposable
         _updatingStartupControl = true;
         try
         {
-            var registration = _startupService.ReadRegistration();
+            var registration = WindowsStartupService.ReadRegistration();
             _startupRegistrationStatus = registration.Status;
             _startupRegistrationError = null;
             StartAtLoginToggle.IsEnabled =
