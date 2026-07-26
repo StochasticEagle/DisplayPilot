@@ -44,6 +44,14 @@ jobs:
           --no-restore
           --output artifacts/DisplayPilot-win-x64
 
+      - name: Verify published WinUI resources
+        shell: pwsh
+        run: |
+          $resourceIndex = "artifacts\DisplayPilot-win-x64\resources.pri"
+          if (-not (Test-Path $resourceIndex -PathType Leaf)) {
+            throw "The published app is missing resources.pri and will fail during WinUI initialization."
+          }
+
       - name: Install Inno Setup
         shell: pwsh
         run: |
