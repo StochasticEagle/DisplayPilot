@@ -20,6 +20,8 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.WindowsAppSDK.WinUI" />
     <PackageReference Include="Microsoft.WindowsAppSDK.Runtime" />
+    <PackageReference Include="Microsoft.WindowsAppSDK.Foundation" />
+    <PackageReference Include="Microsoft.WindowsAppSDK.InteractiveExperiences" />
     <ProjectReference Include="..\DisplayPilot.Core\DisplayPilot.Core.csproj" />
     <ProjectReference Include="..\DisplayPilot.Display\DisplayPilot.Display.csproj" />
     <ProjectReference Include="..\DisplayPilot.Windows\DisplayPilot.Windows.csproj" />
