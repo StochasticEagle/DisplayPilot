@@ -23,7 +23,6 @@ jobs:
 
       - name: Install .NET SDK
         uses: actions/setup-dotnet@v6
-
         with:
           dotnet-version: 10.0.x
 
@@ -92,7 +91,6 @@ jobs:
 
       - name: Upload verification app
         uses: actions/upload-artifact@v7
-
         with:
           name: DisplayPilot-win-x64
           path: artifacts/DisplayPilot-win-x64
@@ -103,4 +101,121 @@ jobs:
         with:
           name: DisplayPilot-Setup-win-x64
           path: artifacts/installer/DisplayPilot-Setup-win-x64.exe
+          if-no-files-found: error
+
+  msix:
+    name: Windows x64 framework-dependent MSIX
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Install .NET SDK
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Build signed test MSIX
+        shell: pwsh
+        run: |
+          $packageDirectory = Join-Path $PWD "artifacts\msix"
+          $certificatePath = Join-Path $env:RUNNER_TEMP "DisplayPilot-Test.pfx"
+          $certificatePasswordText = [Guid]::NewGuid().ToString("N")
+          $certificatePassword = ConvertTo-SecureString `
+            $certificatePasswordText `
+            -AsPlainText `
+            -Force
+          New-Item -ItemType Directory $packageDirectory -Force | Out-Null
+
+          $certificate = New-SelfSignedCertificate `
+            -Type Custom `
+            -Subject "CN=StochasticEagle" `
+            -FriendlyName "DisplayPilot CI test package" `
+            -KeyUsage DigitalSignature `
+            -CertStoreLocation "Cert:\CurrentUser\My" `
+            -TextExtension @(
+              "2.5.29.37={text}1.3.6.1.5.5.7.3.3",
+              "2.5.29.19={text}"
+            )
+
+          Export-PfxCertificate `
+            -Cert $certificate `
+            -FilePath $certificatePath `
+            -Password $certificatePassword | Out-Null
+
+          dotnet msbuild src\DisplayPilot.App\DisplayPilot.App.csproj `
+            /restore `
+            /t:Rebuild `
+            /p:Configuration=Release `
+            /p:Platform=x64 `
+            /p:BuildMsix=true `
+            /p:SelfContained=false `
+            /p:WindowsAppSDKSelfContained=false `
+            /p:AppxPackageSigningEnabled=true `
+            /p:PackageCertificateKeyFile="$certificatePath" `
+            /p:PackageCertificatePassword="$certificatePasswordText" `
+            /p:AppxPackageDir="$packageDirectory\"
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+
+          Export-Certificate `
+            -Cert $certificate `
+            -FilePath (Join-Path $packageDirectory "DisplayPilot-Test.cer") |
+              Out-Null
+          Remove-Item $certificatePath -Force
+
+      - name: Verify framework-dependent MSIX contents
+        shell: pwsh
+        run: |
+          $packages = @(
+            Get-ChildItem "artifacts\msix" -Recurse -File -Filter "*.msix"
+          )
+          if ($packages.Count -ne 1) {
+            throw "Expected one MSIX package, found $($packages.Count)."
+          }
+
+          $makeAppx = Get-ChildItem `
+            "${env:ProgramFiles(x86)}\Windows Kits\10\bin" `
+            -Recurse `
+            -File `
+            -Filter "makeappx.exe" |
+              Sort-Object FullName -Descending |
+              Select-Object -First 1
+          if ($null -eq $makeAppx) {
+            throw "makeappx.exe is unavailable on the Windows runner."
+          }
+
+          $unpackedDirectory = Join-Path $env:RUNNER_TEMP "DisplayPilot-msix"
+          & $makeAppx.FullName unpack `
+            /p $packages[0].FullName `
+            /d $unpackedDirectory `
+            /o
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+
+          $bundledRuntimes = @(
+            Get-ChildItem $unpackedDirectory -Recurse -File |
+              Where-Object {
+                $_.Name -in @(
+                  "coreclr.dll",
+                  "hostfxr.dll",
+                  "Microsoft.ui.xaml.dll"
+                )
+              }
+          )
+          if ($bundledRuntimes.Count -ne 0) {
+            $bundledRuntimes.FullName
+            throw "The MSIX unexpectedly contains bundled .NET or Windows App SDK runtimes."
+          }
+
+      - name: Upload MSIX test package
+        uses: actions/upload-artifact@v6
+        with:
+          name: DisplayPilot-MSIX-win-x64
+          path: |
+            artifacts/msix/**/*.msix
+            artifacts/msix/DisplayPilot-Test.cer
           if-no-files-found: error

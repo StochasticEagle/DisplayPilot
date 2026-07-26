@@ -5,11 +5,20 @@
     <AssemblyName>DisplayPilot</AssemblyName>
     <Description>WinUI 3 desktop application for DisplayPilot.</Description>
     <UseWinUI>true</UseWinUI>
-    <WindowsPackageType>None</WindowsPackageType>
-    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
-    <SelfContained>true</SelfContained>
+    <EnableMsixTooling>true</EnableMsixTooling>
+    <WindowsPackageType Condition="'$(BuildMsix)' != 'true'">None</WindowsPackageType>
+    <WindowsAppSDKSelfContained Condition="'$(BuildMsix)' != 'true'">true</WindowsAppSDKSelfContained>
+    <SelfContained Condition="'$(BuildMsix)' != 'true'">true</SelfContained>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\displaypilot-primary.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(BuildMsix)' == 'true'">
+    <GenerateAppxPackageOnBuild>true</GenerateAppxPackageOnBuild>
+    <AppxPackageSigningEnabled>true</AppxPackageSigningEnabled>
+    <AppxBundle>Never</AppxBundle>
+    <UapAppxPackageBuildMode>SideloadOnly</UapAppxPackageBuildMode>
+    <AppxPackageDir>$(MSBuildProjectDirectory)\..\..\artifacts\msix\</AppxPackageDir>
   </PropertyGroup>
 
   <ItemGroup>
@@ -25,6 +34,9 @@
       Update="Assets\displaypilot-primary-256.png"
       CopyToOutputDirectory="PreserveNewest"
       CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="Assets\Square44x44Logo.png" />
+    <Content Include="Assets\Square150x150Logo.png" />
+    <Content Include="Assets\StoreLogo.png" />
   </ItemGroup>
 
   <ItemGroup>

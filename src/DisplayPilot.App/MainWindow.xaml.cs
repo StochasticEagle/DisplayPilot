@@ -87,7 +87,7 @@ public sealed partial class MainWindow : Window, IDisposable
         Closed += MainWindow_Closed;
         LoadScheduleSettings();
         RefreshSchedulePreview();
-        RefreshStartupRegistration();
+        _ = RefreshStartupRegistrationAsync();
         SystemText.Text = GetSystemSummary();
     }
 
@@ -248,7 +248,7 @@ public sealed partial class MainWindow : Window, IDisposable
         await ProbeDdcBrightnessAsync();
     }
 
-    private void StartAtLoginToggle_Toggled(object sender, RoutedEventArgs e)
+    private async void StartAtLoginToggle_Toggled(object sender, RoutedEventArgs e)
     {
         if (_updatingStartupControl)
         {
@@ -257,8 +257,8 @@ public sealed partial class MainWindow : Window, IDisposable
 
         try
         {
-            WindowsStartupService.SetEnabled(StartAtLoginToggle.IsOn);
-            RefreshStartupRegistration();
+            await WindowsStartupService.SetEnabledAsync(StartAtLoginToggle.IsOn);
+            await RefreshStartupRegistrationAsync();
         }
         catch (UnauthorizedAccessException exception)
         {
@@ -273,6 +273,10 @@ public sealed partial class MainWindow : Window, IDisposable
             ReportStartupRegistrationFailure(exception);
         }
         catch (InvalidOperationException exception)
+        {
+            ReportStartupRegistrationFailure(exception);
+        }
+        catch (COMException exception)
         {
             ReportStartupRegistrationFailure(exception);
         }
@@ -1286,12 +1290,12 @@ public sealed partial class MainWindow : Window, IDisposable
         CompactThemeStatusText.Text = "Theme operation failed. Open Advanced for details.";
     }
 
-    private void RefreshStartupRegistration()
+    private async Task RefreshStartupRegistrationAsync()
     {
         _updatingStartupControl = true;
         try
         {
-            var registration = WindowsStartupService.ReadRegistration();
+            var registration = await WindowsStartupService.ReadRegistrationAsync();
             _startupRegistrationStatus = registration.Status;
             _startupRegistrationError = null;
             StartAtLoginToggle.IsEnabled =
@@ -1306,6 +1310,10 @@ public sealed partial class MainWindow : Window, IDisposable
                     "DisplayPilot will not start automatically.",
                 StartupRegistrationStatus.DifferentExecutable =>
                     "A startup entry points to a different DisplayPilot executable. Turn this on to replace it.",
+                StartupRegistrationStatus.DisabledByUser =>
+                    "Windows has disabled DisplayPilot startup. Re-enable it in Settings > Apps > Startup.",
+                StartupRegistrationStatus.DisabledByPolicy =>
+                    "DisplayPilot startup is disabled by Windows policy.",
                 _ => "The current executable path is unavailable.",
             };
         }
@@ -1318,6 +1326,10 @@ public sealed partial class MainWindow : Window, IDisposable
             ReportStartupRegistrationFailure(exception);
         }
         catch (IOException exception)
+        {
+            ReportStartupRegistrationFailure(exception);
+        }
+        catch (COMException exception)
         {
             ReportStartupRegistrationFailure(exception);
         }
