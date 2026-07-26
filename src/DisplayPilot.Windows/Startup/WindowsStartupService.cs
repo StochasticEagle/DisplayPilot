@@ -5,13 +5,13 @@ using Microsoft.Win32;
 
 namespace DisplayPilot.Windows.Startup;
 
-public sealed class WindowsStartupService
+public static class WindowsStartupService
 {
     private const string RunKeyPath =
         @"Software\Microsoft\Windows\CurrentVersion\Run";
     private const string ValueName = "DisplayPilot";
 
-    public StartupRegistration ReadRegistration()
+    public static StartupRegistration ReadRegistration()
     {
         var executablePath = Environment.ProcessPath;
         if (string.IsNullOrWhiteSpace(executablePath))
@@ -44,7 +44,7 @@ public sealed class WindowsStartupService
             registeredCommand);
     }
 
-    public void SetEnabled(bool enabled)
+    public static void SetEnabled(bool enabled)
     {
         if (!enabled)
         {
