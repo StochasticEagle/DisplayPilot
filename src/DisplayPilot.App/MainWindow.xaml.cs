@@ -253,7 +253,7 @@ public sealed partial class MainWindow : Window, IDisposable
     {
         try
         {
-            await Windows.System.Launcher.LaunchUriAsync(
+            await global::Windows.System.Launcher.LaunchUriAsync(
                 new Uri("ms-settings:startupapps"));
             RefreshStartupRegistration();
         }
