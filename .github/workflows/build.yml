@@ -44,9 +44,33 @@ jobs:
           --no-restore
           --output artifacts/DisplayPilot-win-x64
 
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          $compiler = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $compiler)) {
+            choco install innosetup --no-progress --yes
+          }
+
+      - name: Build installer
+        shell: pwsh
+        run: |
+          $compiler = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          & $compiler "installer\DisplayPilot.iss"
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+
       - name: Upload verification app
         uses: actions/upload-artifact@v4
         with:
           name: DisplayPilot-win-x64
           path: artifacts/DisplayPilot-win-x64
+          if-no-files-found: error
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: DisplayPilot-Setup-win-x64
+          path: artifacts/installer/DisplayPilot-Setup-win-x64.exe
           if-no-files-found: error

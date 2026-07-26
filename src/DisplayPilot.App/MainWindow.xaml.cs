@@ -14,6 +14,7 @@ using DisplayPilot.Display.Wmi;
 using DisplayPilot.Windows.Scheduling;
 using DisplayPilot.Windows.Settings;
 using DisplayPilot.Windows.Shell;
+using DisplayPilot.Windows.Startup;
 using DisplayPilot.Windows.Theme;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
@@ -29,7 +30,7 @@ public sealed partial class MainWindow : Window, IDisposable
     private const int CompactHeight = 520;
     private const int AdvancedWidth = 900;
     private const int AdvancedHeight = 860;
-    private const int BrightnessChangeDelayMilliseconds = 150;
+    private const int BrightnessChangeDelayMilliseconds = 30;
     private const string PrimaryIconFileName = "displaypilot-primary.ico";
     private const string CompactIconFileName = "displaypilot-compact.ico";
     private static readonly long CompactReopenDelayMilliseconds =
@@ -41,6 +42,7 @@ public sealed partial class MainWindow : Window, IDisposable
     private readonly WindowsThemeService _themeService = new();
     private readonly JsonThemeScheduleSettingsStore _themeScheduleSettingsStore = new();
     private readonly WindowsBoundaryTimer _themeScheduleTimer = new();
+    private readonly WindowsStartupService _startupService = new();
     private readonly Dictionary<string, int> _compactBrightnessValues =
         new(StringComparer.OrdinalIgnoreCase);
     private IReadOnlyList<MonitorDisplayInfo> _activeMonitors = [];
@@ -60,6 +62,7 @@ public sealed partial class MainWindow : Window, IDisposable
     private bool _displayOperationRunning;
     private bool _initialScanStarted;
     private bool _updatingCompactControls;
+    private bool _updatingStartupControl;
     private CancellationTokenSource? _brightnessChangeCancellation;
     private string? _pendingBrightnessDevicePath;
     private int _pendingBrightnessPercent;
@@ -69,6 +72,9 @@ public sealed partial class MainWindow : Window, IDisposable
     private bool _disposed;
     private NotificationAreaIcon? _notificationAreaIcon;
     private TrayContextMenuWindow? _trayContextMenuWindow;
+    private StartupRegistrationStatus _startupRegistrationStatus =
+        StartupRegistrationStatus.Unavailable;
+    private string? _startupRegistrationError;
     private string _diagnosticReport = string.Empty;
 
     public MainWindow()
@@ -82,6 +88,7 @@ public sealed partial class MainWindow : Window, IDisposable
         Closed += MainWindow_Closed;
         LoadScheduleSettings();
         RefreshSchedulePreview();
+        RefreshStartupRegistration();
         SystemText.Text = GetSystemSummary();
     }
 
@@ -240,6 +247,38 @@ public sealed partial class MainWindow : Window, IDisposable
     private async void CompactReadBrightnessButton_Click(object sender, RoutedEventArgs e)
     {
         await ProbeDdcBrightnessAsync();
+    }
+
+    private void StartAtLoginToggle_Toggled(object sender, RoutedEventArgs e)
+    {
+        if (_updatingStartupControl)
+        {
+            return;
+        }
+
+        try
+        {
+            _startupService.SetEnabled(StartAtLoginToggle.IsOn);
+            RefreshStartupRegistration();
+        }
+        catch (UnauthorizedAccessException exception)
+        {
+            ReportStartupRegistrationFailure(exception);
+        }
+        catch (SecurityException exception)
+        {
+            ReportStartupRegistrationFailure(exception);
+        }
+        catch (IOException exception)
+        {
+            ReportStartupRegistrationFailure(exception);
+        }
+        catch (InvalidOperationException exception)
+        {
+            ReportStartupRegistrationFailure(exception);
+        }
+
+        RefreshDiagnosticReport();
     }
 
     private async void CompactBrightnessSlider_ValueChanged(
@@ -1248,6 +1287,56 @@ public sealed partial class MainWindow : Window, IDisposable
         CompactThemeStatusText.Text = "Theme operation failed. Open Advanced for details.";
     }
 
+    private void RefreshStartupRegistration()
+    {
+        _updatingStartupControl = true;
+        try
+        {
+            var registration = _startupService.ReadRegistration();
+            _startupRegistrationStatus = registration.Status;
+            _startupRegistrationError = null;
+            StartAtLoginToggle.IsEnabled =
+                registration.Status != StartupRegistrationStatus.Unavailable;
+            StartAtLoginToggle.IsOn =
+                registration.Status == StartupRegistrationStatus.Enabled;
+            StartupStatusText.Text = registration.Status switch
+            {
+                StartupRegistrationStatus.Enabled =>
+                    "DisplayPilot will start in the notification area when you sign in.",
+                StartupRegistrationStatus.Disabled =>
+                    "DisplayPilot will not start automatically.",
+                StartupRegistrationStatus.DifferentExecutable =>
+                    "A startup entry points to a different DisplayPilot executable. Turn this on to replace it.",
+                _ => "The current executable path is unavailable.",
+            };
+        }
+        catch (UnauthorizedAccessException exception)
+        {
+            ReportStartupRegistrationFailure(exception);
+        }
+        catch (SecurityException exception)
+        {
+            ReportStartupRegistrationFailure(exception);
+        }
+        catch (IOException exception)
+        {
+            ReportStartupRegistrationFailure(exception);
+        }
+        finally
+        {
+            _updatingStartupControl = false;
+        }
+    }
+
+    private void ReportStartupRegistrationFailure(Exception exception)
+    {
+        _startupRegistrationStatus = StartupRegistrationStatus.Unavailable;
+        _startupRegistrationError = exception.GetType().Name;
+        StartAtLoginToggle.IsEnabled = false;
+        StartupStatusText.Text =
+            $"Startup registration could not be changed: {exception.Message}";
+    }
+
     private void SetThemeButtonsEnabled(bool enabled)
     {
         RefreshThemeButton.IsEnabled = enabled;
@@ -1457,6 +1546,8 @@ public sealed partial class MainWindow : Window, IDisposable
                 : $"0x{unchecked((uint)notificationDiagnostics.Value.LastContextMenuError):X8}");
         report.Append("Window mode: ").AppendLine(_isCompactMode ? "Compact" : "Advanced");
         report.Append("Window visible: ").AppendLine(AppWindow.IsVisible.ToString(CultureInfo.InvariantCulture));
+        report.Append("Start at sign-in: ").AppendLine(_startupRegistrationStatus.ToString());
+        report.Append("Startup registration error: ").AppendLine(_startupRegistrationError ?? "None");
         report.Append("Display paths: ").AppendLine(monitors.Count.ToString(CultureInfo.InvariantCulture));
         report.Append("Theme apps: ").AppendLine(_themeState is null ? "Unknown" : _themeState.AppsUseLightTheme ? "Light" : "Dark");
         report.Append("Theme Windows: ").AppendLine(_themeState is null ? "Unknown" : _themeState.SystemUsesLightTheme ? "Light" : "Dark");

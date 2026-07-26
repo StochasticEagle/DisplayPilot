@@ -424,6 +424,27 @@
                         </StackPanel>
                     </Border>
 
+                    <!-- Startup Card -->
+                    <Border
+                        Padding="16,12"
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                        BorderThickness="1"
+                        CornerRadius="8">
+                        <StackPanel Spacing="8">
+                            <ToggleSwitch
+                                x:Name="StartAtLoginToggle"
+                                Header="Start DisplayPilot when I sign in"
+                                OffContent="Off"
+                                OnContent="On"
+                                Toggled="StartAtLoginToggle_Toggled" />
+                            <TextBlock
+                                x:Name="StartupStatusText"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Text="Reading startup registration..."
+                                TextWrapping="Wrap" />
+                        </StackPanel>
+                    </Border>
+
                     <!-- Verification InfoBar -->
                     <InfoBar
                         IsClosable="False"
