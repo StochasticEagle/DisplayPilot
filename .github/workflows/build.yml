@@ -120,12 +120,6 @@ jobs:
         shell: pwsh
         run: |
           $packageDirectory = Join-Path $PWD "artifacts\msix"
-          $certificatePath = Join-Path $env:RUNNER_TEMP "DisplayPilot-Test.pfx"
-          $certificatePasswordText = [Guid]::NewGuid().ToString("N")
-          $certificatePassword = ConvertTo-SecureString `
-            $certificatePasswordText `
-            -AsPlainText `
-            -Force
           New-Item -ItemType Directory $packageDirectory -Force | Out-Null
 
           $certificate = New-SelfSignedCertificate `
@@ -136,11 +130,6 @@ jobs:
             -KeySpec Signature `
             -CertStoreLocation "Cert:\CurrentUser\My"
 
-          Export-PfxCertificate `
-            -Cert $certificate `
-            -FilePath $certificatePath `
-            -Password $certificatePassword | Out-Null
-
           dotnet msbuild src\DisplayPilot.App\DisplayPilot.App.csproj `
             /restore `
             /t:Rebuild `
@@ -150,8 +139,7 @@ jobs:
             /p:SelfContained=false `
             /p:WindowsAppSDKSelfContained=false `
             /p:AppxPackageSigningEnabled=true `
-            /p:PackageCertificateKeyFile="$certificatePath" `
-            /p:PackageCertificatePassword="$certificatePasswordText" `
+            /p:PackageCertificateThumbprint="$($certificate.Thumbprint)" `
             /p:AppxPackageDir="$packageDirectory\"
           if ($LASTEXITCODE -ne 0) {
             exit $LASTEXITCODE
@@ -161,13 +149,16 @@ jobs:
             -Cert $certificate `
             -FilePath (Join-Path $packageDirectory "DisplayPilot-Test.cer") |
               Out-Null
-          Remove-Item $certificatePath -Force
 
       - name: Verify framework-dependent MSIX contents
         shell: pwsh
         run: |
           $packages = @(
-            Get-ChildItem "artifacts\msix" -Recurse -File -Filter "*.msix"
+            Get-ChildItem `
+              "artifacts\msix" `
+              -Recurse `
+              -File `
+              -Filter "DisplayPilot.App_*.msix"
           )
           if ($packages.Count -ne 1) {
             throw "Expected one MSIX package, found $($packages.Count)."
@@ -213,6 +204,6 @@ jobs:
         with:
           name: DisplayPilot-MSIX-win-x64
           path: |
-            artifacts/msix/**/*.msix
+            artifacts/msix/**/DisplayPilot.App_*.msix
             artifacts/msix/DisplayPilot-Test.cer
           if-no-files-found: error
