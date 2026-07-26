@@ -26,8 +26,9 @@ public static partial class Program
             return 0;
         }
 
-        Application.Start(_ =>
+        Application.Start(initializationParameters =>
         {
+            _ = initializationParameters;
             var context = new DispatcherQueueSynchronizationContext(
                 DispatcherQueue.GetForCurrentThread());
             SynchronizationContext.SetSynchronizationContext(context);
@@ -52,7 +53,7 @@ public static partial class Program
         return true;
     }
 
-    private static unsafe void RedirectActivation(
+    private static void RedirectActivation(
         AppActivationArguments activationArguments,
         AppInstance instance)
     {
@@ -77,19 +78,24 @@ public static partial class Program
                 }
             });
 
-            nint* handles = stackalloc nint[1];
-            handles[0] = completedEvent;
-            _ = CoWaitForMultipleObjects(
-                0,
-                Infinite,
-                1,
-                handles,
-                out _);
+            WaitForRedirect(completedEvent);
         }
         finally
         {
             _ = CloseHandle(completedEvent);
         }
+    }
+
+    private static unsafe void WaitForRedirect(nint completedEvent)
+    {
+        nint* handles = stackalloc nint[1];
+        handles[0] = completedEvent;
+        _ = CoWaitForMultipleObjects(
+            0,
+            Infinite,
+            1,
+            handles,
+            out _);
     }
 
     private static string CreateInstanceKey()
