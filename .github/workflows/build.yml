@@ -19,10 +19,10 @@ jobs:
 
     steps:
       - name: Check out source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install .NET SDK
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x
 
@@ -45,7 +45,7 @@ jobs:
           --output artifacts/DisplayPilot-win-x64
 
       - name: Upload verification app
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: DisplayPilot-win-x64
           path: artifacts/DisplayPilot-win-x64
