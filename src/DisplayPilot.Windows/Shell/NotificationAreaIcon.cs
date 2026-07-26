@@ -13,7 +13,6 @@ public sealed partial class NotificationAreaIcon : IDisposable
     private const uint CallbackMessage = 0x8000 + 42;
     private const uint NotifyIconAdd = 0x00000000;
     private const uint NotifyIconDelete = 0x00000002;
-    private const uint NotifyIconSetFocus = 0x00000003;
     private const uint NotifyIconSetVersion = 0x00000004;
     private const uint NotifyIconVersion4 = 4;
     private const uint NotifyIconMessage = 0x00000001;
@@ -23,22 +22,13 @@ public sealed partial class NotificationAreaIcon : IDisposable
     private const uint NotifySelect = 0x0400;
     private const uint NotifyKeySelect = 0x0401;
     private const uint ContextMenu = 0x007B;
-    private const uint CommandMessage = 0x0111;
-    private const uint MenuString = 0x00000000;
-    private const uint TrackRightButton = 0x00000002;
-    private const uint TrackRightAlign = 0x00000008;
-    private const int MenuDropAlignmentMetric = 40;
     private const uint AdvancedCommand = 1;
     private const uint ExitCommand = 2;
     private const uint DefaultApplicationIcon = 32512;
     private const uint ExtendedWindowStyleToolWindow = 0x00000080;
     private const uint WindowStylePopup = 0x80000000;
-    private const uint SetWindowPositionShowWindow = 0x00000040;
-    private const int HideWindow = 0;
-    private static readonly nint TopmostWindow = new(-1);
     private const uint NonClientCreate = 0x0081;
     private const uint NonClientDestroy = 0x0082;
-    private const uint NullMessage = 0x0000;
     private const int NotificationHistoryLimit = 12;
     private const int WindowUserData = -21;
     private const string NotificationWindowClassName = "DisplayPilot.NotificationAreaWindow";
@@ -119,6 +109,8 @@ public sealed partial class NotificationAreaIcon : IDisposable
 
     public event EventHandler? PrimaryInvoked;
 
+    public event EventHandler? ContextMenuInvoked;
+
     public event EventHandler? AdvancedInvoked;
 
     public event EventHandler? ExitInvoked;
@@ -129,6 +121,16 @@ public sealed partial class NotificationAreaIcon : IDisposable
     public bool TryBringWindowToForeground()
     {
         return !_disposed && SetForegroundWindow(_ownerWindow);
+    }
+
+    public void InvokeContextMenuCommand(NotificationAreaMenuCommand command)
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        HandleMenuCommand((uint)command);
     }
 
     public NotificationAreaIconDiagnostics GetDiagnostics()
@@ -327,12 +329,6 @@ public sealed partial class NotificationAreaIcon : IDisposable
 
         if (message != CallbackMessage)
         {
-            if (message == CommandMessage)
-            {
-                HandleMenuCommand(unchecked((uint)wParam) & 0xffff);
-                return 0;
-            }
-
             return DefWindowProc(window, message, wParam, lParam);
         }
 
@@ -344,7 +340,7 @@ public sealed partial class NotificationAreaIcon : IDisposable
         }
         else if (notification == ContextMenu)
         {
-            ShowContextMenu(wParam);
+            RequestContextMenu();
         }
 
         return 0;
@@ -364,86 +360,10 @@ public sealed partial class NotificationAreaIcon : IDisposable
         }
     }
 
-    private void ShowContextMenu(nuint packedCoordinates)
+    private void RequestContextMenu()
     {
-        RecordContextMenuStage("CreatePopupMenu", requestStarted: true);
-        var menu = CreatePopupMenu();
-        if (menu == 0)
-        {
-            RecordContextMenuStage(
-                "CreatePopupMenu failed",
-                Marshal.GetLastPInvokeError());
-            return;
-        }
-
-        try
-        {
-            if (!AppendMenu(menu, MenuString, AdvancedCommand, "Advanced") ||
-                !AppendMenu(menu, MenuString, ExitCommand, "Exit"))
-            {
-                RecordContextMenuStage(
-                    "AppendMenu failed",
-                    Marshal.GetLastPInvokeError());
-                return;
-            }
-
-            var x = (int)unchecked((short)((ulong)packedCoordinates & 0xffff));
-            var y = (int)unchecked((short)(((ulong)packedCoordinates >> 16) & 0xffff));
-            if (x == 0 && y == 0 && GetCursorPosition(out var cursor))
-            {
-                x = cursor.X;
-                y = cursor.Y;
-            }
-
-            if (!SetWindowPosition(
-                    _messageWindow,
-                    TopmostWindow,
-                    x,
-                    y,
-                    1,
-                    1,
-                    SetWindowPositionShowWindow))
-            {
-                RecordContextMenuStage(
-                    "SetWindowPos failed",
-                    Marshal.GetLastPInvokeError());
-                return;
-            }
-
-            if (!SetForegroundWindow(_messageWindow))
-            {
-                RecordContextMenuStage(
-                    "SetForegroundWindow failed",
-                    Marshal.GetLastPInvokeError());
-            }
-
-            RecordContextMenuStage("TrackPopupMenu");
-            var flags = TrackRightButton;
-            if (GetSystemMetrics(MenuDropAlignmentMetric) != 0)
-            {
-                flags |= TrackRightAlign;
-            }
-
-            var shown = TrackPopupMenu(
-                menu,
-                flags,
-                x,
-                y,
-                0,
-                _messageWindow,
-                0);
-            var trackError = Marshal.GetLastPInvokeError();
-            _ = PostMessage(_messageWindow, NullMessage, 0, 0);
-            RecordContextMenuStage(
-                shown == 0 ? "Menu closed without selection" : "Command dispatched",
-                shown == 0 ? trackError : 0);
-        }
-        finally
-        {
-            _ = ShowWindow(_messageWindow, HideWindow);
-            _ = DestroyMenu(menu);
-            SetFocusToNotificationArea();
-        }
+        RecordContextMenuStage("WinUI menu requested", requestStarted: true);
+        ContextMenuInvoked?.Invoke(this, EventArgs.Empty);
     }
 
     private void HandleMenuCommand(uint command)
@@ -458,20 +378,6 @@ public sealed partial class NotificationAreaIcon : IDisposable
             case ExitCommand:
                 ExitInvoked?.Invoke(this, EventArgs.Empty);
                 break;
-        }
-    }
-
-    private void SetFocusToNotificationArea()
-    {
-        if (_disposed)
-        {
-            return;
-        }
-
-        unsafe
-        {
-            var data = CreateIconData();
-            _ = ShellNotifyIcon(NotifyIconSetFocus, &data);
         }
     }
 
@@ -569,58 +475,11 @@ public sealed partial class NotificationAreaIcon : IDisposable
     private static partial nint SetWindowLongPtr(nint window, int index, nint newValue);
 
     [LibraryImport("user32.dll")]
-    private static partial nint CreatePopupMenu();
-
-    [LibraryImport("user32.dll", EntryPoint = "AppendMenuW", StringMarshalling = StringMarshalling.Utf16)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool AppendMenu(nint menu, uint flags, nuint identifier, string text);
-
-    [LibraryImport("user32.dll", EntryPoint = "TrackPopupMenuEx")]
-    private static partial uint TrackPopupMenu(
-        nint menu,
-        uint flags,
-        int x,
-        int y,
-        int reserved,
-        nint window,
-        nint parameters);
-
-    [LibraryImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool DestroyMenu(nint menu);
-
-    [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool SetForegroundWindow(nint window);
 
-    [LibraryImport("user32.dll", EntryPoint = "SetWindowPos", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool SetWindowPosition(
-        nint window,
-        nint insertAfter,
-        int x,
-        int y,
-        int width,
-        int height,
-        uint flags);
-
-    [LibraryImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool ShowWindow(nint window, int command);
-
-    [LibraryImport("user32.dll", EntryPoint = "PostMessageW", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool PostMessage(nint window, uint message, nuint wParam, nint lParam);
-
-    [LibraryImport("user32.dll")]
-    private static partial int GetSystemMetrics(int index);
-
     [LibraryImport("user32.dll")]
     private static partial uint GetDoubleClickTime();
-
-    [LibraryImport("user32.dll", EntryPoint = "GetCursorPos")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool GetCursorPosition(out NativePoint point);
 
     [StructLayout(LayoutKind.Sequential)]
     private unsafe struct WindowClassEx
@@ -677,12 +536,12 @@ public sealed partial class NotificationAreaIcon : IDisposable
         internal int Bottom;
     }
 
-    [StructLayout(LayoutKind.Sequential)]
-    private struct NativePoint
-    {
-        internal int X;
-        internal int Y;
-    }
+}
+
+public enum NotificationAreaMenuCommand : uint
+{
+    Advanced = 1,
+    Exit = 2,
 }
 
 public readonly record struct NotificationAreaIconDiagnostics(
