@@ -25,8 +25,6 @@ public sealed partial class NotificationAreaIcon : IDisposable
     private const uint AdvancedCommand = 1;
     private const uint ExitCommand = 2;
     private const uint DefaultApplicationIcon = 32512;
-    private const uint ImageIcon = 1;
-    private const uint LoadFromFile = 0x00000010;
     private const uint LoadDefaultSize = 0x00000040;
     private const uint ExtendedWindowStyleToolWindow = 0x00000080;
     private const uint WindowStylePopup = 0x80000000;
@@ -56,7 +54,7 @@ public sealed partial class NotificationAreaIcon : IDisposable
     private string _lastContextMenuStage = "None";
     private int _lastContextMenuError;
 
-    public NotificationAreaIcon(nint window, string? iconPath = null)
+    public NotificationAreaIcon(nint window, byte[]? iconData = null)
     {
         if (window == 0)
         {
@@ -101,7 +99,7 @@ public sealed partial class NotificationAreaIcon : IDisposable
 
         try
         {
-            var loadedIcon = LoadNotificationIcon(iconPath);
+            var loadedIcon = LoadNotificationIcon(iconData);
             _iconHandle = loadedIcon.Handle;
             _ownsIconHandle = loadedIcon.OwnsHandle;
             AddIcon();
@@ -271,20 +269,24 @@ public sealed partial class NotificationAreaIcon : IDisposable
         return data;
     }
 
-    private (nint Handle, bool OwnsHandle) LoadNotificationIcon(string? iconPath)
+    private unsafe (nint Handle, bool OwnsHandle) LoadNotificationIcon(byte[]? iconData)
     {
-        if (!string.IsNullOrWhiteSpace(iconPath))
+        if (TryGetLargestIconImage(iconData, out var imageOffset, out var imageLength))
         {
-            var fileIcon = LoadImage(
-                0,
-                iconPath,
-                ImageIcon,
-                0,
-                0,
-                LoadFromFile | LoadDefaultSize);
-            if (fileIcon != 0)
+            fixed (byte* data = &iconData![imageOffset])
             {
-                return (fileIcon, true);
+                var resourceIcon = CreateIconFromResourceEx(
+                    data,
+                    (uint)imageLength,
+                    true,
+                    0x00030000,
+                    0,
+                    0,
+                    LoadDefaultSize);
+                if (resourceIcon != 0)
+                {
+                    return (resourceIcon, true);
+                }
             }
         }
 
@@ -300,6 +302,54 @@ public sealed partial class NotificationAreaIcon : IDisposable
         }
 
         return (applicationIcon, false);
+    }
+
+    private static bool TryGetLargestIconImage(
+        byte[]? iconData,
+        out int imageOffset,
+        out int imageLength)
+    {
+        imageOffset = 0;
+        imageLength = 0;
+        if (iconData is null ||
+            iconData.Length < 22 ||
+            BitConverter.ToUInt16(iconData, 0) != 0 ||
+            BitConverter.ToUInt16(iconData, 2) != 1)
+        {
+            return false;
+        }
+
+        var imageCount = BitConverter.ToUInt16(iconData, 4);
+        var bestArea = -1;
+        for (var index = 0; index < imageCount; index++)
+        {
+            var entryOffset = 6 + (index * 16);
+            if (entryOffset + 16 > iconData.Length)
+            {
+                return false;
+            }
+
+            var width = iconData[entryOffset] == 0 ? 256 : iconData[entryOffset];
+            var height = iconData[entryOffset + 1] == 0 ? 256 : iconData[entryOffset + 1];
+            var candidateLength = checked((int)BitConverter.ToUInt32(iconData, entryOffset + 8));
+            var candidateOffset = checked((int)BitConverter.ToUInt32(iconData, entryOffset + 12));
+            if (candidateLength <= 0 ||
+                candidateOffset < 0 ||
+                candidateOffset > iconData.Length - candidateLength)
+            {
+                return false;
+            }
+
+            var area = width * height;
+            if (area > bestArea)
+            {
+                bestArea = area;
+                imageOffset = candidateOffset;
+                imageLength = candidateLength;
+            }
+        }
+
+        return bestArea >= 0;
     }
 
     private unsafe void RegisterNotificationWindowClass()
@@ -482,11 +532,12 @@ public sealed partial class NotificationAreaIcon : IDisposable
     [LibraryImport("user32.dll", EntryPoint = "LoadIconW")]
     private static partial nint LoadIcon(nint instance, nint iconName);
 
-    [LibraryImport("user32.dll", EntryPoint = "LoadImageW", StringMarshalling = StringMarshalling.Utf16, SetLastError = true)]
-    private static partial nint LoadImage(
-        nint instance,
-        string name,
-        uint type,
+    [LibraryImport("user32.dll", SetLastError = true)]
+    private static unsafe partial nint CreateIconFromResourceEx(
+        byte* resourceBits,
+        uint resourceSize,
+        [MarshalAs(UnmanagedType.Bool)] bool icon,
+        uint version,
         int width,
         int height,
         uint flags);

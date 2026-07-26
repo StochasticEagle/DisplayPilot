@@ -90,6 +90,31 @@ jobs:
             throw "The published app unexpectedly contains bundled runtimes."
           }
 
+          $unexpectedReleaseFiles = @(
+            Get-ChildItem "artifacts\DisplayPilot-win-x64" -Recurse -File |
+              Where-Object {
+                $_.Extension -eq ".pdb" -or
+                $_.Name -in @(
+                  "DirectML.dll",
+                  "Microsoft.ML.OnnxRuntime.dll",
+                  "Microsoft.Windows.AI.MachineLearning.dll",
+                  "onnxruntime.dll",
+                  "WebView2Loader.dll"
+                ) -or
+                $_.Name -like "Microsoft.Windows.AI.*" -or
+                $_.Name -like "Microsoft.Windows.Widgets.*" -or
+                $_.Name -like "Microsoft.Web.WebView2.*"
+              }
+          )
+          if ($unexpectedReleaseFiles.Count -ne 0) {
+            $unexpectedReleaseFiles.FullName
+            throw "The release contains debug symbols or unused Windows App SDK feature payloads."
+          }
+
+          if (Test-Path "artifacts\DisplayPilot-win-x64\Assets") {
+            throw "The release unexpectedly contains a separate Assets directory."
+          }
+
       - name: Download system runtime installers
         shell: pwsh
         run: |

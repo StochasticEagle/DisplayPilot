@@ -19,8 +19,10 @@ using DisplayPilot.Windows.Theme;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Graphics;
+using Windows.Storage.Streams;
 
 namespace DisplayPilot.App;
 
@@ -31,8 +33,10 @@ public sealed partial class MainWindow : Window, IDisposable
     private const int AdvancedWidth = 900;
     private const int AdvancedHeight = 860;
     private const int BrightnessChangeDelayMilliseconds = 30;
-    private const string PrimaryIconFileName = "displaypilot-primary.ico";
-    private const string CompactIconFileName = "displaypilot-compact.ico";
+    private const string CompactIconResourceName =
+        "DisplayPilot.App.Assets.displaypilot-compact.ico";
+    private const string PrimaryImageResourceName =
+        "DisplayPilot.App.Assets.displaypilot-primary-256.png";
     private static readonly long CompactReopenDelayMilliseconds =
         NotificationAreaIcon.ActivationGuardDurationMilliseconds;
     private readonly IMonitorDiscoveryService _monitorDiscovery = new DisplayConfigMonitorDiscovery();
@@ -78,7 +82,12 @@ public sealed partial class MainWindow : Window, IDisposable
     public MainWindow()
     {
         InitializeComponent();
-        AppWindow.SetIcon(GetIconPath(PrimaryIconFileName));
+        if (Environment.ProcessPath is { } processPath)
+        {
+            AppWindow.SetIcon(processPath);
+        }
+
+        LoadAdvancedIcon();
         ConfigureCompactWindow();
         _themeScheduleTimer.Elapsed += ThemeScheduleTimer_Elapsed;
         Activated += MainWindow_Activated;
@@ -97,7 +106,7 @@ public sealed partial class MainWindow : Window, IDisposable
             var window = WinRT.Interop.WindowNative.GetWindowHandle(this);
             _notificationAreaIcon = new NotificationAreaIcon(
                 window,
-                GetIconPath(CompactIconFileName));
+                ReadEmbeddedResource(CompactIconResourceName));
             _notificationAreaIcon.PrimaryInvoked += NotificationAreaIcon_PrimaryInvoked;
             _notificationAreaIcon.ContextMenuInvoked += NotificationAreaIcon_ContextMenuInvoked;
             _notificationAreaIcon.AdvancedInvoked += NotificationAreaIcon_AdvancedInvoked;
@@ -111,9 +120,31 @@ public sealed partial class MainWindow : Window, IDisposable
         }
     }
 
-    private static string GetIconPath(string fileName)
+    private static byte[] ReadEmbeddedResource(string resourceName)
     {
-        return Path.Combine(AppContext.BaseDirectory, "Assets", fileName);
+        using var resource = typeof(MainWindow).Assembly.GetManifestResourceStream(resourceName)
+            ?? throw new InvalidOperationException($"Embedded resource '{resourceName}' was not found.");
+        using var buffer = new MemoryStream();
+        resource.CopyTo(buffer);
+        return buffer.ToArray();
+    }
+
+    private async void LoadAdvancedIcon()
+    {
+        var imageBytes = ReadEmbeddedResource(PrimaryImageResourceName);
+        using var imageStream = new InMemoryRandomAccessStream();
+        using (var writer = new DataWriter(imageStream))
+        {
+            writer.WriteBytes(imageBytes);
+            await writer.StoreAsync();
+            await writer.FlushAsync();
+            writer.DetachStream();
+        }
+
+        imageStream.Seek(0);
+        var image = new BitmapImage();
+        await image.SetSourceAsync(imageStream);
+        AdvancedIcon.Source = image;
     }
 
     public async Task InitializeAsync()
