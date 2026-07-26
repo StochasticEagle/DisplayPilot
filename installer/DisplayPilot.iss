@@ -37,10 +37,17 @@ Name: "startup"; Description: "Start DisplayPilot when I sign in"; GroupDescript
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
 
+[Registry]
+; Remove the obsolete machine-wide startup entry created by installers before 0.1.0.
+Root: HKLM64; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: none; ValueName: "DisplayPilot"; Flags: deletevalue
+
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Parameters: "--register-startup"; Flags: runasoriginaluser runhidden waituntilterminated; Tasks: startup
 Filename: "{app}\{#MyAppExeName}"; Parameters: "--unregister-startup"; Flags: runasoriginaluser runhidden waituntilterminated; Tasks: not startup
 Filename: "{app}\{#MyAppExeName}"; Description: "Launch {#MyAppName}"; Flags: nowait postinstall skipifsilent
+
+[UninstallRun]
+Filename: "{sys}\taskkill.exe"; Parameters: "/F /T /IM {#MyAppExeName}"; Flags: runhidden; RunOnceId: "CloseDisplayPilot"
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}\Assets"
@@ -124,26 +131,10 @@ begin
 end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
-var
-  ResultCode: Integer;
 begin
   if CurUninstallStep = usUninstall then
-  begin
     RegDeleteValue(
       HKCU,
       'Software\Microsoft\Windows\CurrentVersion\Run',
       'DisplayPilot');
-
-    Log('Closing DisplayPilot before removing application files.');
-    if Exec(
-         ExpandConstant('{sys}\taskkill.exe'),
-         '/F /T /IM {#MyAppExeName}',
-         '',
-         SW_HIDE,
-         ewWaitUntilTerminated,
-         ResultCode) then
-      Log('taskkill exit code: ' + IntToStr(ResultCode))
-    else
-      Log('taskkill could not be started; continuing uninstall.');
-  end;
 end;

@@ -26,6 +26,10 @@ Test the Release installer artifact on Windows 10 and Windows 11 x64.
    start after the next sign-in.
 8. Turn it on again and confirm that startup resumes for this account.
 
+Windows may label DisplayPilot as a **High impact** startup application. This
+classification is based on Windows startup-impact measurements and is accepted;
+DisplayPilot does not attempt to override it.
+
 Repeat the installation with the installer option cleared:
 
 1. Confirm that this account's DisplayPilot startup entry is removed.
