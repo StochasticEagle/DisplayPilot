@@ -19,8 +19,10 @@ using DisplayPilot.Windows.Theme;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Graphics;
+using Windows.Storage.Streams;
 
 namespace DisplayPilot.App;
 
@@ -31,8 +33,10 @@ public sealed partial class MainWindow : Window, IDisposable
     private const int AdvancedWidth = 900;
     private const int AdvancedHeight = 860;
     private const int BrightnessChangeDelayMilliseconds = 30;
-    private const string PrimaryIconFileName = "displaypilot-primary.ico";
-    private const string CompactIconFileName = "displaypilot-compact.ico";
+    private const string CompactIconResourceName =
+        "DisplayPilot.App.Assets.displaypilot-compact.ico";
+    private const string PrimaryImageResourceName =
+        "DisplayPilot.App.Assets.displaypilot-primary-256.png";
     private static readonly long CompactReopenDelayMilliseconds =
         NotificationAreaIcon.ActivationGuardDurationMilliseconds;
     private readonly IMonitorDiscoveryService _monitorDiscovery = new DisplayConfigMonitorDiscovery();
@@ -61,7 +65,6 @@ public sealed partial class MainWindow : Window, IDisposable
     private bool _displayOperationRunning;
     private bool _initialScanStarted;
     private bool _updatingCompactControls;
-    private bool _updatingStartupControl;
     private CancellationTokenSource? _brightnessChangeCancellation;
     private string? _pendingBrightnessDevicePath;
     private int _pendingBrightnessPercent;
@@ -79,7 +82,12 @@ public sealed partial class MainWindow : Window, IDisposable
     public MainWindow()
     {
         InitializeComponent();
-        AppWindow.SetIcon(GetIconPath(PrimaryIconFileName));
+        if (Environment.ProcessPath is { } processPath)
+        {
+            AppWindow.SetIcon(processPath);
+        }
+
+        LoadAdvancedIcon();
         ConfigureCompactWindow();
         _themeScheduleTimer.Elapsed += ThemeScheduleTimer_Elapsed;
         Activated += MainWindow_Activated;
@@ -98,7 +106,7 @@ public sealed partial class MainWindow : Window, IDisposable
             var window = WinRT.Interop.WindowNative.GetWindowHandle(this);
             _notificationAreaIcon = new NotificationAreaIcon(
                 window,
-                GetIconPath(CompactIconFileName));
+                ReadEmbeddedResource(CompactIconResourceName));
             _notificationAreaIcon.PrimaryInvoked += NotificationAreaIcon_PrimaryInvoked;
             _notificationAreaIcon.ContextMenuInvoked += NotificationAreaIcon_ContextMenuInvoked;
             _notificationAreaIcon.AdvancedInvoked += NotificationAreaIcon_AdvancedInvoked;
@@ -112,9 +120,31 @@ public sealed partial class MainWindow : Window, IDisposable
         }
     }
 
-    private static string GetIconPath(string fileName)
+    private static byte[] ReadEmbeddedResource(string resourceName)
     {
-        return Path.Combine(AppContext.BaseDirectory, "Assets", fileName);
+        using var resource = typeof(MainWindow).Assembly.GetManifestResourceStream(resourceName)
+            ?? throw new InvalidOperationException($"Embedded resource '{resourceName}' was not found.");
+        using var buffer = new MemoryStream();
+        resource.CopyTo(buffer);
+        return buffer.ToArray();
+    }
+
+    private async void LoadAdvancedIcon()
+    {
+        var imageBytes = ReadEmbeddedResource(PrimaryImageResourceName);
+        using var imageStream = new InMemoryRandomAccessStream();
+        using (var writer = new DataWriter(imageStream))
+        {
+            writer.WriteBytes(imageBytes);
+            await writer.StoreAsync();
+            await writer.FlushAsync();
+            writer.DetachStream();
+        }
+
+        imageStream.Seek(0);
+        var image = new BitmapImage();
+        await image.SetSourceAsync(imageStream);
+        AdvancedIcon.Source = image;
     }
 
     public async Task InitializeAsync()
@@ -248,29 +278,15 @@ public sealed partial class MainWindow : Window, IDisposable
         await ProbeDdcBrightnessAsync();
     }
 
-    private void StartAtLoginToggle_Toggled(object sender, RoutedEventArgs e)
+    private async void OpenStartupSettingsButton_Click(
+        object sender,
+        RoutedEventArgs e)
     {
-        if (_updatingStartupControl)
-        {
-            return;
-        }
-
         try
         {
-            WindowsStartupService.SetEnabled(StartAtLoginToggle.IsOn);
+            await global::Windows.System.Launcher.LaunchUriAsync(
+                new Uri("ms-settings:startupapps"));
             RefreshStartupRegistration();
-        }
-        catch (UnauthorizedAccessException exception)
-        {
-            ReportStartupRegistrationFailure(exception);
-        }
-        catch (SecurityException exception)
-        {
-            ReportStartupRegistrationFailure(exception);
-        }
-        catch (IOException exception)
-        {
-            ReportStartupRegistrationFailure(exception);
         }
         catch (InvalidOperationException exception)
         {
@@ -1288,25 +1304,20 @@ public sealed partial class MainWindow : Window, IDisposable
 
     private void RefreshStartupRegistration()
     {
-        _updatingStartupControl = true;
         try
         {
             var registration = WindowsStartupService.ReadRegistration();
             _startupRegistrationStatus = registration.Status;
             _startupRegistrationError = null;
-            StartAtLoginToggle.IsEnabled =
-                registration.Status != StartupRegistrationStatus.Unavailable;
-            StartAtLoginToggle.IsOn =
-                registration.Status == StartupRegistrationStatus.Enabled;
             StartupStatusText.Text = registration.Status switch
             {
-                StartupRegistrationStatus.Enabled =>
-                    "DisplayPilot will start in the notification area when you sign in.",
+                StartupRegistrationStatus.MachineRegistered =>
+                    "DisplayPilot is registered for all users. Use Windows Startup settings to enable or disable it for this account.",
                 StartupRegistrationStatus.Disabled =>
-                    "DisplayPilot will not start automatically.",
+                    "DisplayPilot is not registered to start automatically. Reinstall it to enable machine-wide startup.",
                 StartupRegistrationStatus.DifferentExecutable =>
-                    "A startup entry points to a different DisplayPilot executable. Turn this on to replace it.",
-                _ => "The current executable path is unavailable.",
+                    "The machine-wide startup entry points to a different DisplayPilot executable. Reinstall DisplayPilot to repair it.",
+                _ => "The machine-wide startup registration is unavailable.",
             };
         }
         catch (UnauthorizedAccessException exception)
@@ -1321,19 +1332,14 @@ public sealed partial class MainWindow : Window, IDisposable
         {
             ReportStartupRegistrationFailure(exception);
         }
-        finally
-        {
-            _updatingStartupControl = false;
-        }
     }
 
     private void ReportStartupRegistrationFailure(Exception exception)
     {
         _startupRegistrationStatus = StartupRegistrationStatus.Unavailable;
         _startupRegistrationError = exception.GetType().Name;
-        StartAtLoginToggle.IsEnabled = false;
         StartupStatusText.Text =
-            $"Startup registration could not be changed: {exception.Message}";
+            $"Startup registration could not be read: {exception.Message}";
     }
 
     private void SetThemeButtonsEnabled(bool enabled)

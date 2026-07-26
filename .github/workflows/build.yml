@@ -23,7 +23,6 @@ jobs:
 
       - name: Install .NET SDK
         uses: actions/setup-dotnet@v6
-
         with:
           dotnet-version: 10.0.x
 
@@ -41,7 +40,7 @@ jobs:
           dotnet publish src/DisplayPilot.App/DisplayPilot.App.csproj
           --configuration Release
           --runtime win-x64
-          --self-contained true
+          --self-contained false
           --no-restore
           --output artifacts/DisplayPilot-win-x64
 
@@ -73,6 +72,74 @@ jobs:
             throw "The published app is missing resources.pri and will fail during WinUI initialization."
           }
 
+      - name: Verify framework-dependent app
+        shell: pwsh
+        run: |
+          $bundledRuntimes = @(
+            Get-ChildItem "artifacts\DisplayPilot-win-x64" -Recurse -File |
+              Where-Object {
+                $_.Name -in @(
+                  "coreclr.dll",
+                  "hostfxr.dll",
+                  "Microsoft.ui.xaml.dll"
+                )
+              }
+          )
+          if ($bundledRuntimes.Count -ne 0) {
+            $bundledRuntimes.FullName
+            throw "The published app unexpectedly contains bundled runtimes."
+          }
+
+          $unexpectedReleaseFiles = @(
+            Get-ChildItem "artifacts\DisplayPilot-win-x64" -Recurse -File |
+              Where-Object {
+                $_.Extension -eq ".pdb" -or
+                $_.Name -in @(
+                  "DirectML.dll",
+                  "Microsoft.ML.OnnxRuntime.dll",
+                  "Microsoft.Windows.AI.MachineLearning.dll",
+                  "onnxruntime.dll",
+                  "WebView2Loader.dll"
+                ) -or
+                $_.Name -like "Microsoft.Windows.AI.*" -or
+                $_.Name -like "Microsoft.Windows.Widgets.*" -or
+                $_.Name -like "Microsoft.Web.WebView2.*"
+              }
+          )
+          if ($unexpectedReleaseFiles.Count -ne 0) {
+            $unexpectedReleaseFiles.FullName
+            throw "The release contains debug symbols or unused Windows App SDK feature payloads."
+          }
+
+          if (Test-Path "artifacts\DisplayPilot-win-x64\Assets") {
+            throw "The release unexpectedly contains a separate Assets directory."
+          }
+
+      - name: Download system runtime installers
+        shell: pwsh
+        run: |
+          $prerequisites = "artifacts\prerequisites"
+          New-Item -ItemType Directory $prerequisites -Force | Out-Null
+
+          $downloads = @{
+            "windowsdesktop-runtime-win-x64.exe" =
+              "https://aka.ms/dotnet/10.0/windowsdesktop-runtime-win-x64.exe"
+            "WindowsAppRuntimeInstall-x64.exe" =
+              "https://aka.ms/windowsappsdk/2.3/latest/windowsappruntimeinstall-x64.exe"
+            "vc_redist.x64.exe" =
+              "https://aka.ms/vs/17/release/vc_redist.x64.exe"
+          }
+
+          foreach ($download in $downloads.GetEnumerator()) {
+            $destination = Join-Path $prerequisites $download.Key
+            Invoke-WebRequest $download.Value -OutFile $destination
+
+            $signature = Get-AuthenticodeSignature $destination
+            if ($signature.Status -ne "Valid") {
+              throw "$($download.Key) does not have a valid Authenticode signature."
+            }
+          }
+
       - name: Install Inno Setup
         shell: pwsh
         run: |
@@ -92,7 +159,6 @@ jobs:
 
       - name: Upload verification app
         uses: actions/upload-artifact@v7
-
         with:
           name: DisplayPilot-win-x64
           path: artifacts/DisplayPilot-win-x64

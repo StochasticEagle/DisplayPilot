@@ -21,7 +21,10 @@ public static class WindowsStartupService
                 null);
         }
 
-        using var key = Registry.CurrentUser.OpenSubKey(RunKeyPath);
+        using var localMachine = RegistryKey.OpenBaseKey(
+            RegistryHive.LocalMachine,
+            RegistryView.Registry64);
+        using var key = localMachine.OpenSubKey(RunKeyPath);
         var registeredCommand = key?.GetValue(
             ValueName,
             defaultValue: null,
@@ -39,42 +42,9 @@ public static class WindowsStartupService
                 registeredCommand,
                 expectedCommand,
                 StringComparison.OrdinalIgnoreCase)
-                ? StartupRegistrationStatus.Enabled
+                ? StartupRegistrationStatus.MachineRegistered
                 : StartupRegistrationStatus.DifferentExecutable,
             registeredCommand);
-    }
-
-    public static void SetEnabled(bool enabled)
-    {
-        if (!enabled)
-        {
-            using var existingKey = Registry.CurrentUser.OpenSubKey(
-                RunKeyPath,
-                writable: true);
-            existingKey?.DeleteValue(ValueName, throwOnMissingValue: false);
-            return;
-        }
-
-        var executablePath = Environment.ProcessPath;
-        if (string.IsNullOrWhiteSpace(executablePath))
-        {
-            throw new InvalidOperationException(
-                "The current DisplayPilot executable path is unavailable.");
-        }
-
-        using var key = Registry.CurrentUser.CreateSubKey(
-            RunKeyPath,
-            writable: true);
-        if (key is null)
-        {
-            throw new InvalidOperationException(
-                "The current-user startup registry key could not be opened.");
-        }
-
-        key.SetValue(
-            ValueName,
-            BuildCommandLine(executablePath),
-            RegistryValueKind.String);
     }
 
     public static string BuildCommandLine(string executablePath)
@@ -87,7 +57,7 @@ public static class WindowsStartupService
 public enum StartupRegistrationStatus
 {
     Disabled,
-    Enabled,
+    MachineRegistered,
     DifferentExecutable,
     Unavailable,
 }

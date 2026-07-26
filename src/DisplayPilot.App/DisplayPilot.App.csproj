@@ -6,31 +6,33 @@
     <Description>WinUI 3 desktop application for DisplayPilot.</Description>
     <UseWinUI>true</UseWinUI>
     <WindowsPackageType>None</WindowsPackageType>
-    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
-    <SelfContained>true</SelfContained>
+    <WindowsAppSDKSelfContained>false</WindowsAppSDKSelfContained>
+    <SelfContained>false</SelfContained>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\displaypilot-primary.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
-    <None
-      Update="Assets\displaypilot-compact.ico"
-      CopyToOutputDirectory="PreserveNewest"
-      CopyToPublishDirectory="PreserveNewest" />
-    <None
-      Update="Assets\displaypilot-primary.ico"
-      CopyToOutputDirectory="PreserveNewest"
-      CopyToPublishDirectory="PreserveNewest" />
-    <None
-      Update="Assets\displaypilot-primary-256.png"
-      CopyToOutputDirectory="PreserveNewest"
-      CopyToPublishDirectory="PreserveNewest" />
+    <EmbeddedResource Include="Assets\displaypilot-compact.ico" />
+    <EmbeddedResource Include="Assets\displaypilot-primary-256.png" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.WindowsAppSDK" />
+    <PackageReference Include="Microsoft.WindowsAppSDK.WinUI" />
+    <PackageReference Include="Microsoft.WindowsAppSDK.Runtime" />
+    <PackageReference Include="Microsoft.WindowsAppSDK.Foundation" />
+    <PackageReference Include="Microsoft.WindowsAppSDK.InteractiveExperiences" />
     <ProjectReference Include="..\DisplayPilot.Core\DisplayPilot.Core.csproj" />
     <ProjectReference Include="..\DisplayPilot.Display\DisplayPilot.Display.csproj" />
     <ProjectReference Include="..\DisplayPilot.Windows\DisplayPilot.Windows.csproj" />
   </ItemGroup>
+
+  <Target Name="RemoveUnusedWebViewRuntime" AfterTargets="Publish">
+    <ItemGroup>
+      <UnusedWebViewRuntime Include="$(PublishDir)Microsoft.Web.WebView2.Core.dll" />
+      <UnusedWebViewRuntime Include="$(PublishDir)Microsoft.Web.WebView2.Core.Projection.dll" />
+      <UnusedWebViewRuntime Include="$(PublishDir)WebView2Loader.dll" />
+    </ItemGroup>
+    <Delete Files="@(UnusedWebViewRuntime)" />
+  </Target>
 </Project>
