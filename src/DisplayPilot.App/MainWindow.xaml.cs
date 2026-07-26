@@ -30,6 +30,8 @@ public sealed partial class MainWindow : Window, IDisposable
     private const int AdvancedWidth = 900;
     private const int AdvancedHeight = 860;
     private const int BrightnessChangeDelayMilliseconds = 150;
+    private const string PrimaryIconFileName = "displaypilot-primary.ico";
+    private const string CompactIconFileName = "displaypilot-compact.ico";
     private static readonly long CompactReopenDelayMilliseconds =
         NotificationAreaIcon.ActivationGuardDurationMilliseconds;
     private readonly IMonitorDiscoveryService _monitorDiscovery = new DisplayConfigMonitorDiscovery();
@@ -72,6 +74,7 @@ public sealed partial class MainWindow : Window, IDisposable
     public MainWindow()
     {
         InitializeComponent();
+        AppWindow.SetIcon(GetIconPath(PrimaryIconFileName));
         ConfigureCompactWindow();
         _themeScheduleTimer.Elapsed += ThemeScheduleTimer_Elapsed;
         Activated += MainWindow_Activated;
@@ -87,7 +90,9 @@ public sealed partial class MainWindow : Window, IDisposable
         try
         {
             var window = WinRT.Interop.WindowNative.GetWindowHandle(this);
-            _notificationAreaIcon = new NotificationAreaIcon(window);
+            _notificationAreaIcon = new NotificationAreaIcon(
+                window,
+                GetIconPath(CompactIconFileName));
             _notificationAreaIcon.PrimaryInvoked += NotificationAreaIcon_PrimaryInvoked;
             _notificationAreaIcon.ContextMenuInvoked += NotificationAreaIcon_ContextMenuInvoked;
             _notificationAreaIcon.AdvancedInvoked += NotificationAreaIcon_AdvancedInvoked;
@@ -99,6 +104,11 @@ public sealed partial class MainWindow : Window, IDisposable
             CompactStatusText.Text = $"Notification-area icon unavailable: {exception.Message}";
             return false;
         }
+    }
+
+    private static string GetIconPath(string fileName)
+    {
+        return Path.Combine(AppContext.BaseDirectory, "Assets", fileName);
     }
 
     public async Task InitializeAsync()
