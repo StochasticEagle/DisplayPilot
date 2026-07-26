@@ -22,6 +22,7 @@
     <PackageReference Include="Microsoft.WindowsAppSDK.Runtime" />
     <PackageReference Include="Microsoft.WindowsAppSDK.Foundation" />
     <PackageReference Include="Microsoft.WindowsAppSDK.InteractiveExperiences" />
+    <PackageReference Include="Microsoft.Web.WebView2" ExcludeAssets="runtime" />
     <ProjectReference Include="..\DisplayPilot.Core\DisplayPilot.Core.csproj" />
     <ProjectReference Include="..\DisplayPilot.Display\DisplayPilot.Display.csproj" />
     <ProjectReference Include="..\DisplayPilot.Windows\DisplayPilot.Windows.csproj" />
