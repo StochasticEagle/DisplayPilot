@@ -21,6 +21,10 @@
       Update="Assets\displaypilot-primary.ico"
       CopyToOutputDirectory="PreserveNewest"
       CopyToPublishDirectory="PreserveNewest" />
+    <None
+      Update="Assets\displaypilot-primary-256.png"
+      CopyToOutputDirectory="PreserveNewest"
+      CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

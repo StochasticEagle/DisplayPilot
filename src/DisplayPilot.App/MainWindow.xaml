@@ -208,6 +208,13 @@
             </Grid.ColumnDefinitions>
 
             <StackPanel Spacing="4">
+                <Image
+                    Width="72"
+                    Height="72"
+                    Margin="0,0,0,8"
+                    HorizontalAlignment="Left"
+                    Source="Assets/displaypilot-primary-256.png"
+                    Stretch="Uniform" />
                 <TextBlock Style="{StaticResource TitleTextBlockStyle}" Text="DisplayPilot" />
                 <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="Windows theme and display verification" />
             </StackPanel>
