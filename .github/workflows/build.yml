@@ -45,7 +45,7 @@ jobs:
           --output artifacts/DisplayPilot-win-x64
 
       - name: Upload verification app
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: DisplayPilot-win-x64
           path: artifacts/DisplayPilot-win-x64
