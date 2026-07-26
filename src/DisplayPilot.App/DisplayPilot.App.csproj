@@ -22,9 +22,17 @@
     <PackageReference Include="Microsoft.WindowsAppSDK.Runtime" />
     <PackageReference Include="Microsoft.WindowsAppSDK.Foundation" />
     <PackageReference Include="Microsoft.WindowsAppSDK.InteractiveExperiences" />
-    <PackageReference Include="Microsoft.Web.WebView2" ExcludeAssets="runtime" />
     <ProjectReference Include="..\DisplayPilot.Core\DisplayPilot.Core.csproj" />
     <ProjectReference Include="..\DisplayPilot.Display\DisplayPilot.Display.csproj" />
     <ProjectReference Include="..\DisplayPilot.Windows\DisplayPilot.Windows.csproj" />
   </ItemGroup>
+
+  <Target Name="RemoveUnusedWebViewRuntime" AfterTargets="Publish">
+    <ItemGroup>
+      <UnusedWebViewRuntime Include="$(PublishDir)Microsoft.Web.WebView2.Core.dll" />
+      <UnusedWebViewRuntime Include="$(PublishDir)Microsoft.Web.WebView2.Core.Projection.dll" />
+      <UnusedWebViewRuntime Include="$(PublishDir)WebView2Loader.dll" />
+    </ItemGroup>
+    <Delete Files="@(UnusedWebViewRuntime)" />
+  </Target>
 </Project>
