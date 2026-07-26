@@ -10,55 +10,49 @@ public static class WindowsStartupService
     private const string RunKeyPath =
         @"Software\Microsoft\Windows\CurrentVersion\Run";
     private const string ValueName = "DisplayPilot";
+    private const string ShortcutFileName = "DisplayPilot.lnk";
 
     public static StartupRegistration ReadRegistration()
     {
-        var executablePath = Environment.ProcessPath;
-        if (string.IsNullOrWhiteSpace(executablePath))
+        var startupDirectory = Environment.GetFolderPath(
+            Environment.SpecialFolder.Startup);
+        if (string.IsNullOrWhiteSpace(startupDirectory))
         {
             return new StartupRegistration(
                 StartupRegistrationStatus.Unavailable,
                 null);
         }
 
-        using var localMachine = RegistryKey.OpenBaseKey(
-            RegistryHive.LocalMachine,
-            RegistryView.Registry64);
-        using var key = localMachine.OpenSubKey(RunKeyPath);
-        var registeredCommand = key?.GetValue(
-            ValueName,
-            defaultValue: null,
-            RegistryValueOptions.DoNotExpandEnvironmentNames) as string;
-        if (string.IsNullOrWhiteSpace(registeredCommand))
-        {
-            return new StartupRegistration(
-                StartupRegistrationStatus.Disabled,
-                null);
-        }
-
-        var expectedCommand = BuildCommandLine(executablePath);
+        var shortcutPath = BuildStartupShortcutPath(startupDirectory);
         return new StartupRegistration(
-            string.Equals(
-                registeredCommand,
-                expectedCommand,
-                StringComparison.OrdinalIgnoreCase)
-                ? StartupRegistrationStatus.MachineRegistered
-                : StartupRegistrationStatus.DifferentExecutable,
-            registeredCommand);
+            File.Exists(shortcutPath)
+                ? StartupRegistrationStatus.PerUserRegistered
+                : StartupRegistrationStatus.Disabled,
+            shortcutPath);
     }
 
-    public static string BuildCommandLine(string executablePath)
+    public static void RemoveLegacyPerUserRegistration()
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(executablePath);
-        return $"\"{Path.GetFullPath(executablePath)}\" --startup";
+        using var currentUser = RegistryKey.OpenBaseKey(
+            RegistryHive.CurrentUser,
+            RegistryView.Default);
+        using var key = currentUser.CreateSubKey(RunKeyPath, writable: true);
+        key.DeleteValue(ValueName, throwOnMissingValue: false);
+    }
+
+    public static string BuildStartupShortcutPath(string startupDirectory)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(startupDirectory);
+        return Path.Combine(
+            Path.GetFullPath(startupDirectory),
+            ShortcutFileName);
     }
 }
 
 public enum StartupRegistrationStatus
 {
     Disabled,
-    MachineRegistered,
-    DifferentExecutable,
+    PerUserRegistered,
     Unavailable,
 }
 

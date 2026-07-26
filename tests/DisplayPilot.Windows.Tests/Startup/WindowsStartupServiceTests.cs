@@ -10,20 +10,20 @@ namespace DisplayPilot.Windows.Tests.Startup;
 public sealed class WindowsStartupServiceTests
 {
     [TestMethod]
-    public void BuildCommandLineQuotesExecutablePathAndAddsStartupArgument()
+    public void BuildStartupShortcutPathAddsShortcutName()
     {
-        var result = WindowsStartupService.BuildCommandLine(
-            @"C:\Program Files\DisplayPilot\DisplayPilot.exe");
+        var result = WindowsStartupService.BuildStartupShortcutPath(
+            @"C:\Users\dev\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup");
 
         Assert.AreEqual(
-            "\"C:\\Program Files\\DisplayPilot\\DisplayPilot.exe\" --startup",
+            "C:\\Users\\dev\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\DisplayPilot.lnk",
             result);
     }
 
     [TestMethod]
-    public void BuildCommandLineRejectsEmptyPath()
+    public void BuildStartupShortcutPathRejectsEmptyPath()
     {
         Assert.ThrowsExactly<ArgumentException>(
-            () => WindowsStartupService.BuildCommandLine(string.Empty));
+            () => WindowsStartupService.BuildStartupShortcutPath(string.Empty));
     }
 }
