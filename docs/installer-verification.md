@@ -34,7 +34,7 @@ DisplayPilot does not attempt to override it.
 
 Repeat the installation with the installer option cleared:
 
-1. Confirm that the shared DisplayPilot startup shortcut is removed.
+1. Confirm that each account's DisplayPilot startup shortcut is removed.
 2. Sign out and sign in.
 3. Confirm that DisplayPilot does not start automatically.
 
@@ -51,7 +51,7 @@ Repeat the installation with the installer option cleared:
 1. Enable DisplayPilot in Windows Startup settings and leave DisplayPilot running.
 2. Uninstall DisplayPilot from Windows Settings.
 3. Confirm that DisplayPilot closes during uninstall.
-4. Confirm that the application directory, Start menu shortcut, and shared
-   DisplayPilot startup shortcut are removed.
+4. Confirm that the application directory, Start menu shortcut, and per-user
+   DisplayPilot startup shortcuts are removed.
 5. Confirm that the shared system runtimes remain available for other
    applications.

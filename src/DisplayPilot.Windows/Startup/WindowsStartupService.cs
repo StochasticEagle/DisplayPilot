@@ -14,20 +14,19 @@ public static class WindowsStartupService
 
     public static StartupRegistration ReadRegistration()
     {
-        var commonApplicationDataDirectory = Environment.GetFolderPath(
-            Environment.SpecialFolder.CommonApplicationData);
-        if (string.IsNullOrWhiteSpace(commonApplicationDataDirectory))
+        var startupDirectory = Environment.GetFolderPath(
+            Environment.SpecialFolder.Startup);
+        if (string.IsNullOrWhiteSpace(startupDirectory))
         {
             return new StartupRegistration(
                 StartupRegistrationStatus.Unavailable,
                 null);
         }
 
-        var shortcutPath = BuildCommonStartupShortcutPath(
-            commonApplicationDataDirectory);
+        var shortcutPath = BuildStartupShortcutPath(startupDirectory);
         return new StartupRegistration(
             File.Exists(shortcutPath)
-                ? StartupRegistrationStatus.AllUsersRegistered
+                ? StartupRegistrationStatus.PerUserRegistered
                 : StartupRegistrationStatus.Disabled,
             shortcutPath);
     }
@@ -41,17 +40,11 @@ public static class WindowsStartupService
         key.DeleteValue(ValueName, throwOnMissingValue: false);
     }
 
-    public static string BuildCommonStartupShortcutPath(
-        string commonApplicationDataDirectory)
+    public static string BuildStartupShortcutPath(string startupDirectory)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(commonApplicationDataDirectory);
+        ArgumentException.ThrowIfNullOrWhiteSpace(startupDirectory);
         return Path.Combine(
-            Path.GetFullPath(commonApplicationDataDirectory),
-            "Microsoft",
-            "Windows",
-            "Start Menu",
-            "Programs",
-            "Startup",
+            Path.GetFullPath(startupDirectory),
             ShortcutFileName);
     }
 }
@@ -59,7 +52,7 @@ public static class WindowsStartupService
 public enum StartupRegistrationStatus
 {
     Disabled,
-    AllUsersRegistered,
+    PerUserRegistered,
     Unavailable,
 }
 
