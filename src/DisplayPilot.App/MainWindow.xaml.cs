@@ -1011,6 +1011,7 @@ public sealed partial class MainWindow : Window, IDisposable
         CompactView.Visibility = Visibility.Collapsed;
         AdvancedView.Visibility = Visibility.Visible;
         AppWindow.SetPresenter(AppWindowPresenterKind.Default);
+        AppWindow.SetIcon(GetIconPath(PrimaryIconFileName));
         if (AppWindow.Presenter is OverlappedPresenter presenter)
         {
             presenter.IsMaximizable = true;
