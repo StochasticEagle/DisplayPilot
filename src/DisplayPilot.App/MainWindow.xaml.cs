@@ -64,6 +64,9 @@ public sealed partial class MainWindow : Window, IDisposable
     private bool _themeOperationRunning;
     private bool _displayOperationRunning;
     private bool _initialScanStarted;
+    private bool _displayScanStarted;
+    private bool _sessionIsActive = true;
+    private bool _advancedIconLoaded;
     private bool _updatingCompactControls;
     private CancellationTokenSource? _brightnessChangeCancellation;
     private string? _pendingBrightnessDevicePath;
@@ -87,7 +90,6 @@ public sealed partial class MainWindow : Window, IDisposable
             AppWindow.SetIcon(processPath);
         }
 
-        LoadAdvancedIcon();
         ConfigureCompactWindow();
         _themeScheduleTimer.Elapsed += ThemeScheduleTimer_Elapsed;
         Activated += MainWindow_Activated;
@@ -111,6 +113,8 @@ public sealed partial class MainWindow : Window, IDisposable
             _notificationAreaIcon.ContextMenuInvoked += NotificationAreaIcon_ContextMenuInvoked;
             _notificationAreaIcon.AdvancedInvoked += NotificationAreaIcon_AdvancedInvoked;
             _notificationAreaIcon.ExitInvoked += NotificationAreaIcon_ExitInvoked;
+            _notificationAreaIcon.SessionActivityChanged +=
+                NotificationAreaIcon_SessionActivityChanged;
             return true;
         }
         catch (Win32Exception exception)
@@ -131,6 +135,12 @@ public sealed partial class MainWindow : Window, IDisposable
 
     private async void LoadAdvancedIcon()
     {
+        if (_advancedIconLoaded)
+        {
+            return;
+        }
+
+        _advancedIconLoaded = true;
         var imageBytes = ReadEmbeddedResource(PrimaryImageResourceName);
         using var imageStream = new InMemoryRandomAccessStream();
         using (var writer = new DataWriter(imageStream))
@@ -147,18 +157,24 @@ public sealed partial class MainWindow : Window, IDisposable
         AdvancedIcon.Source = image;
     }
 
-    public async Task InitializeAsync()
+    public async Task InitializeAsync(bool includeDisplays = true)
     {
-        if (_initialScanStarted)
+        if (!_initialScanStarted)
         {
-            return;
+            _initialScanStarted = true;
+            RefreshThemeStatus();
+            if (_sessionIsActive)
+            {
+                await EvaluateAndApplyScheduleAsync();
+                UpdateThemeScheduleTimer();
+            }
         }
 
-        _initialScanStarted = true;
-        RefreshThemeStatus();
-        await EvaluateAndApplyScheduleAsync();
-        UpdateThemeScheduleTimer();
-        await RefreshDisplaysAsync();
+        if (includeDisplays && !_displayScanStarted && _sessionIsActive)
+        {
+            _displayScanStarted = true;
+            await RefreshDisplaysAsync();
+        }
     }
 
     private async void RootGrid_Loaded(object sender, RoutedEventArgs e)
@@ -180,6 +196,12 @@ public sealed partial class MainWindow : Window, IDisposable
         }
 
         if (Environment.TickCount64 < _compactShowBlockedUntil)
+        {
+            return;
+        }
+
+        await InitializeAsync();
+        if (!_sessionIsActive)
         {
             return;
         }
@@ -256,6 +278,49 @@ public sealed partial class MainWindow : Window, IDisposable
     private void NotificationAreaIcon_ExitInvoked(object? sender, EventArgs e)
     {
         _ = DispatcherQueue.TryEnqueue(ExitApplication);
+    }
+
+    private void NotificationAreaIcon_SessionActivityChanged(object? sender, bool isActive)
+    {
+        _ = DispatcherQueue.TryEnqueue(() => SetSessionActivity(isActive));
+    }
+
+    private async void SetSessionActivity(bool isActive)
+    {
+        if (_sessionIsActive == isActive)
+        {
+            return;
+        }
+
+        _sessionIsActive = isActive;
+        if (!isActive)
+        {
+            _brightnessChangeCancellation?.Cancel();
+            _themeScheduleTimer.Cancel();
+            _trayContextMenuWindow?.Close();
+            AppWindow.Hide();
+            return;
+        }
+
+        var displaysWereInitialized = _displayScanStarted;
+        await InitializeAsync();
+        await EvaluateAndApplyScheduleAsync();
+        UpdateThemeScheduleTimer();
+        if (displaysWereInitialized)
+        {
+            await RefreshDisplaysAsync();
+        }
+    }
+
+    public async void ShowFromExternalActivation()
+    {
+        if (!_sessionIsActive)
+        {
+            return;
+        }
+
+        await InitializeAsync();
+        ShowCompactView();
     }
 
     private void ShowAdvancedButton_Click(object sender, RoutedEventArgs e)
@@ -463,7 +528,7 @@ public sealed partial class MainWindow : Window, IDisposable
 
     private async Task RefreshDisplaysAsync()
     {
-        if (_displayOperationRunning)
+        if (_displayOperationRunning || !_sessionIsActive)
         {
             return;
         }
@@ -536,7 +601,7 @@ public sealed partial class MainWindow : Window, IDisposable
 
     private async Task ProbeDdcBrightnessAsync()
     {
-        if (_displayOperationRunning)
+        if (_displayOperationRunning || !_sessionIsActive)
         {
             return;
         }
@@ -628,7 +693,7 @@ public sealed partial class MainWindow : Window, IDisposable
 
     private async Task SetBrightnessAsync(string devicePath, int requestedPercent)
     {
-        if (_displayOperationRunning)
+        if (_displayOperationRunning || !_sessionIsActive)
         {
             return;
         }
@@ -1035,6 +1100,8 @@ public sealed partial class MainWindow : Window, IDisposable
             _notificationAreaIcon.ContextMenuInvoked -= NotificationAreaIcon_ContextMenuInvoked;
             _notificationAreaIcon.AdvancedInvoked -= NotificationAreaIcon_AdvancedInvoked;
             _notificationAreaIcon.ExitInvoked -= NotificationAreaIcon_ExitInvoked;
+            _notificationAreaIcon.SessionActivityChanged -=
+                NotificationAreaIcon_SessionActivityChanged;
             _notificationAreaIcon.Dispose();
         }
 
@@ -1061,6 +1128,7 @@ public sealed partial class MainWindow : Window, IDisposable
 
     private void ShowAdvancedView()
     {
+        LoadAdvancedIcon();
         _isCompactMode = false;
         CompactView.Visibility = Visibility.Collapsed;
         AdvancedView.Visibility = Visibility.Visible;
@@ -1150,7 +1218,7 @@ public sealed partial class MainWindow : Window, IDisposable
 
     private async Task EvaluateAndApplyScheduleAsync()
     {
-        if (!_scheduleAutomationEnabled || _themeOperationRunning)
+        if (!_sessionIsActive || !_scheduleAutomationEnabled || _themeOperationRunning)
         {
             return;
         }
@@ -1229,7 +1297,10 @@ public sealed partial class MainWindow : Window, IDisposable
 
     private void UpdateThemeScheduleTimer()
     {
-        if (!_scheduleAutomationEnabled || !_initialScanStarted || _savedThemeSchedule is null)
+        if (!_sessionIsActive ||
+            !_scheduleAutomationEnabled ||
+            !_initialScanStarted ||
+            _savedThemeSchedule is null)
         {
             _themeScheduleTimer.Cancel();
             return;

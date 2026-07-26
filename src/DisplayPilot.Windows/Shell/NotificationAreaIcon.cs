@@ -22,6 +22,17 @@ public sealed partial class NotificationAreaIcon : IDisposable
     private const uint NotifySelect = 0x0400;
     private const uint NotifyKeySelect = 0x0401;
     private const uint ContextMenu = 0x007B;
+    private const uint SessionChangeMessage = 0x02B1;
+    private const uint ConsoleConnect = 0x1;
+    private const uint ConsoleDisconnect = 0x2;
+    private const uint RemoteConnect = 0x3;
+    private const uint RemoteDisconnect = 0x4;
+    private const uint SessionLogon = 0x5;
+    private const uint SessionLogoff = 0x6;
+    private const uint SessionLock = 0x7;
+    private const uint SessionUnlock = 0x8;
+    private const uint SessionDesktopReady = 0xF;
+    private const uint NotifyForThisSession = 0;
     private const uint AdvancedCommand = 1;
     private const uint ExitCommand = 2;
     private const uint DefaultApplicationIcon = 32512;
@@ -45,6 +56,7 @@ public sealed partial class NotificationAreaIcon : IDisposable
     private bool _windowClassRegistered;
     private bool _disposed;
     private bool _iconAdded;
+    private bool _sessionNotificationsRegistered;
     private long _callbackCount;
     private uint _lastNotificationCode;
     private DateTimeOffset? _lastCallbackUtc;
@@ -99,6 +111,9 @@ public sealed partial class NotificationAreaIcon : IDisposable
 
         try
         {
+            _sessionNotificationsRegistered = WtsRegisterSessionNotification(
+                _messageWindow,
+                NotifyForThisSession);
             var loadedIcon = LoadNotificationIcon(iconData);
             _iconHandle = loadedIcon.Handle;
             _ownsIconHandle = loadedIcon.OwnsHandle;
@@ -125,6 +140,8 @@ public sealed partial class NotificationAreaIcon : IDisposable
     public event EventHandler? AdvancedInvoked;
 
     public event EventHandler? ExitInvoked;
+
+    public event EventHandler<bool>? SessionActivityChanged;
 
     public static uint ActivationGuardDurationMilliseconds =>
         Math.Max(GetDoubleClickTime(), 1u);
@@ -194,6 +211,12 @@ public sealed partial class NotificationAreaIcon : IDisposable
 
             _disposed = true;
             DeleteIcon();
+            if (_sessionNotificationsRegistered)
+            {
+                _ = WtsUnRegisterSessionNotification(_messageWindow);
+                _sessionNotificationsRegistered = false;
+            }
+
             _ = DestroyWindow(_messageWindow);
             if (_ownsIconHandle && _iconHandle != 0)
             {
@@ -426,6 +449,21 @@ public sealed partial class NotificationAreaIcon : IDisposable
             return 0;
         }
 
+        if (message == SessionChangeMessage)
+        {
+            var sessionEvent = unchecked((uint)wParam);
+            if (sessionEvent is ConsoleDisconnect or RemoteDisconnect or SessionLogoff or SessionLock)
+            {
+                SessionActivityChanged?.Invoke(this, false);
+            }
+            else if (sessionEvent is ConsoleConnect or RemoteConnect or SessionLogon or SessionUnlock or SessionDesktopReady)
+            {
+                SessionActivityChanged?.Invoke(this, true);
+            }
+
+            return 0;
+        }
+
         if (message != CallbackMessage)
         {
             return DefWindowProc(window, message, wParam, lParam);
@@ -593,6 +631,14 @@ public sealed partial class NotificationAreaIcon : IDisposable
 
     [LibraryImport("user32.dll")]
     private static partial uint GetDoubleClickTime();
+
+    [LibraryImport("wtsapi32.dll", EntryPoint = "WTSRegisterSessionNotification", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool WtsRegisterSessionNotification(nint window, uint flags);
+
+    [LibraryImport("wtsapi32.dll", EntryPoint = "WTSUnRegisterSessionNotification")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool WtsUnRegisterSessionNotification(nint window);
 
     [StructLayout(LayoutKind.Sequential)]
     private unsafe struct WindowClassEx
