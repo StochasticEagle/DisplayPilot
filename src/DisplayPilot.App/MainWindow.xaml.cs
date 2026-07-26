@@ -1311,13 +1311,13 @@ public sealed partial class MainWindow : Window, IDisposable
             _startupRegistrationError = null;
             StartupStatusText.Text = registration.Status switch
             {
-                StartupRegistrationStatus.MachineRegistered =>
-                    "DisplayPilot is registered for all users. Use Windows Startup settings to enable or disable it for this account.",
+                StartupRegistrationStatus.PerUserRegistered =>
+                    "DisplayPilot is registered to start for this account. Use Windows Startup settings to enable or disable it.",
                 StartupRegistrationStatus.Disabled =>
-                    "DisplayPilot is not registered to start automatically. Reinstall it to enable machine-wide startup.",
+                    "DisplayPilot is not registered to start automatically for this account. Reinstall it to enable startup.",
                 StartupRegistrationStatus.DifferentExecutable =>
-                    "The machine-wide startup entry points to a different DisplayPilot executable. Reinstall DisplayPilot to repair it.",
-                _ => "The machine-wide startup registration is unavailable.",
+                    "This account's startup entry points to a different DisplayPilot executable. Reinstall DisplayPilot to repair it.",
+                _ => "The startup registration for this account is unavailable.",
             };
         }
         catch (UnauthorizedAccessException exception)

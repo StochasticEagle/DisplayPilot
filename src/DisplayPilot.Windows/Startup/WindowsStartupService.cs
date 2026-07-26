@@ -21,10 +21,10 @@ public static class WindowsStartupService
                 null);
         }
 
-        using var localMachine = RegistryKey.OpenBaseKey(
-            RegistryHive.LocalMachine,
-            RegistryView.Registry64);
-        using var key = localMachine.OpenSubKey(RunKeyPath);
+        using var currentUser = RegistryKey.OpenBaseKey(
+            RegistryHive.CurrentUser,
+            RegistryView.Default);
+        using var key = currentUser.OpenSubKey(RunKeyPath);
         var registeredCommand = key?.GetValue(
             ValueName,
             defaultValue: null,
@@ -42,9 +42,34 @@ public static class WindowsStartupService
                 registeredCommand,
                 expectedCommand,
                 StringComparison.OrdinalIgnoreCase)
-                ? StartupRegistrationStatus.MachineRegistered
+                ? StartupRegistrationStatus.PerUserRegistered
                 : StartupRegistrationStatus.DifferentExecutable,
             registeredCommand);
+    }
+
+    public static void SetRegistration(bool enabled)
+    {
+        using var currentUser = RegistryKey.OpenBaseKey(
+            RegistryHive.CurrentUser,
+            RegistryView.Default);
+        using var key = currentUser.CreateSubKey(RunKeyPath, writable: true);
+        if (!enabled)
+        {
+            key.DeleteValue(ValueName, throwOnMissingValue: false);
+            return;
+        }
+
+        var executablePath = Environment.ProcessPath;
+        if (string.IsNullOrWhiteSpace(executablePath))
+        {
+            throw new InvalidOperationException(
+                "The DisplayPilot executable path is unavailable.");
+        }
+
+        key.SetValue(
+            ValueName,
+            BuildCommandLine(executablePath),
+            RegistryValueKind.String);
     }
 
     public static string BuildCommandLine(string executablePath)
@@ -57,7 +82,7 @@ public static class WindowsStartupService
 public enum StartupRegistrationStatus
 {
     Disabled,
-    MachineRegistered,
+    PerUserRegistered,
     DifferentExecutable,
     Unavailable,
 }
