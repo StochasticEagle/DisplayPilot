@@ -22,19 +22,10 @@ public partial class App : Application
     {
         var commandLine = Environment.GetCommandLineArgs();
         if (commandLine.Contains(
-                "--register-startup",
+                "--remove-legacy-user-startup",
                 StringComparer.OrdinalIgnoreCase))
         {
-            WindowsStartupService.SetRegistration(enabled: true);
-            Exit();
-            return;
-        }
-
-        if (commandLine.Contains(
-                "--unregister-startup",
-                StringComparer.OrdinalIgnoreCase))
-        {
-            WindowsStartupService.SetRegistration(enabled: false);
+            WindowsStartupService.RemoveLegacyPerUserRegistration();
             Exit();
             return;
         }

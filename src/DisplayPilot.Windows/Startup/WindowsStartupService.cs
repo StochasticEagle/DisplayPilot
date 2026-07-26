@@ -10,80 +10,56 @@ public static class WindowsStartupService
     private const string RunKeyPath =
         @"Software\Microsoft\Windows\CurrentVersion\Run";
     private const string ValueName = "DisplayPilot";
+    private const string ShortcutFileName = "DisplayPilot.lnk";
 
     public static StartupRegistration ReadRegistration()
     {
-        var executablePath = Environment.ProcessPath;
-        if (string.IsNullOrWhiteSpace(executablePath))
+        var commonApplicationDataDirectory = Environment.GetFolderPath(
+            Environment.SpecialFolder.CommonApplicationData);
+        if (string.IsNullOrWhiteSpace(commonApplicationDataDirectory))
         {
             return new StartupRegistration(
                 StartupRegistrationStatus.Unavailable,
                 null);
         }
 
-        using var currentUser = RegistryKey.OpenBaseKey(
-            RegistryHive.CurrentUser,
-            RegistryView.Default);
-        using var key = currentUser.OpenSubKey(RunKeyPath);
-        var registeredCommand = key?.GetValue(
-            ValueName,
-            defaultValue: null,
-            RegistryValueOptions.DoNotExpandEnvironmentNames) as string;
-        if (string.IsNullOrWhiteSpace(registeredCommand))
-        {
-            return new StartupRegistration(
-                StartupRegistrationStatus.Disabled,
-                null);
-        }
-
-        var expectedCommand = BuildCommandLine(executablePath);
+        var shortcutPath = BuildCommonStartupShortcutPath(
+            commonApplicationDataDirectory);
         return new StartupRegistration(
-            string.Equals(
-                registeredCommand,
-                expectedCommand,
-                StringComparison.OrdinalIgnoreCase)
-                ? StartupRegistrationStatus.PerUserRegistered
-                : StartupRegistrationStatus.DifferentExecutable,
-            registeredCommand);
+            File.Exists(shortcutPath)
+                ? StartupRegistrationStatus.AllUsersRegistered
+                : StartupRegistrationStatus.Disabled,
+            shortcutPath);
     }
 
-    public static void SetRegistration(bool enabled)
+    public static void RemoveLegacyPerUserRegistration()
     {
         using var currentUser = RegistryKey.OpenBaseKey(
             RegistryHive.CurrentUser,
             RegistryView.Default);
         using var key = currentUser.CreateSubKey(RunKeyPath, writable: true);
-        if (!enabled)
-        {
-            key.DeleteValue(ValueName, throwOnMissingValue: false);
-            return;
-        }
-
-        var executablePath = Environment.ProcessPath;
-        if (string.IsNullOrWhiteSpace(executablePath))
-        {
-            throw new InvalidOperationException(
-                "The DisplayPilot executable path is unavailable.");
-        }
-
-        key.SetValue(
-            ValueName,
-            BuildCommandLine(executablePath),
-            RegistryValueKind.String);
+        key.DeleteValue(ValueName, throwOnMissingValue: false);
     }
 
-    public static string BuildCommandLine(string executablePath)
+    public static string BuildCommonStartupShortcutPath(
+        string commonApplicationDataDirectory)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(executablePath);
-        return $"\"{Path.GetFullPath(executablePath)}\" --startup";
+        ArgumentException.ThrowIfNullOrWhiteSpace(commonApplicationDataDirectory);
+        return Path.Combine(
+            Path.GetFullPath(commonApplicationDataDirectory),
+            "Microsoft",
+            "Windows",
+            "Start Menu",
+            "Programs",
+            "Startup",
+            ShortcutFileName);
     }
 }
 
 public enum StartupRegistrationStatus
 {
     Disabled,
-    PerUserRegistered,
-    DifferentExecutable,
+    AllUsersRegistered,
     Unavailable,
 }
 

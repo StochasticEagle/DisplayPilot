@@ -32,18 +32,18 @@ Source: "..\artifacts\prerequisites\WindowsAppRuntimeInstall-x64.exe"; Flags: do
 Source: "..\artifacts\prerequisites\vc_redist.x64.exe"; Flags: dontcopy
 
 [Tasks]
-Name: "startup"; Description: "Start DisplayPilot when I sign in"; GroupDescription: "Startup:"
+Name: "startup"; Description: "Start DisplayPilot for all users when they sign in"; GroupDescription: "Startup:"
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
+Name: "{commonstartup}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Parameters: "--startup"; Tasks: startup
 
 [Registry]
 ; Remove the obsolete machine-wide startup entry created by installers before 0.1.0.
 Root: HKLM64; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: none; ValueName: "DisplayPilot"; Flags: deletevalue
 
 [Run]
-Filename: "{app}\{#MyAppExeName}"; Parameters: "--register-startup"; Flags: runasoriginaluser runhidden waituntilterminated; Tasks: startup
-Filename: "{app}\{#MyAppExeName}"; Parameters: "--unregister-startup"; Flags: runasoriginaluser runhidden waituntilterminated; Tasks: not startup
+Filename: "{app}\{#MyAppExeName}"; Parameters: "--remove-legacy-user-startup"; Flags: runasoriginaluser runhidden waituntilterminated
 Filename: "{app}\{#MyAppExeName}"; Description: "Launch {#MyAppName}"; Flags: nowait postinstall skipifsilent
 
 [UninstallRun]
@@ -128,6 +128,13 @@ begin
     'WindowsAppRuntimeInstall-x64.exe',
     '--quiet',
     NeedsRestart);
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if (CurStep = ssPostInstall) and
+     (not WizardIsTaskSelected('startup')) then
+    DeleteFile(ExpandConstant('{commonstartup}\{#MyAppName}.lnk'));
 end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
