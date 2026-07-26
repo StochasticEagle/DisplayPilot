@@ -66,6 +66,7 @@ public sealed partial class MainWindow : Window, IDisposable
     private bool _exitRequested;
     private bool _disposed;
     private NotificationAreaIcon? _notificationAreaIcon;
+    private TrayContextMenuWindow? _trayContextMenuWindow;
     private string _diagnosticReport = string.Empty;
 
     public MainWindow()
@@ -88,6 +89,7 @@ public sealed partial class MainWindow : Window, IDisposable
             var window = WinRT.Interop.WindowNative.GetWindowHandle(this);
             _notificationAreaIcon = new NotificationAreaIcon(window);
             _notificationAreaIcon.PrimaryInvoked += NotificationAreaIcon_PrimaryInvoked;
+            _notificationAreaIcon.ContextMenuInvoked += NotificationAreaIcon_ContextMenuInvoked;
             _notificationAreaIcon.AdvancedInvoked += NotificationAreaIcon_AdvancedInvoked;
             _notificationAreaIcon.ExitInvoked += NotificationAreaIcon_ExitInvoked;
             return true;
@@ -123,7 +125,7 @@ public sealed partial class MainWindow : Window, IDisposable
         _ = DispatcherQueue.TryEnqueue(HandleNotificationAreaPrimaryInvocation);
     }
 
-    private void HandleNotificationAreaPrimaryInvocation()
+    private async void HandleNotificationAreaPrimaryInvocation()
     {
         if (AppWindow.IsVisible)
         {
@@ -138,7 +140,62 @@ public sealed partial class MainWindow : Window, IDisposable
 
         ShowCompactView();
         RefreshDiagnosticReport();
-        QueueInitialBrightnessProbe();
+        if (_activeMonitors.Count > 0)
+        {
+            await ProbeDdcBrightnessAsync();
+        }
+    }
+
+    private void NotificationAreaIcon_ContextMenuInvoked(object? sender, EventArgs e)
+    {
+        _ = DispatcherQueue.TryEnqueue(ShowNotificationAreaContextMenu);
+    }
+
+    private void ShowNotificationAreaContextMenu()
+    {
+        _trayContextMenuWindow?.Close();
+
+        var menu = new TrayContextMenuWindow();
+        menu.AdvancedInvoked += TrayContextMenuWindow_AdvancedInvoked;
+        menu.ExitInvoked += TrayContextMenuWindow_ExitInvoked;
+        menu.Closed += TrayContextMenuWindow_Closed;
+        _trayContextMenuWindow = menu;
+
+        NotificationAreaBounds? anchor = null;
+        if (_notificationAreaIcon?.TryGetBounds(out var bounds) == true)
+        {
+            anchor = bounds;
+        }
+
+        menu.ShowAt(anchor);
+    }
+
+    private void TrayContextMenuWindow_AdvancedInvoked(object? sender, EventArgs e)
+    {
+        _notificationAreaIcon?.InvokeContextMenuCommand(
+            NotificationAreaMenuCommand.Advanced);
+    }
+
+    private void TrayContextMenuWindow_ExitInvoked(object? sender, EventArgs e)
+    {
+        _notificationAreaIcon?.InvokeContextMenuCommand(
+            NotificationAreaMenuCommand.Exit);
+    }
+
+    private void TrayContextMenuWindow_Closed(object sender, WindowEventArgs args)
+    {
+        if (sender is not TrayContextMenuWindow menu)
+        {
+            return;
+        }
+
+        menu.AdvancedInvoked -= TrayContextMenuWindow_AdvancedInvoked;
+        menu.ExitInvoked -= TrayContextMenuWindow_ExitInvoked;
+        menu.Closed -= TrayContextMenuWindow_Closed;
+        if (ReferenceEquals(_trayContextMenuWindow, menu))
+        {
+            _trayContextMenuWindow = null;
+        }
     }
 
     private void NotificationAreaIcon_AdvancedInvoked(object? sender, EventArgs e)
@@ -153,19 +210,6 @@ public sealed partial class MainWindow : Window, IDisposable
     private void NotificationAreaIcon_ExitInvoked(object? sender, EventArgs e)
     {
         _ = DispatcherQueue.TryEnqueue(ExitApplication);
-    }
-
-    private void QueueInitialBrightnessProbe()
-    {
-        if (_activeMonitors.Count > 0 && _lastDdcProbes.Count == 0 && _lastWmiProbes.Count == 0)
-        {
-            _ = DispatcherQueue.TryEnqueue(ProbeInitialBrightness);
-        }
-    }
-
-    private async void ProbeInitialBrightness()
-    {
-        await ProbeDdcBrightnessAsync();
     }
 
     private void ShowAdvancedButton_Click(object sender, RoutedEventArgs e)
@@ -924,11 +968,14 @@ public sealed partial class MainWindow : Window, IDisposable
         if (_notificationAreaIcon is not null)
         {
             _notificationAreaIcon.PrimaryInvoked -= NotificationAreaIcon_PrimaryInvoked;
+            _notificationAreaIcon.ContextMenuInvoked -= NotificationAreaIcon_ContextMenuInvoked;
             _notificationAreaIcon.AdvancedInvoked -= NotificationAreaIcon_AdvancedInvoked;
             _notificationAreaIcon.ExitInvoked -= NotificationAreaIcon_ExitInvoked;
             _notificationAreaIcon.Dispose();
         }
 
+        _trayContextMenuWindow?.Close();
+        _trayContextMenuWindow = null;
         _themeScheduleTimer.Dispose();
         GC.SuppressFinalize(this);
     }
