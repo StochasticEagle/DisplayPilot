@@ -13,3 +13,5 @@ Per-user schedule saving is covered by
 [Theme schedule persistence verification](docs/theme-schedule-persistence-verification.md).
 Opt-in switching while the app is open is covered by
 [Fixed theme automation verification](docs/fixed-theme-automation-verification.md).
+The compact notification-area flyout and retained Advanced interface are covered
+by [Notification-area UI verification](docs/notification-area-ui-verification.md).

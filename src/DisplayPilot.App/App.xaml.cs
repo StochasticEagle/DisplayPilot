@@ -14,9 +14,15 @@ public partial class App : Application
         InitializeComponent();
     }
 
-    protected override void OnLaunched(LaunchActivatedEventArgs args)
+    protected override async void OnLaunched(LaunchActivatedEventArgs args)
     {
-        _window = new MainWindow();
-        _window.Activate();
+        var window = new MainWindow();
+        _window = window;
+        var notificationAreaReady = window.InitializeNotificationArea();
+        await window.InitializeAsync();
+        if (!notificationAreaReady)
+        {
+            window.Activate();
+        }
     }
 }
