@@ -25,6 +25,9 @@ public sealed partial class NotificationAreaIcon : IDisposable
     private const uint AdvancedCommand = 1;
     private const uint ExitCommand = 2;
     private const uint DefaultApplicationIcon = 32512;
+    private const uint ImageIcon = 1;
+    private const uint LoadFromFile = 0x00000010;
+    private const uint LoadDefaultSize = 0x00000040;
     private const uint ExtendedWindowStyleToolWindow = 0x00000080;
     private const uint WindowStylePopup = 0x80000000;
     private const uint NonClientCreate = 0x0081;
@@ -37,6 +40,8 @@ public sealed partial class NotificationAreaIcon : IDisposable
     private readonly nint _ownerWindow;
     private readonly nint _moduleHandle;
     private readonly nint _messageWindow;
+    private readonly nint _iconHandle;
+    private readonly bool _ownsIconHandle;
     private readonly uint _taskbarCreatedMessage;
     private GCHandle _selfHandle;
     private bool _windowClassRegistered;
@@ -51,7 +56,7 @@ public sealed partial class NotificationAreaIcon : IDisposable
     private string _lastContextMenuStage = "None";
     private int _lastContextMenuError;
 
-    public NotificationAreaIcon(nint window)
+    public NotificationAreaIcon(nint window, string? iconPath = null)
     {
         if (window == 0)
         {
@@ -96,11 +101,19 @@ public sealed partial class NotificationAreaIcon : IDisposable
 
         try
         {
+            var loadedIcon = LoadNotificationIcon(iconPath);
+            _iconHandle = loadedIcon.Handle;
+            _ownsIconHandle = loadedIcon.OwnsHandle;
             AddIcon();
         }
         catch (Win32Exception)
         {
             _ = DestroyWindow(_messageWindow);
+            if (_ownsIconHandle && _iconHandle != 0)
+            {
+                _ = DestroyIcon(_iconHandle);
+            }
+
             _selfHandle.Free();
             UnregisterNotificationWindowClass();
             throw;
@@ -184,6 +197,11 @@ public sealed partial class NotificationAreaIcon : IDisposable
             _disposed = true;
             DeleteIcon();
             _ = DestroyWindow(_messageWindow);
+            if (_ownsIconHandle && _iconHandle != 0)
+            {
+                _ = DestroyIcon(_iconHandle);
+            }
+
             _selfHandle.Free();
             UnregisterNotificationWindowClass();
         }
@@ -236,7 +254,7 @@ public sealed partial class NotificationAreaIcon : IDisposable
             IconIdentifier = IconIdentifier,
             Flags = NotifyIconMessage | NotifyIconImage | NotifyIconTip | NotifyIconShowTip,
             CallbackMessage = CallbackMessage,
-            Icon = LoadIcon(0, unchecked((nint)DefaultApplicationIcon)),
+            Icon = _iconHandle,
         };
         if (data.Icon == 0)
         {
@@ -251,6 +269,37 @@ public sealed partial class NotificationAreaIcon : IDisposable
 
         data.Tip[tooltip.Length] = '\0';
         return data;
+    }
+
+    private (nint Handle, bool OwnsHandle) LoadNotificationIcon(string? iconPath)
+    {
+        if (!string.IsNullOrWhiteSpace(iconPath))
+        {
+            var fileIcon = LoadImage(
+                0,
+                iconPath,
+                ImageIcon,
+                0,
+                0,
+                LoadFromFile | LoadDefaultSize);
+            if (fileIcon != 0)
+            {
+                return (fileIcon, true);
+            }
+        }
+
+        var applicationIcon = LoadIcon(
+            _moduleHandle,
+            unchecked((nint)DefaultApplicationIcon));
+        applicationIcon = applicationIcon != 0
+            ? applicationIcon
+            : LoadIcon(0, unchecked((nint)DefaultApplicationIcon));
+        if (applicationIcon == 0)
+        {
+            throw new Win32Exception(Marshal.GetLastPInvokeError());
+        }
+
+        return (applicationIcon, false);
     }
 
     private unsafe void RegisterNotificationWindowClass()
@@ -432,6 +481,19 @@ public sealed partial class NotificationAreaIcon : IDisposable
 
     [LibraryImport("user32.dll", EntryPoint = "LoadIconW")]
     private static partial nint LoadIcon(nint instance, nint iconName);
+
+    [LibraryImport("user32.dll", EntryPoint = "LoadImageW", StringMarshalling = StringMarshalling.Utf16, SetLastError = true)]
+    private static partial nint LoadImage(
+        nint instance,
+        string name,
+        uint type,
+        int width,
+        int height,
+        uint flags);
+
+    [LibraryImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool DestroyIcon(nint icon);
 
     [LibraryImport("user32.dll", EntryPoint = "RegisterWindowMessageW", StringMarshalling = StringMarshalling.Utf16)]
     private static partial uint RegisterWindowMessage(string message);
