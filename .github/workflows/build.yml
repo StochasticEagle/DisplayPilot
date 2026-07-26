@@ -23,6 +23,7 @@ jobs:
 
       - name: Install .NET SDK
         uses: actions/setup-dotnet@v6
+
         with:
           dotnet-version: 10.0.x
 
@@ -44,9 +45,62 @@ jobs:
           --no-restore
           --output artifacts/DisplayPilot-win-x64
 
+      - name: Finalize published WinUI resources
+        shell: pwsh
+        run: |
+          $publishDirectory = (Resolve-Path "artifacts\DisplayPilot-win-x64").Path
+          $resourceIndex = Join-Path $publishDirectory "resources.pri"
+          if (-not (Test-Path $resourceIndex -PathType Leaf)) {
+            $projectResourceIndex = Get-ChildItem `
+              "src\DisplayPilot.App\bin\Release" `
+              -Recurse `
+              -File `
+              -Include "DisplayPilot.pri", "DisplayPilot.App.pri" |
+                Where-Object { -not $_.FullName.StartsWith($publishDirectory) } |
+                Sort-Object LastWriteTimeUtc -Descending |
+                Select-Object -First 1
+
+            if ($null -eq $projectResourceIndex) {
+              Get-ChildItem "src\DisplayPilot.App" -Recurse -File -Filter "*.pri" |
+                Select-Object -ExpandProperty FullName
+              throw "The WinUI build did not generate a DisplayPilot resource index."
+            }
+
+            Copy-Item $projectResourceIndex.FullName $resourceIndex
+          }
+
+          if (-not (Test-Path $resourceIndex -PathType Leaf)) {
+            throw "The published app is missing resources.pri and will fail during WinUI initialization."
+          }
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          $compiler = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $compiler)) {
+            choco install innosetup --no-progress --yes
+          }
+
+      - name: Build installer
+        shell: pwsh
+        run: |
+          $compiler = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          & $compiler "installer\DisplayPilot.iss"
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+
       - name: Upload verification app
         uses: actions/upload-artifact@v7
+
         with:
           name: DisplayPilot-win-x64
           path: artifacts/DisplayPilot-win-x64
+          if-no-files-found: error
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v6
+        with:
+          name: DisplayPilot-Setup-win-x64
+          path: artifacts/installer/DisplayPilot-Setup-win-x64.exe
           if-no-files-found: error
