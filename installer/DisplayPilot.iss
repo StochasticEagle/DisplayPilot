@@ -27,14 +27,57 @@ RestartApplications=no
 
 [Files]
 Source: "..\artifacts\DisplayPilot-win-x64\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\artifacts\installer\DisplayPilot-Prerequisites.exe"; Flags: dontcopy
+
+[Tasks]
+Name: "startup"; Description: "Start DisplayPilot when I sign in"; GroupDescription: "Startup:"; Flags: unchecked
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
+
+[Registry]
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "DisplayPilot"; ValueData: """{app}\{#MyAppExeName}"" --startup"; Tasks: startup; Flags: uninsdeletevalue
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "Launch {#MyAppName}"; Flags: nowait postinstall skipifsilent
 
 [Code]
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  ResultCode: Integer;
+begin
+  Result := '';
+  ExtractTemporaryFile('DisplayPilot-Prerequisites.exe');
+  if not Exec(
+       ExpandConstant('{tmp}\DisplayPilot-Prerequisites.exe'),
+       '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /RESTARTEXITCODE=3010',
+       '',
+       SW_HIDE,
+       ewWaitUntilTerminated,
+       ResultCode) then
+  begin
+    Result := 'The shared system runtime installer could not be started.';
+    Exit;
+  end;
+
+  if ResultCode = 3010 then
+    NeedsRestart := True
+  else if ResultCode <> 0 then
+    Result :=
+      'The shared system runtime installation failed with exit code ' +
+      IntToStr(ResultCode) + '.';
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if (CurStep = ssPostInstall) and
+     (not WizardIsTaskSelected('startup')) then
+    RegDeleteValue(
+      HKCU,
+      'Software\Microsoft\Windows\CurrentVersion\Run',
+      'DisplayPilot');
+end;
+
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 begin
   if CurUninstallStep = usUninstall then
