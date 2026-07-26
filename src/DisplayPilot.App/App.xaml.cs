@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Aaron
 // Licensed under the MIT license. See the LICENSE file in the project root.
 
+using DisplayPilot.Windows.Startup;
 using Microsoft.UI.Xaml;
 using Microsoft.Windows.AppLifecycle;
 using Windows.ApplicationModel.Activation;
@@ -19,6 +20,25 @@ public partial class App : Application
 
     protected override async void OnLaunched(Microsoft.UI.Xaml.LaunchActivatedEventArgs args)
     {
+        var commandLine = Environment.GetCommandLineArgs();
+        if (commandLine.Contains(
+                "--register-startup",
+                StringComparer.OrdinalIgnoreCase))
+        {
+            WindowsStartupService.SetRegistration(enabled: true);
+            Exit();
+            return;
+        }
+
+        if (commandLine.Contains(
+                "--unregister-startup",
+                StringComparer.OrdinalIgnoreCase))
+        {
+            WindowsStartupService.SetRegistration(enabled: false);
+            Exit();
+            return;
+        }
+
         var startupLaunch = IsStartupLaunch(args.Arguments);
         var window = new MainWindow();
         _window = window;

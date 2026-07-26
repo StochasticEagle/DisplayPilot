@@ -32,16 +32,34 @@ Source: "..\artifacts\prerequisites\WindowsAppRuntimeInstall-x64.exe"; Flags: do
 Source: "..\artifacts\prerequisites\vc_redist.x64.exe"; Flags: dontcopy
 
 [Tasks]
-Name: "startup"; Description: "Start DisplayPilot when users sign in"; GroupDescription: "Startup:"
+Name: "startup"; Description: "Start DisplayPilot when I sign in"; GroupDescription: "Startup:"
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
 
 [Registry]
-Root: HKLM64; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "DisplayPilot"; ValueData: """{app}\{#MyAppExeName}"" --startup"; Tasks: startup; Flags: uninsdeletevalue
+; Remove the obsolete machine-wide startup entry created by installers before 0.1.0.
+Root: HKLM64; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: none; ValueName: "DisplayPilot"; Flags: deletevalue
 
 [Run]
+Filename: "{app}\{#MyAppExeName}"; Parameters: "--register-startup"; Flags: runasoriginaluser runhidden waituntilterminated; Tasks: startup
+Filename: "{app}\{#MyAppExeName}"; Parameters: "--unregister-startup"; Flags: runasoriginaluser runhidden waituntilterminated; Tasks: not startup
 Filename: "{app}\{#MyAppExeName}"; Description: "Launch {#MyAppName}"; Flags: nowait postinstall skipifsilent
+
+[UninstallRun]
+Filename: "{sys}\taskkill.exe"; Parameters: "/F /T /IM {#MyAppExeName}"; Flags: runhidden; RunOnceId: "CloseDisplayPilot"
+
+[UninstallDelete]
+Type: filesandordirs; Name: "{app}\Assets"
+Type: files; Name: "{app}\*.pdb"
+Type: files; Name: "{app}\DirectML.dll"
+Type: files; Name: "{app}\Microsoft.ML.OnnxRuntime.dll"
+Type: files; Name: "{app}\Microsoft.Windows.AI.*"
+Type: files; Name: "{app}\Microsoft.Windows.Widgets.*"
+Type: files; Name: "{app}\Microsoft.Web.WebView2.*"
+Type: files; Name: "{app}\onnxruntime.dll"
+Type: files; Name: "{app}\WebView2Loader.dll"
+Type: dirifempty; Name: "{app}"
 
 [Code]
 function IsSuccessfulRuntimeExitCode(ResultCode: Integer): Boolean;
@@ -112,12 +130,11 @@ begin
     NeedsRestart);
 end;
 
-procedure CurStepChanged(CurStep: TSetupStep);
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 begin
-  if (CurStep = ssPostInstall) and
-     (not WizardIsTaskSelected('startup')) then
+  if CurUninstallStep = usUninstall then
     RegDeleteValue(
-      HKLM64,
+      HKCU,
       'Software\Microsoft\Windows\CurrentVersion\Run',
       'DisplayPilot');
 end;
