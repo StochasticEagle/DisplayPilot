@@ -15,7 +15,7 @@ namespace DisplayPilot.Display.Ddc;
 /// Reads and writes one standard monitor VCP feature at a time. Every write is
 /// followed by an immediate read-back through the active physical-monitor handle.
 /// </summary>
-public sealed class WindowsDdcVcpFeatureService
+public static class WindowsDdcVcpFeatureService
 {
     private const uint MaximumPhysicalMonitorsPerDisplay = 64;
     private const int ErrorInvalidData = 13;
@@ -24,7 +24,7 @@ public sealed class WindowsDdcVcpFeatureService
     private const int HandleRetryDelayMilliseconds = 200;
     private const int ReadRetryDelayMilliseconds = 75;
 
-    public IReadOnlyList<MonitorDdcVcpFeatureInfo> ReadFeature(
+    public static IReadOnlyList<MonitorDdcVcpFeatureInfo> ReadFeature(
         IReadOnlyList<MonitorDisplayInfo> activeDisplays,
         byte vcpCode)
     {
@@ -49,17 +49,17 @@ public sealed class WindowsDdcVcpFeatureService
                     0)])).ToArray();
     }
 
-    public DdcVcpWriteResult WriteContinuousPercent(
+    public static DdcVcpWriteResult WriteContinuousPercent(
         MonitorDisplayInfo display,
         byte vcpCode,
         int requestedPercent)
     {
         ArgumentNullException.ThrowIfNull(display);
         requestedPercent = Math.Clamp(requestedPercent, 0, 100);
-        return WriteFeature(display, vcpCode, requestedPercent, continuous: true);
+        return WriteFeature(display, vcpCode, checked((uint)requestedPercent), continuous: true);
     }
 
-    public DdcVcpWriteResult WriteDiscreteValue(
+    public static DdcVcpWriteResult WriteDiscreteValue(
         MonitorDisplayInfo display,
         byte vcpCode,
         uint requestedValue)
@@ -68,7 +68,7 @@ public sealed class WindowsDdcVcpFeatureService
         return WriteFeature(display, vcpCode, requestedValue, continuous: false);
     }
 
-    public IReadOnlyList<MonitorDdcCapabilitiesInfo> ReadCapabilities(
+    public static IReadOnlyList<MonitorDdcCapabilitiesInfo> ReadCapabilities(
         IReadOnlyList<MonitorDisplayInfo> activeDisplays)
     {
         ArgumentNullException.ThrowIfNull(activeDisplays);
@@ -287,7 +287,7 @@ public sealed class WindowsDdcVcpFeatureService
             lastError);
     }
 
-    private static IReadOnlyList<DdcVcpFeatureResult> ProbeFeature(byte vcpCode)
+    private static List<DdcVcpFeatureResult> ProbeFeature(byte vcpCode)
     {
         var results = new List<DdcVcpFeatureResult>();
         foreach (var logicalMonitor in EnumerateLogicalMonitors())
