@@ -95,6 +95,7 @@
                                                 <RowDefinition Height="Auto" />
                                                 <RowDefinition Height="Auto" />
                                                 <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
                                             </Grid.RowDefinitions>
                                             <TextBlock
                                                 FontWeight="SemiBold"
@@ -150,6 +151,28 @@
                                                 Tag="{x:Bind}" />
                                             <TextBlock
                                                 Grid.Row="5"
+                                                VerticalAlignment="Center"
+                                                FontWeight="SemiBold"
+                                                Text="Rotation" />
+                                            <StackPanel
+                                                Grid.Row="5"
+                                                Grid.Column="1"
+                                                Orientation="Horizontal"
+                                                Spacing="6">
+                                                <ComboBox
+                                                    MinWidth="170"
+                                                    DisplayMemberPath="DisplayName"
+                                                    IsEnabled="{x:Bind IsRotationAvailable, Mode=OneTime}"
+                                                    ItemsSource="{x:Bind RotationOptions, Mode=OneTime}"
+                                                    SelectedItem="{x:Bind SelectedRotation, Mode=TwoWay}" />
+                                                <Button
+                                                    Click="CompactApplyRotationButton_Click"
+                                                    Content="Apply"
+                                                    IsEnabled="{x:Bind IsRotationAvailable, Mode=OneTime}"
+                                                    Tag="{x:Bind}" />
+                                            </StackPanel>
+                                            <TextBlock
+                                                Grid.Row="6"
                                                 Grid.ColumnSpan="2"
                                                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                                 Text="{x:Bind Status, Mode=OneTime}"

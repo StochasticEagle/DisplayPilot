@@ -12,6 +12,7 @@ using DisplayPilot.Display.Ddc;
 using DisplayPilot.Display.Discovery;
 using DisplayPilot.Display.Interop;
 using DisplayPilot.Display.Mccs;
+using DisplayPilot.Display.Rotation;
 using DisplayPilot.Display.Wmi;
 using DisplayPilot.Windows.Scheduling;
 using DisplayPilot.Windows.Settings;
@@ -58,6 +59,7 @@ public sealed partial class MainWindow : Window, IDisposable
     private IReadOnlyList<MonitorDdcVcpFeatureInfo> _lastContrastProbes = [];
     private IReadOnlyList<MonitorDdcVcpFeatureInfo> _lastColorTemperatureProbes = [];
     private IReadOnlyList<MonitorDdcCapabilitiesInfo> _lastDdcCapabilities = [];
+    private IReadOnlyList<DisplayRotationResult> _lastRotationReads = [];
     private ThemeState? _themeState;
     private ThemeApplyResult? _lastThemeResult;
     private CustomThemeSchedule? _customThemeSchedule;
@@ -69,6 +71,7 @@ public sealed partial class MainWindow : Window, IDisposable
     private string? _scheduleSettingsError;
     private BrightnessWriteResult? _lastBrightnessWriteResult;
     private DdcVcpWriteResult? _lastDdcVcpWriteResult;
+    private DisplayRotationResult? _lastRotationWriteResult;
     private bool _themeOperationRunning;
     private bool _displayOperationRunning;
     private bool _initialScanStarted;
@@ -520,6 +523,23 @@ public sealed partial class MainWindow : Window, IDisposable
         await SetColorTemperatureAsync(monitor.DevicePath, checked((uint)preset.RawValue));
     }
 
+    private async void CompactApplyRotationButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button
+            {
+                Tag: CompactMonitorViewModel
+                {
+                    IsRotationAvailable: true,
+                    SelectedRotation: { } selectedRotation,
+                } monitor,
+            })
+        {
+            return;
+        }
+
+        await ApplyRotationAsync(monitor.DevicePath, selectedRotation.Rotation);
+    }
+
     private async void CompactDarkModeToggle_Toggled(object sender, RoutedEventArgs e)
     {
         if (_updatingCompactControls)
@@ -686,6 +706,9 @@ public sealed partial class MainWindow : Window, IDisposable
             var monitors = await Task.Run(_monitorDiscovery.DiscoverActiveMonitors);
 
             _activeMonitors = monitors;
+            _lastRotationReads = await Task.Run(() => monitors
+                .Select(monitor => WindowsDisplayRotationService.Read(monitor.GdiDeviceName))
+                .ToArray());
             _lastDdcProbes = [];
             _lastWmiProbes = [];
             _lastContrastProbes = [];
@@ -719,6 +742,7 @@ public sealed partial class MainWindow : Window, IDisposable
             _lastContrastProbes = [];
             _lastColorTemperatureProbes = [];
             _lastDdcCapabilities = [];
+            _lastRotationReads = [];
             UpdateCompactMonitorCards();
             EmptyState.Visibility = Visibility.Visible;
             StatusText.Text = $"Display discovery failed: {exception.Message}";
@@ -1026,6 +1050,59 @@ public sealed partial class MainWindow : Window, IDisposable
             SetDisplayControlsEnabled(true);
         }
     }
+
+    private async Task ApplyRotationAsync(
+        string devicePath,
+        DisplayRotation requestedRotation)
+    {
+        if (_displayOperationRunning || !_sessionIsActive)
+        {
+            return;
+        }
+
+        var display = FindActiveDisplay(devicePath);
+        _displayOperationRunning = true;
+        SetDisplayControlsEnabled(false);
+        CompactStatusText.Text = $"Rotating {display.FriendlyName} to {FormatRotation(requestedRotation)}...";
+        StatusText.Text = CompactStatusText.Text;
+
+        try
+        {
+            var result = await Task.Run(() => WindowsDisplayRotationService.Apply(
+                display.GdiDeviceName,
+                requestedRotation));
+            _lastRotationWriteResult = result;
+            _lastRotationReads = await Task.Run(() => _activeMonitors
+                .Select(monitor => WindowsDisplayRotationService.Read(monitor.GdiDeviceName))
+                .ToArray());
+            UpdateCompactMonitorCards();
+            CompactStatusText.Text = result.Status switch
+            {
+                DisplayRotationStatus.Applied =>
+                    $"{display.FriendlyName}: rotation verified as {FormatRotation(requestedRotation)}.",
+                DisplayRotationStatus.RestartRequired =>
+                    $"{display.FriendlyName}: rotation saved; Windows requires a restart.",
+                _ =>
+                    $"Rotation failed ({result.Status}, native result {result.NativeResult}).",
+            };
+            StatusText.Text = CompactStatusText.Text;
+            RefreshDiagnosticReport();
+        }
+        finally
+        {
+            _displayOperationRunning = false;
+            SetDisplayControlsEnabled(true);
+        }
+    }
+
+    private static string FormatRotation(DisplayRotation rotation) => rotation switch
+    {
+        DisplayRotation.Landscape => "Landscape (0°)",
+        DisplayRotation.Portrait => "Portrait (90°)",
+        DisplayRotation.LandscapeFlipped => "Landscape flipped (180°)",
+        DisplayRotation.PortraitFlipped => "Portrait flipped (270°)",
+        _ => rotation.ToString(),
+    };
 
     private MonitorDisplayInfo FindActiveDisplay(string devicePath) =>
         _activeMonitors.First(candidate => string.Equals(
@@ -1726,6 +1803,12 @@ public sealed partial class MainWindow : Window, IDisposable
                 _lastColorTemperatureProbes,
                 display.DevicePath);
             var colorTemperaturePresets = GetColorTemperaturePresets(display.DevicePath);
+            var rotationRead = _lastRotationReads.FirstOrDefault(candidate =>
+                string.Equals(
+                    candidate.GdiDeviceName,
+                    display.GdiDeviceName,
+                    StringComparison.OrdinalIgnoreCase));
+            var rotationAvailable = rotationRead?.Status == DisplayRotationStatus.ReadSucceeded;
 
             var wmiProbe = _lastWmiProbes.FirstOrDefault(candidate => string.Equals(
                 candidate.Display.DevicePath,
@@ -1742,6 +1825,8 @@ public sealed partial class MainWindow : Window, IDisposable
                     GetCompactContrast(display.DevicePath, contrastPercent),
                     colorTemperaturePresets,
                     colorTemperatureRead is null ? null : checked((int)colorTemperatureRead.CurrentValue),
+                    rotationAvailable,
+                    rotationRead?.Rotation,
                     "Internal display · WMI");
             }
 
@@ -1767,6 +1852,8 @@ public sealed partial class MainWindow : Window, IDisposable
                     GetCompactContrast(display.DevicePath, contrastPercent),
                     colorTemperaturePresets,
                     colorTemperatureRead is null ? null : checked((int)colorTemperatureRead.CurrentValue),
+                    rotationAvailable,
+                    rotationRead?.Rotation,
                     "External display · DDC/CI");
             }
 
@@ -1779,6 +1866,8 @@ public sealed partial class MainWindow : Window, IDisposable
                 GetCompactContrast(display.DevicePath, contrastPercent),
                 colorTemperaturePresets,
                 colorTemperatureRead is null ? null : checked((int)colorTemperatureRead.CurrentValue),
+                rotationAvailable,
+                rotationRead?.Rotation,
                 _lastDdcProbes.Count == 0 && _lastWmiProbes.Count == 0
                     ? "Brightness has not been read yet"
                     : "Brightness control unavailable");
@@ -2013,6 +2102,19 @@ public sealed partial class MainWindow : Window, IDisposable
             report.Append("Extended VCP message: ").AppendLine(_lastDdcVcpWriteResult.Message);
         }
 
+        if (_lastRotationWriteResult is not null)
+        {
+            report.Append("Rotation write display: ").AppendLine(_lastRotationWriteResult.GdiDeviceName);
+            report.Append("Rotation write status: ").AppendLine(_lastRotationWriteResult.Status.ToString());
+            report.Append("Rotation requested: ").AppendLine(
+                _lastRotationWriteResult.Rotation is null
+                    ? "Unavailable"
+                    : FormatRotation(_lastRotationWriteResult.Rotation.Value));
+            report.Append("Rotation native result: ").AppendLine(
+                _lastRotationWriteResult.NativeResult?.ToString(CultureInfo.InvariantCulture) ?? "None");
+            report.Append("Rotation write message: ").AppendLine(_lastRotationWriteResult.Message ?? "None");
+        }
+
         if (error is not null)
         {
             report.Append("Win32 error: ").Append(error.NativeErrorCode).Append(" - ").AppendLine(error.Message);
@@ -2026,6 +2128,17 @@ public sealed partial class MainWindow : Window, IDisposable
             report.Append("Windows name: ").AppendLine(monitor.GdiDeviceName);
             report.Append("Monitor number: ").AppendLine(monitor.MonitorNumber.ToString(CultureInfo.InvariantCulture));
             report.Append("Device path: ").AppendLine(monitor.DevicePath);
+
+            var rotationRead = _lastRotationReads.FirstOrDefault(candidate =>
+                string.Equals(candidate.GdiDeviceName, monitor.GdiDeviceName, StringComparison.OrdinalIgnoreCase));
+            report.Append("Rotation status: ").AppendLine(rotationRead?.Status.ToString() ?? "Not read");
+            report.Append("Rotation current: ").AppendLine(
+                rotationRead?.Rotation is null
+                    ? "Unavailable"
+                    : FormatRotation(rotationRead.Rotation.Value));
+            report.Append("Rotation native result: ").AppendLine(
+                rotationRead?.NativeResult?.ToString(CultureInfo.InvariantCulture) ?? "None");
+            report.Append("Rotation message: ").AppendLine(rotationRead?.Message ?? "None");
 
             var probe = ddcProbes?.FirstOrDefault(candidate =>
                 string.Equals(candidate.Display.DevicePath, monitor.DevicePath, StringComparison.OrdinalIgnoreCase));

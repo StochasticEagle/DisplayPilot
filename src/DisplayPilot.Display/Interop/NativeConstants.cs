@@ -77,10 +77,14 @@ namespace DisplayPilot.Display.Interop
         /// </summary>
         public const int DmdoDefault = 0;
 
+        public const int Dmdo90 = 1;
+
         /// <summary>
         /// The display is rotated 180 degrees (measured clockwise) from its natural orientation.
         /// </summary>
         public const int Dmdo180 = 2;
+
+        public const int Dmdo270 = 3;
 
         // ==================== DEVMODE field flags ====================
 
@@ -105,6 +109,8 @@ namespace DisplayPilot.Display.Interop
         /// Test the graphics mode but don't actually set it.
         /// </summary>
         public const uint CdsTest = 0x00000002;
+
+        public const uint CdsUpdateRegistry = 0x00000001;
 
         // ==================== ChangeDisplaySettings result codes ====================
 
