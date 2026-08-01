@@ -65,18 +65,18 @@
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
-                                <TextBlock FontWeight="SemiBold" Text="Brightness" />
+                                <TextBlock FontWeight="SemiBold" Text="Displays" />
                                 <Button
                                     x:Name="CompactReadBrightnessButton"
                                     Grid.Column="1"
                                     Click="CompactReadBrightnessButton_Click"
-                                    Content="Refresh" />
+                                    Content="Refresh controls" />
                             </Grid>
 
                             <ListView
                                 x:Name="CompactMonitorList"
                                 HorizontalContentAlignment="Stretch"
-                                MaxHeight="220"
+                                MaxHeight="360"
                                 SelectionMode="None">
                                 <ListView.ItemTemplate>
                                     <DataTemplate x:DataType="local:CompactMonitorViewModel">
@@ -89,6 +89,9 @@
                                                 <ColumnDefinition Width="Auto" />
                                             </Grid.ColumnDefinitions>
                                             <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
                                                 <RowDefinition Height="Auto" />
                                                 <RowDefinition Height="Auto" />
                                                 <RowDefinition Height="Auto" />
@@ -113,6 +116,40 @@
                                                 Value="{x:Bind BrightnessPercent, Mode=TwoWay}" />
                                             <TextBlock
                                                 Grid.Row="2"
+                                                FontWeight="SemiBold"
+                                                Text="Contrast" />
+                                            <TextBlock
+                                                Grid.Row="2"
+                                                Grid.Column="1"
+                                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                Text="{x:Bind ContrastText, Mode=OneWay}" />
+                                            <Slider
+                                                Grid.Row="3"
+                                                Grid.ColumnSpan="2"
+                                                Minimum="0"
+                                                Maximum="100"
+                                                IsEnabled="{x:Bind IsContrastAvailable, Mode=OneTime}"
+                                                StepFrequency="1"
+                                                Tag="{x:Bind}"
+                                                ValueChanged="CompactContrastSlider_ValueChanged"
+                                                Value="{x:Bind ContrastPercent, Mode=TwoWay}" />
+                                            <TextBlock
+                                                Grid.Row="4"
+                                                VerticalAlignment="Center"
+                                                FontWeight="SemiBold"
+                                                Text="Color temperature" />
+                                            <ComboBox
+                                                Grid.Row="4"
+                                                Grid.Column="1"
+                                                MinWidth="150"
+                                                DisplayMemberPath="DisplayName"
+                                                IsEnabled="{x:Bind IsColorTemperatureAvailable, Mode=OneTime}"
+                                                ItemsSource="{x:Bind ColorTemperaturePresets, Mode=OneTime}"
+                                                SelectionChanged="CompactColorTemperature_SelectionChanged"
+                                                SelectedItem="{x:Bind SelectedColorTemperaturePreset, Mode=TwoWay}"
+                                                Tag="{x:Bind}" />
+                                            <TextBlock
+                                                Grid.Row="5"
                                                 Grid.ColumnSpan="2"
                                                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                                 Text="{x:Bind Status, Mode=OneTime}"
@@ -234,7 +271,7 @@
                 <Button
                     x:Name="ProbeDdcButton"
                     Click="ProbeDdcButton_Click"
-                    Content="Read brightness (DDC + WMI)"
+                    Content="Refresh display controls"
                     IsEnabled="False" />
             </StackPanel>
         </Grid>
@@ -451,9 +488,9 @@
                     <InfoBar
                         IsClosable="False"
                         IsOpen="True"
-                        Message="Read brightness first, select one validated display, then explicitly set 0–100%. DisplayPilot writes only brightness and immediately reads it back for verification."
+                        Message="DisplayPilot verifies brightness, contrast, and advertised color-temperature changes with an immediate read-back. Unsupported DDC/CI controls remain disabled."
                         Severity="Warning"
-                        Title="Brightness write verification" />
+                        Title="Display-control verification" />
 
                     <!-- Brightness Control -->
                     <Grid HorizontalAlignment="Stretch">

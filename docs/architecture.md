@@ -5,7 +5,7 @@ theme automation with monitor management.
 
 ## Boundaries
 
-- `DisplayPilot.Core`: scheduling, profiles, settings models, and domain logic.
+- `DisplayPilot.Core`: scheduling, settings models, and domain logic.
 - `DisplayPilot.Display`: monitor discovery and control through DDC/CI and WMI.
 - `DisplayPilot.Windows`: Windows theme, notification-area shell integration,
   registry, scheduling, and session integration.

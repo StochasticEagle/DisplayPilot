@@ -10,6 +10,8 @@ using DisplayPilot.Core.Theme;
 using DisplayPilot.Display.Brightness;
 using DisplayPilot.Display.Ddc;
 using DisplayPilot.Display.Discovery;
+using DisplayPilot.Display.Interop;
+using DisplayPilot.Display.Mccs;
 using DisplayPilot.Display.Wmi;
 using DisplayPilot.Windows.Scheduling;
 using DisplayPilot.Windows.Settings;
@@ -29,7 +31,7 @@ namespace DisplayPilot.App;
 public sealed partial class MainWindow : Window, IDisposable
 {
     private const int CompactWidth = 480;
-    private const int CompactHeight = 520;
+    private const int CompactHeight = 640;
     private const int AdvancedWidth = 900;
     private const int AdvancedHeight = 860;
     private const int BrightnessChangeDelayMilliseconds = 30;
@@ -48,9 +50,14 @@ public sealed partial class MainWindow : Window, IDisposable
     private readonly WindowsBoundaryTimer _themeScheduleTimer = new();
     private readonly Dictionary<string, int> _compactBrightnessValues =
         new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, int> _compactContrastValues =
+        new(StringComparer.OrdinalIgnoreCase);
     private IReadOnlyList<MonitorDisplayInfo> _activeMonitors = [];
     private IReadOnlyList<MonitorDdcProbeInfo> _lastDdcProbes = [];
     private IReadOnlyList<WmiBrightnessProbeResult> _lastWmiProbes = [];
+    private IReadOnlyList<MonitorDdcVcpFeatureInfo> _lastContrastProbes = [];
+    private IReadOnlyList<MonitorDdcVcpFeatureInfo> _lastColorTemperatureProbes = [];
+    private IReadOnlyList<MonitorDdcCapabilitiesInfo> _lastDdcCapabilities = [];
     private ThemeState? _themeState;
     private ThemeApplyResult? _lastThemeResult;
     private CustomThemeSchedule? _customThemeSchedule;
@@ -61,6 +68,7 @@ public sealed partial class MainWindow : Window, IDisposable
     private DateTimeOffset? _manualScheduleOverrideUntil;
     private string? _scheduleSettingsError;
     private BrightnessWriteResult? _lastBrightnessWriteResult;
+    private DdcVcpWriteResult? _lastDdcVcpWriteResult;
     private bool _themeOperationRunning;
     private bool _displayOperationRunning;
     private bool _initialScanStarted;
@@ -69,8 +77,11 @@ public sealed partial class MainWindow : Window, IDisposable
     private bool _advancedIconLoaded;
     private bool _updatingCompactControls;
     private CancellationTokenSource? _brightnessChangeCancellation;
+    private CancellationTokenSource? _contrastChangeCancellation;
     private string? _pendingBrightnessDevicePath;
     private int _pendingBrightnessPercent;
+    private string? _pendingContrastDevicePath;
+    private int _pendingContrastPercent;
     private bool _isCompactMode = true;
     private long _compactShowBlockedUntil;
     private bool _exitRequested;
@@ -296,6 +307,7 @@ public sealed partial class MainWindow : Window, IDisposable
         if (!isActive)
         {
             _brightnessChangeCancellation?.Cancel();
+            _contrastChangeCancellation?.Cancel();
             _themeScheduleTimer.Cancel();
             _trayContextMenuWindow?.Close();
             AppWindow.Hide();
@@ -390,6 +402,8 @@ public sealed partial class MainWindow : Window, IDisposable
         _pendingBrightnessPercent = requestedPercent;
         _brightnessChangeCancellation?.Cancel();
         _brightnessChangeCancellation?.Dispose();
+        _contrastChangeCancellation?.Cancel();
+        _contrastChangeCancellation?.Dispose();
         var cancellation = new CancellationTokenSource();
         _brightnessChangeCancellation = cancellation;
 
@@ -414,6 +428,89 @@ public sealed partial class MainWindow : Window, IDisposable
         {
             // A newer slider value superseded this write.
         }
+    }
+
+    private async void CompactContrastSlider_ValueChanged(
+        object sender,
+        Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
+    {
+        if (_updatingCompactControls ||
+            sender is not Slider { Tag: CompactMonitorViewModel monitor } ||
+            !monitor.IsContrastAvailable)
+        {
+            return;
+        }
+
+        var requestedPercent = Math.Clamp((int)Math.Round(e.NewValue), 0, 100);
+        if ((_compactContrastValues.TryGetValue(monitor.DevicePath, out var currentPercent) &&
+             currentPercent == requestedPercent) ||
+            (_pendingContrastDevicePath is not null &&
+             string.Equals(_pendingContrastDevicePath, monitor.DevicePath, StringComparison.OrdinalIgnoreCase) &&
+             _pendingContrastPercent == requestedPercent))
+        {
+            return;
+        }
+
+        _compactContrastValues[monitor.DevicePath] = requestedPercent;
+        _pendingContrastDevicePath = monitor.DevicePath;
+        _pendingContrastPercent = requestedPercent;
+        _contrastChangeCancellation?.Cancel();
+        _contrastChangeCancellation?.Dispose();
+        var cancellation = new CancellationTokenSource();
+        _contrastChangeCancellation = cancellation;
+
+        try
+        {
+            await Task.Delay(BrightnessChangeDelayMilliseconds, cancellation.Token);
+            while (_displayOperationRunning)
+            {
+                await Task.Delay(50, cancellation.Token);
+            }
+
+            await SetContrastAsync(monitor.DevicePath, requestedPercent);
+            if (ReferenceEquals(_contrastChangeCancellation, cancellation))
+            {
+                _pendingContrastDevicePath = null;
+                _contrastChangeCancellation = null;
+                cancellation.Dispose();
+                UpdateCompactMonitorCards();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // A newer slider value superseded this write.
+        }
+    }
+
+    private async void CompactColorTemperature_SelectionChanged(
+        object sender,
+        SelectionChangedEventArgs e)
+    {
+        if (_updatingCompactControls ||
+            sender is not ComboBox
+            {
+                Tag: CompactMonitorViewModel monitor,
+                SelectedItem: ColorTemperaturePresetViewModel preset,
+            } ||
+            !monitor.IsColorTemperatureAvailable)
+        {
+            return;
+        }
+
+        var current = GetSuccessfulFeatureRead(
+            _lastColorTemperatureProbes,
+            monitor.DevicePath);
+        if (current?.CurrentValue == preset.RawValue)
+        {
+            return;
+        }
+
+        while (_displayOperationRunning)
+        {
+            await Task.Delay(50);
+        }
+
+        await SetColorTemperatureAsync(monitor.DevicePath, checked((uint)preset.RawValue));
     }
 
     private async void CompactDarkModeToggle_Toggled(object sender, RoutedEventArgs e)
@@ -552,6 +649,9 @@ public sealed partial class MainWindow : Window, IDisposable
             _activeMonitors = monitors;
             _lastDdcProbes = [];
             _lastWmiProbes = [];
+            _lastContrastProbes = [];
+            _lastColorTemperatureProbes = [];
+            _lastDdcCapabilities = [];
             MonitorList.ItemsSource = monitors.Select(MonitorCardViewModel.NotProbed).ToArray();
             UpdateCompactMonitorCards();
             EmptyState.Visibility = monitors.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -577,6 +677,9 @@ public sealed partial class MainWindow : Window, IDisposable
             _activeMonitors = [];
             _lastDdcProbes = [];
             _lastWmiProbes = [];
+            _lastContrastProbes = [];
+            _lastColorTemperatureProbes = [];
+            _lastDdcCapabilities = [];
             UpdateCompactMonitorCards();
             EmptyState.Visibility = Visibility.Visible;
             StatusText.Text = $"Display discovery failed: {exception.Message}";
@@ -621,9 +724,21 @@ public sealed partial class MainWindow : Window, IDisposable
         {
             var probes = await Task.Run(() => (
                 Ddc: _ddcProbeService.ProbeBrightness(_activeMonitors),
-                Wmi: _wmiProbeService.ProbeBrightness(_activeMonitors)));
+                Wmi: _wmiProbeService.ProbeBrightness(_activeMonitors),
+                Contrast: WindowsDdcVcpFeatureService.ReadFeature(
+                    _activeMonitors,
+                    NativeConstants.VcpCodeContrast),
+                ColorTemperature: WindowsDdcVcpFeatureService.ReadFeature(
+                    _activeMonitors,
+                    NativeConstants.VcpCodeSelectColorPreset),
+                Capabilities: _lastDdcCapabilities.Count == 0
+                    ? WindowsDdcVcpFeatureService.ReadCapabilities(_activeMonitors)
+                    : _lastDdcCapabilities));
             _lastDdcProbes = probes.Ddc;
             _lastWmiProbes = probes.Wmi;
+            _lastContrastProbes = probes.Contrast;
+            _lastColorTemperatureProbes = probes.ColorTemperature;
+            _lastDdcCapabilities = probes.Capabilities;
             UpdateMonitorCards(selectedDevicePath: null);
             UpdateCompactMonitorCards();
 
@@ -794,6 +909,99 @@ public sealed partial class MainWindow : Window, IDisposable
             CompactMonitorList.IsEnabled = true;
             CopyReportButton.IsEnabled = true;
         }
+    }
+
+    private async Task SetContrastAsync(string devicePath, int requestedPercent)
+    {
+        if (_displayOperationRunning || !_sessionIsActive)
+        {
+            return;
+        }
+
+        var display = FindActiveDisplay(devicePath);
+        _displayOperationRunning = true;
+        SetDisplayControlsEnabled(false);
+        CompactStatusText.Text = $"Setting {display.FriendlyName} contrast to {requestedPercent}%...";
+        StatusText.Text = CompactStatusText.Text;
+
+        try
+        {
+            var result = await Task.Run(() => WindowsDdcVcpFeatureService.WriteContinuousPercent(
+                display,
+                NativeConstants.VcpCodeContrast,
+                requestedPercent));
+            _lastDdcVcpWriteResult = result;
+            _lastContrastProbes = await Task.Run(() => WindowsDdcVcpFeatureService.ReadFeature(
+                _activeMonitors,
+                NativeConstants.VcpCodeContrast));
+            UpdateCompactMonitorCards();
+            CompactStatusText.Text = result.Succeeded
+                ? $"{display.FriendlyName}: contrast verified at {result.VerifiedPercent}%."
+                : $"Contrast did not verify (error 0x{unchecked((uint)result.ErrorCode):X8}).";
+            StatusText.Text = CompactStatusText.Text;
+            RefreshDiagnosticReport();
+        }
+        finally
+        {
+            _displayOperationRunning = false;
+            SetDisplayControlsEnabled(true);
+        }
+    }
+
+    private async Task SetColorTemperatureAsync(string devicePath, uint requestedValue)
+    {
+        if (_displayOperationRunning || !_sessionIsActive)
+        {
+            return;
+        }
+
+        var display = FindActiveDisplay(devicePath);
+        _displayOperationRunning = true;
+        SetDisplayControlsEnabled(false);
+        var presetName = VcpNames.GetFormattedValueName(
+            NativeConstants.VcpCodeSelectColorPreset,
+            checked((int)requestedValue));
+        CompactStatusText.Text = $"Setting {display.FriendlyName} color temperature to {presetName}...";
+        StatusText.Text = CompactStatusText.Text;
+
+        try
+        {
+            var result = await Task.Run(() => WindowsDdcVcpFeatureService.WriteDiscreteValue(
+                display,
+                NativeConstants.VcpCodeSelectColorPreset,
+                requestedValue));
+            _lastDdcVcpWriteResult = result;
+            _lastColorTemperatureProbes = await Task.Run(() => WindowsDdcVcpFeatureService.ReadFeature(
+                _activeMonitors,
+                NativeConstants.VcpCodeSelectColorPreset));
+            UpdateCompactMonitorCards();
+            CompactStatusText.Text = result.Succeeded
+                ? $"{display.FriendlyName}: color temperature verified as {presetName}."
+                : $"Color temperature did not verify (error 0x{unchecked((uint)result.ErrorCode):X8}).";
+            StatusText.Text = CompactStatusText.Text;
+            RefreshDiagnosticReport();
+        }
+        finally
+        {
+            _displayOperationRunning = false;
+            SetDisplayControlsEnabled(true);
+        }
+    }
+
+    private MonitorDisplayInfo FindActiveDisplay(string devicePath) =>
+        _activeMonitors.First(candidate => string.Equals(
+            candidate.DevicePath,
+            devicePath,
+            StringComparison.OrdinalIgnoreCase));
+
+    private void SetDisplayControlsEnabled(bool enabled)
+    {
+        RescanButton.IsEnabled = enabled;
+        ProbeDdcButton.IsEnabled = enabled && _activeMonitors.Count > 0;
+        SetBrightnessButton.IsEnabled = enabled && CanSetSelectedDisplay();
+        CompactReadBrightnessButton.IsEnabled = enabled && _activeMonitors.Count > 0;
+        CompactMonitorList.IsEnabled = enabled;
+        CopyReportButton.IsEnabled = enabled;
     }
 
     private async Task<bool> ApplyThemeAsync(ThemeMode mode, bool isScheduledChange)
@@ -1449,6 +1657,22 @@ public sealed partial class MainWindow : Window, IDisposable
     {
         var cards = _activeMonitors.Select(display =>
         {
+            var capabilities = _lastDdcCapabilities.FirstOrDefault(candidate => string.Equals(
+                candidate.Display.DevicePath,
+                display.DevicePath,
+                StringComparison.OrdinalIgnoreCase));
+            var contrastRead = GetSuccessfulFeatureRead(_lastContrastProbes, display.DevicePath);
+            var contrastAvailable =
+                capabilities?.Capabilities.SupportsVcpCode(NativeConstants.VcpCodeContrast) == true &&
+                contrastRead is { MaximumValue: > 0 };
+            var contrastPercent = contrastRead is { MaximumValue: > 0 }
+                ? Math.Clamp(contrastRead.CurrentValue * 100d / contrastRead.MaximumValue, 0, 100)
+                : 0;
+            var colorTemperatureRead = GetSuccessfulFeatureRead(
+                _lastColorTemperatureProbes,
+                display.DevicePath);
+            var colorTemperaturePresets = GetColorTemperaturePresets(display.DevicePath);
+
             var wmiProbe = _lastWmiProbes.FirstOrDefault(candidate => string.Equals(
                 candidate.Display.DevicePath,
                 display.DevicePath,
@@ -1460,6 +1684,10 @@ public sealed partial class MainWindow : Window, IDisposable
                     display.FriendlyName,
                     isBrightnessAvailable: true,
                     GetCompactBrightness(display.DevicePath, wmiProbe.CurrentBrightness),
+                    isContrastAvailable: contrastAvailable,
+                    GetCompactContrast(display.DevicePath, contrastPercent),
+                    colorTemperaturePresets,
+                    colorTemperatureRead is null ? null : checked((int)colorTemperatureRead.CurrentValue),
                     "Internal display · WMI");
             }
 
@@ -1481,6 +1709,10 @@ public sealed partial class MainWindow : Window, IDisposable
                     display.FriendlyName,
                     isBrightnessAvailable: true,
                     GetCompactBrightness(display.DevicePath, percent),
+                    isContrastAvailable: contrastAvailable,
+                    GetCompactContrast(display.DevicePath, contrastPercent),
+                    colorTemperaturePresets,
+                    colorTemperatureRead is null ? null : checked((int)colorTemperatureRead.CurrentValue),
                     "External display · DDC/CI");
             }
 
@@ -1489,6 +1721,10 @@ public sealed partial class MainWindow : Window, IDisposable
                 display.FriendlyName,
                 isBrightnessAvailable: false,
                 brightnessPercent: 0,
+                isContrastAvailable: contrastAvailable,
+                GetCompactContrast(display.DevicePath, contrastPercent),
+                colorTemperaturePresets,
+                colorTemperatureRead is null ? null : checked((int)colorTemperatureRead.CurrentValue),
                 _lastDdcProbes.Count == 0 && _lastWmiProbes.Count == 0
                     ? "Brightness has not been read yet"
                     : "Brightness control unavailable");
@@ -1499,6 +1735,8 @@ public sealed partial class MainWindow : Window, IDisposable
         {
             _compactBrightnessValues[card.DevicePath] =
                 Math.Clamp((int)Math.Round(card.BrightnessPercent), 0, 100);
+            _compactContrastValues[card.DevicePath] =
+                Math.Clamp((int)Math.Round(card.ContrastPercent), 0, 100);
         }
 
         _updatingCompactControls = true;
@@ -1521,6 +1759,46 @@ public sealed partial class MainWindow : Window, IDisposable
                    StringComparison.OrdinalIgnoreCase)
             ? _pendingBrightnessPercent
             : Math.Round(verifiedPercent);
+    }
+
+    private double GetCompactContrast(string devicePath, double verifiedPercent)
+    {
+        return _pendingContrastDevicePath is not null &&
+               string.Equals(_pendingContrastDevicePath, devicePath, StringComparison.OrdinalIgnoreCase)
+            ? _pendingContrastPercent
+            : Math.Round(verifiedPercent);
+    }
+
+    private static DdcVcpFeatureResult? GetSuccessfulFeatureRead(
+        IReadOnlyList<MonitorDdcVcpFeatureInfo> probes,
+        string devicePath) =>
+        probes.FirstOrDefault(candidate => string.Equals(
+                candidate.Display.DevicePath,
+                devicePath,
+                StringComparison.OrdinalIgnoreCase))?
+            .PhysicalMonitors.FirstOrDefault(result =>
+                result.Status == DdcVcpFeatureStatus.ReadSucceeded);
+
+    private ColorTemperaturePresetViewModel[] GetColorTemperaturePresets(
+        string devicePath)
+    {
+        var capabilities = _lastDdcCapabilities.FirstOrDefault(candidate => string.Equals(
+            candidate.Display.DevicePath,
+            devicePath,
+            StringComparison.OrdinalIgnoreCase));
+        var values = capabilities?.Capabilities.GetSupportedValues(
+            NativeConstants.VcpCodeSelectColorPreset);
+        return values is null
+            ? []
+            : values
+                .Distinct()
+                .Order()
+                .Select(value => new ColorTemperaturePresetViewModel(
+                    value,
+                    VcpNames.GetFormattedValueName(
+                        NativeConstants.VcpCodeSelectColorPreset,
+                        value)))
+                .ToArray();
     }
 
     private void UpdateCompactScheduleStatus()
@@ -1642,6 +1920,8 @@ public sealed partial class MainWindow : Window, IDisposable
         report.AppendLine("Privacy: device paths and WMI instance names can identify a local display instance; review before sharing");
         report.AppendLine(ddcProbes is null
             ? "DDC/CI commands issued: no"
+            : _lastDdcVcpWriteResult is not null
+                ? $"DDC/CI commands issued: brightness VCP 0x10 reads plus VCP 0x{_lastDdcVcpWriteResult.VcpCode:X2} write and verification read-back"
             : writeResult?.Provider == BrightnessWriteProvider.DdcCi
                 ? "DDC/CI commands issued: brightness VCP 0x10 read, write, and verification read-back"
                 : "DDC/CI commands issued: read-only brightness VCP 0x10 queries; no DDC writes");
@@ -1663,6 +1943,20 @@ public sealed partial class MainWindow : Window, IDisposable
                 .Append(" / 0x")
                 .AppendLine(unchecked((uint)writeResult.ErrorCode).ToString("X8", CultureInfo.InvariantCulture));
             report.Append("Brightness write message: ").AppendLine(writeResult.Message);
+        }
+
+        if (_lastDdcVcpWriteResult is not null)
+        {
+            report.Append("Extended VCP write code: 0x")
+                .AppendLine(_lastDdcVcpWriteResult.VcpCode.ToString("X2", CultureInfo.InvariantCulture));
+            report.Append("Extended VCP write status: ").AppendLine(_lastDdcVcpWriteResult.Status.ToString());
+            report.Append("Extended VCP requested raw: ").AppendLine(_lastDdcVcpWriteResult.RequestedRawValue.ToString(CultureInfo.InvariantCulture));
+            report.Append("Extended VCP applied raw: ").AppendLine(_lastDdcVcpWriteResult.AppliedRawValue.ToString(CultureInfo.InvariantCulture));
+            report.Append("Extended VCP verified raw: ").AppendLine(_lastDdcVcpWriteResult.VerifiedRawValue?.ToString(CultureInfo.InvariantCulture) ?? "Unavailable");
+            report.Append("Extended VCP requested percent: ").AppendLine(_lastDdcVcpWriteResult.RequestedPercent?.ToString(CultureInfo.InvariantCulture) ?? "Not applicable");
+            report.Append("Extended VCP verified percent: ").AppendLine(_lastDdcVcpWriteResult.VerifiedPercent?.ToString(CultureInfo.InvariantCulture) ?? "Not applicable");
+            report.Append("Extended VCP error: 0x").AppendLine(unchecked((uint)_lastDdcVcpWriteResult.ErrorCode).ToString("X8", CultureInfo.InvariantCulture));
+            report.Append("Extended VCP message: ").AppendLine(_lastDdcVcpWriteResult.Message);
         }
 
         if (error is not null)
@@ -1702,6 +1996,24 @@ public sealed partial class MainWindow : Window, IDisposable
                 }
             }
 
+            AppendVcpFeatureDiagnostics(report, "Contrast", monitor, _lastContrastProbes);
+            AppendVcpFeatureDiagnostics(report, "Color temperature", monitor, _lastColorTemperatureProbes);
+            var capabilities = _lastDdcCapabilities.FirstOrDefault(candidate => string.Equals(
+                candidate.Display.DevicePath,
+                monitor.DevicePath,
+                StringComparison.OrdinalIgnoreCase));
+            report.Append("MCCS capabilities: ").AppendLine(capabilities is null
+                ? "not read"
+                : capabilities.Succeeded
+                    ? "read"
+                    : $"failed (0x{unchecked((uint)capabilities.Win32Error):X8})");
+            if (capabilities?.Succeeded == true)
+            {
+                report.Append("MCCS VCP codes: ").AppendLine(string.Join(", ", capabilities.Capabilities.GetVcpCodesAsHexStrings()));
+                report.Append("MCCS color presets: ").AppendLine(string.Join(", ",
+                    capabilities.Capabilities.GetSupportedValues(NativeConstants.VcpCodeSelectColorPreset) ?? []));
+            }
+
             var wmiProbe = wmiProbes?.FirstOrDefault(candidate => string.Equals(
                 candidate.Display.DevicePath,
                 monitor.DevicePath,
@@ -1727,6 +2039,31 @@ public sealed partial class MainWindow : Window, IDisposable
         }
 
         return report.ToString();
+    }
+
+    private static void AppendVcpFeatureDiagnostics(
+        StringBuilder report,
+        string featureName,
+        MonitorDisplayInfo monitor,
+        IReadOnlyList<MonitorDdcVcpFeatureInfo> probes)
+    {
+        var probe = probes.FirstOrDefault(candidate => string.Equals(
+            candidate.Display.DevicePath,
+            monitor.DevicePath,
+            StringComparison.OrdinalIgnoreCase));
+        if (probe is null)
+        {
+            report.Append(featureName).AppendLine(" VCP: not probed");
+            return;
+        }
+
+        foreach (var physicalMonitor in probe.PhysicalMonitors)
+        {
+            report.Append(featureName).Append(" VCP status: ").AppendLine(physicalMonitor.Status.ToString());
+            report.Append(featureName).Append(" VCP current: ").AppendLine(physicalMonitor.CurrentValue.ToString(CultureInfo.InvariantCulture));
+            report.Append(featureName).Append(" VCP maximum: ").AppendLine(physicalMonitor.MaximumValue.ToString(CultureInfo.InvariantCulture));
+            report.Append(featureName).Append(" VCP error: 0x").AppendLine(unchecked((uint)physicalMonitor.Win32Error).ToString("X8", CultureInfo.InvariantCulture));
+        }
     }
 
     private void ReportClipboardFailure(Exception exception)

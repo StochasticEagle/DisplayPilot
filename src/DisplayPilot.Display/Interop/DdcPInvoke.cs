@@ -55,4 +55,17 @@ internal static partial class DdcPInvoke
         nint physicalMonitor,
         byte vcpCode,
         uint newValue);
+
+    [LibraryImport("Dxva2.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool GetCapabilitiesStringLength(
+        nint physicalMonitor,
+        out uint capabilitiesStringLength);
+
+    [LibraryImport("Dxva2.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static unsafe partial bool CapabilitiesRequestAndCapabilitiesReply(
+        nint physicalMonitor,
+        byte* capabilitiesString,
+        uint capabilitiesStringLength);
 }

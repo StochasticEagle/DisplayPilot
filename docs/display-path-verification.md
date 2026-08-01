@@ -86,9 +86,15 @@ Use non-extreme values first (for example 40, 60, then 50).
 - The status line must name the chosen provider and show requested, applied, and
   verified percentages.
 - DDC/CI percentages are mapped to the monitor's raw maximum before VCP 0x10 is set.
+- Contrast uses the same percentage mapping for VCP 0x12 and requires both MCCS
+  capability advertisement and a successful read.
+- Color temperature exposes only the discrete VCP 0x14 presets advertised by the
+  monitor's MCCS capabilities string.
+- Every contrast or color-temperature write must have a matching read-back before
+  the UI reports success.
 - WMI requests snap to the nearest level advertised by the panel.
 - A display without a validated read path must never enable the write button.
-- Do not test power, input source, contrast, volume, color temperature, or profiles;
+- Do not test power, input source, volume, or saved display profiles;
   those controls are not part of this checkpoint.
 
 The current QEMU test baseline is one `QEMU Monitor` at `\\.\DISPLAY1`, with an

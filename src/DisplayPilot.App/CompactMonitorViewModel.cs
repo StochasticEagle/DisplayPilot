@@ -9,18 +9,29 @@ namespace DisplayPilot.App;
 public sealed class CompactMonitorViewModel : INotifyPropertyChanged
 {
     private double _brightnessPercent;
+    private double _contrastPercent;
+    private ColorTemperaturePresetViewModel? _selectedColorTemperaturePreset;
 
     public CompactMonitorViewModel(
         string devicePath,
         string friendlyName,
         bool isBrightnessAvailable,
         double brightnessPercent,
+        bool isContrastAvailable,
+        double contrastPercent,
+        IReadOnlyList<ColorTemperaturePresetViewModel> colorTemperaturePresets,
+        int? currentColorTemperatureValue,
         string status)
     {
         DevicePath = devicePath;
         FriendlyName = friendlyName;
         IsBrightnessAvailable = isBrightnessAvailable;
         _brightnessPercent = brightnessPercent;
+        IsContrastAvailable = isContrastAvailable;
+        _contrastPercent = contrastPercent;
+        ColorTemperaturePresets = colorTemperaturePresets;
+        _selectedColorTemperaturePreset = colorTemperaturePresets.FirstOrDefault(preset =>
+            preset.RawValue == currentColorTemperatureValue);
         Status = status;
     }
 
@@ -29,6 +40,12 @@ public sealed class CompactMonitorViewModel : INotifyPropertyChanged
     public string FriendlyName { get; }
 
     public bool IsBrightnessAvailable { get; }
+
+    public bool IsContrastAvailable { get; }
+
+    public bool IsColorTemperatureAvailable => ColorTemperaturePresets.Count > 0;
+
+    public IReadOnlyList<ColorTemperaturePresetViewModel> ColorTemperaturePresets { get; }
 
     public double BrightnessPercent
     {
@@ -48,6 +65,39 @@ public sealed class CompactMonitorViewModel : INotifyPropertyChanged
 
     public string BrightnessText => $"{BrightnessPercent:F0}%";
 
+    public double ContrastPercent
+    {
+        get => _contrastPercent;
+        set
+        {
+            if (Math.Abs(_contrastPercent - value) < double.Epsilon)
+            {
+                return;
+            }
+
+            _contrastPercent = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(ContrastText));
+        }
+    }
+
+    public string ContrastText => $"{ContrastPercent:F0}%";
+
+    public ColorTemperaturePresetViewModel? SelectedColorTemperaturePreset
+    {
+        get => _selectedColorTemperaturePreset;
+        set
+        {
+            if (Equals(_selectedColorTemperaturePreset, value))
+            {
+                return;
+            }
+
+            _selectedColorTemperaturePreset = value;
+            OnPropertyChanged();
+        }
+    }
+
     public string Status { get; }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -57,3 +107,5 @@ public sealed class CompactMonitorViewModel : INotifyPropertyChanged
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
 }
+
+public sealed record ColorTemperaturePresetViewModel(int RawValue, string DisplayName);
