@@ -45,7 +45,6 @@ public sealed partial class MainWindow : Window, IDisposable
     private readonly DdcBrightnessProbeService _ddcProbeService = new();
     private readonly WmiBrightnessProbeService _wmiProbeService = new();
     private readonly BrightnessControlService _brightnessControlService = new();
-    private readonly WindowsDdcVcpFeatureService _ddcVcpFeatureService = new();
     private readonly WindowsThemeService _themeService = new();
     private readonly JsonThemeScheduleSettingsStore _themeScheduleSettingsStore = new();
     private readonly WindowsBoundaryTimer _themeScheduleTimer = new();
@@ -726,14 +725,14 @@ public sealed partial class MainWindow : Window, IDisposable
             var probes = await Task.Run(() => (
                 Ddc: _ddcProbeService.ProbeBrightness(_activeMonitors),
                 Wmi: _wmiProbeService.ProbeBrightness(_activeMonitors),
-                Contrast: _ddcVcpFeatureService.ReadFeature(
+                Contrast: WindowsDdcVcpFeatureService.ReadFeature(
                     _activeMonitors,
                     NativeConstants.VcpCodeContrast),
-                ColorTemperature: _ddcVcpFeatureService.ReadFeature(
+                ColorTemperature: WindowsDdcVcpFeatureService.ReadFeature(
                     _activeMonitors,
                     NativeConstants.VcpCodeSelectColorPreset),
                 Capabilities: _lastDdcCapabilities.Count == 0
-                    ? _ddcVcpFeatureService.ReadCapabilities(_activeMonitors)
+                    ? WindowsDdcVcpFeatureService.ReadCapabilities(_activeMonitors)
                     : _lastDdcCapabilities));
             _lastDdcProbes = probes.Ddc;
             _lastWmiProbes = probes.Wmi;
@@ -927,12 +926,12 @@ public sealed partial class MainWindow : Window, IDisposable
 
         try
         {
-            var result = await Task.Run(() => _ddcVcpFeatureService.WriteContinuousPercent(
+            var result = await Task.Run(() => WindowsDdcVcpFeatureService.WriteContinuousPercent(
                 display,
                 NativeConstants.VcpCodeContrast,
                 requestedPercent));
             _lastDdcVcpWriteResult = result;
-            _lastContrastProbes = await Task.Run(() => _ddcVcpFeatureService.ReadFeature(
+            _lastContrastProbes = await Task.Run(() => WindowsDdcVcpFeatureService.ReadFeature(
                 _activeMonitors,
                 NativeConstants.VcpCodeContrast));
             UpdateCompactMonitorCards();
@@ -967,12 +966,12 @@ public sealed partial class MainWindow : Window, IDisposable
 
         try
         {
-            var result = await Task.Run(() => _ddcVcpFeatureService.WriteDiscreteValue(
+            var result = await Task.Run(() => WindowsDdcVcpFeatureService.WriteDiscreteValue(
                 display,
                 NativeConstants.VcpCodeSelectColorPreset,
                 requestedValue));
             _lastDdcVcpWriteResult = result;
-            _lastColorTemperatureProbes = await Task.Run(() => _ddcVcpFeatureService.ReadFeature(
+            _lastColorTemperatureProbes = await Task.Run(() => WindowsDdcVcpFeatureService.ReadFeature(
                 _activeMonitors,
                 NativeConstants.VcpCodeSelectColorPreset));
             UpdateCompactMonitorCards();
