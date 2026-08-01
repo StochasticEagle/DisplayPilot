@@ -3,6 +3,7 @@
 
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using DisplayPilot.Display.Rotation;
 
 namespace DisplayPilot.App;
 
@@ -11,6 +12,7 @@ public sealed class CompactMonitorViewModel : INotifyPropertyChanged
     private double _brightnessPercent;
     private double _contrastPercent;
     private ColorTemperaturePresetViewModel? _selectedColorTemperaturePreset;
+    private RotationOptionViewModel? _selectedRotation;
 
     public CompactMonitorViewModel(
         string devicePath,
@@ -21,6 +23,8 @@ public sealed class CompactMonitorViewModel : INotifyPropertyChanged
         double contrastPercent,
         IReadOnlyList<ColorTemperaturePresetViewModel> colorTemperaturePresets,
         int? currentColorTemperatureValue,
+        bool isRotationAvailable,
+        DisplayRotation? currentRotation,
         string status)
     {
         DevicePath = devicePath;
@@ -32,6 +36,16 @@ public sealed class CompactMonitorViewModel : INotifyPropertyChanged
         ColorTemperaturePresets = colorTemperaturePresets;
         _selectedColorTemperaturePreset = colorTemperaturePresets.FirstOrDefault(preset =>
             preset.RawValue == currentColorTemperatureValue);
+        IsRotationAvailable = isRotationAvailable;
+        RotationOptions =
+        [
+            new(DisplayRotation.Landscape, "Landscape (0°)"),
+            new(DisplayRotation.Portrait, "Portrait (90°)"),
+            new(DisplayRotation.LandscapeFlipped, "Landscape flipped (180°)"),
+            new(DisplayRotation.PortraitFlipped, "Portrait flipped (270°)"),
+        ];
+        _selectedRotation = RotationOptions.FirstOrDefault(option =>
+            option.Rotation == currentRotation);
         Status = status;
     }
 
@@ -46,6 +60,10 @@ public sealed class CompactMonitorViewModel : INotifyPropertyChanged
     public bool IsColorTemperatureAvailable => ColorTemperaturePresets.Count > 0;
 
     public IReadOnlyList<ColorTemperaturePresetViewModel> ColorTemperaturePresets { get; }
+
+    public bool IsRotationAvailable { get; }
+
+    public IReadOnlyList<RotationOptionViewModel> RotationOptions { get; }
 
     public double BrightnessPercent
     {
@@ -98,6 +116,21 @@ public sealed class CompactMonitorViewModel : INotifyPropertyChanged
         }
     }
 
+    public RotationOptionViewModel? SelectedRotation
+    {
+        get => _selectedRotation;
+        set
+        {
+            if (Equals(_selectedRotation, value))
+            {
+                return;
+            }
+
+            _selectedRotation = value;
+            OnPropertyChanged();
+        }
+    }
+
     public string Status { get; }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -109,3 +142,5 @@ public sealed class CompactMonitorViewModel : INotifyPropertyChanged
 }
 
 public sealed record ColorTemperaturePresetViewModel(int RawValue, string DisplayName);
+
+public sealed record RotationOptionViewModel(DisplayRotation Rotation, string DisplayName);
