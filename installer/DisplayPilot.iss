@@ -65,13 +65,13 @@ var
   ExistingInstallRemoved: Boolean;
 
 function RemoveExistingInstallation(): String;
-const
-  UninstallKey = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{B98DDFE4-C70B-49F4-95A8-A11D47393F66}_is1';
 var
   ResultCode: Integer;
+  UninstallKey: String;
   UninstallerPath: String;
 begin
   Result := '';
+  UninstallKey := 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{B98DDFE4-C70B-49F4-95A8-A11D47393F66}_is1';
   if ExistingInstallRemoved then
     Exit;
 
