@@ -126,7 +126,7 @@ public sealed class JsonThemeScheduleSettingsStore : IThemeScheduleSettingsStore
 
     private static int ToMinuteOfDay(TimeOnly value) => (value.Hour * 60) + value.Minute;
 
-    private static IReadOnlyDictionary<string, int> ValidateRestoreValues(StoredSettings stored)
+    private static Dictionary<string, int> ValidateRestoreValues(StoredSettings stored)
     {
         if (stored.Version < 3 || stored.BrightnessRestoreValues is null)
         {
