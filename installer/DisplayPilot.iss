@@ -66,9 +66,7 @@ var
 
 function RemoveExistingInstallation(): String;
 const
-  UninstallKey =
-    'Software\Microsoft\Windows\CurrentVersion\Uninstall\' +
-    '{B98DDFE4-C70B-49F4-95A8-A11D47393F66}_is1';
+  UninstallKey = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{B98DDFE4-C70B-49F4-95A8-A11D47393F66}_is1';
 var
   ResultCode: Integer;
   UninstallerPath: String;
