@@ -193,27 +193,52 @@
                         BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                         BorderThickness="1"
                         CornerRadius="8">
-                        <Grid ColumnSpacing="12">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Spacing="3">
-                                <TextBlock FontWeight="SemiBold" Text="Theme schedule" />
-                                <TextBlock
-                                    x:Name="CompactScheduleStatusText"
-                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                    Text="Loading saved schedule..."
-                                    TextWrapping="Wrap" />
-                            </StackPanel>
-                            <ToggleSwitch
-                                x:Name="CompactScheduleAutomationToggle"
-                                Grid.Column="1"
-                                VerticalAlignment="Center"
-                                OffContent="Off"
-                                OnContent="On"
-                                Toggled="CompactScheduleAutomationToggle_Toggled" />
-                        </Grid>
+                        <StackPanel Spacing="10">
+                            <Grid ColumnSpacing="12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Spacing="3">
+                                    <TextBlock FontWeight="SemiBold" Text="Theme schedule" />
+                                    <TextBlock
+                                        x:Name="CompactScheduleStatusText"
+                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                        Text="Loading saved schedule..."
+                                        TextWrapping="Wrap" />
+                                </StackPanel>
+                                <ToggleSwitch
+                                    x:Name="CompactScheduleAutomationToggle"
+                                    Grid.Column="1"
+                                    VerticalAlignment="Center"
+                                    OffContent="Off"
+                                    OnContent="On"
+                                    Toggled="CompactScheduleAutomationToggle_Toggled" />
+                            </Grid>
+
+                            <Grid ColumnSpacing="12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TimePicker
+                                    x:Name="CompactLightScheduleTimePicker"
+                                    ClockIdentifier="24HourClock"
+                                    Header="Light starts"
+                                    MinuteIncrement="1" />
+                                <TimePicker
+                                    x:Name="CompactDarkScheduleTimePicker"
+                                    Grid.Column="1"
+                                    ClockIdentifier="24HourClock"
+                                    Header="Dark starts"
+                                    MinuteIncrement="1" />
+                            </Grid>
+
+                            <Button
+                                HorizontalAlignment="Left"
+                                Click="SaveCompactScheduleButton_Click"
+                                Content="Save schedule" />
+                        </StackPanel>
                     </Border>
                 </StackPanel>
             </ScrollViewer>
@@ -254,6 +279,10 @@
                     Stretch="Uniform" />
                 <TextBlock Style="{StaticResource TitleTextBlockStyle}" Text="DisplayPilot" />
                 <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="Windows theme and display verification" />
+                <TextBlock
+                    x:Name="AdvancedVersionText"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Text="Version 0.5.0" />
             </StackPanel>
 
             <StackPanel

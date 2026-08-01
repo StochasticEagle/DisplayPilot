@@ -1,5 +1,5 @@
 #define MyAppName "DisplayPilot"
-#define MyAppVersion "0.1.0"
+#define MyAppVersion "0.5.0"
 #define MyAppPublisher "StochasticEagle"
 #define MyAppExeName "DisplayPilot.exe"
 

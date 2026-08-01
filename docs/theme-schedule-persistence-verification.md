@@ -1,5 +1,15 @@
 # Theme schedule persistence verification
 
+## Notification-area flyout
+
+1. Open the DisplayPilot flyout.
+2. Set **Light starts** and **Dark starts** to distinct minute values.
+3. Select **Save schedule**, close the flyout, and reopen it.
+4. Confirm both complete times, including minutes, are preserved.
+5. Toggle the schedule off and on in the flyout and confirm the saved times do
+   not change.
+6. Open Advanced and confirm its schedule controls show the same values.
+
 This checkpoint persists the custom fixed-hours Light and Dark transition times in
 the current user's local application-data folder. The settings file uses a versioned
 JSON schema and stores minute-of-day values without device identifiers.

@@ -96,6 +96,7 @@ public sealed partial class MainWindow : Window, IDisposable
     public MainWindow()
     {
         InitializeComponent();
+        AdvancedVersionText.Text = $"Version {GetDisplayVersion()}";
         if (Environment.ProcessPath is { } processPath)
         {
             AppWindow.SetIcon(processPath);
@@ -110,6 +111,12 @@ public sealed partial class MainWindow : Window, IDisposable
         RefreshSchedulePreview();
         RefreshStartupRegistration();
         SystemText.Text = GetSystemSummary();
+    }
+
+    private static string GetDisplayVersion()
+    {
+        var version = typeof(MainWindow).Assembly.GetName().Version;
+        return version is null ? "0.5.0" : version.ToString(3);
     }
 
     public bool InitializeNotificationArea()
@@ -534,11 +541,43 @@ public sealed partial class MainWindow : Window, IDisposable
             return;
         }
 
+        CopyCompactScheduleToAdvanced();
         ScheduleAutomationToggle.IsOn = CompactScheduleAutomationToggle.IsOn;
         if (SaveScheduleSettings())
         {
             await EvaluateAndApplyScheduleAsync();
             UpdateThemeScheduleTimer();
+        }
+        else
+        {
+            _updatingCompactControls = true;
+            try
+            {
+                ScheduleAutomationToggle.IsOn = _scheduleAutomationEnabled;
+                CompactScheduleAutomationToggle.IsOn = _scheduleAutomationEnabled;
+            }
+            finally
+            {
+                _updatingCompactControls = false;
+            }
+
+            CompactStatusText.Text = "Theme schedule could not be saved. Open Advanced for details.";
+        }
+    }
+
+    private async void SaveCompactScheduleButton_Click(object sender, RoutedEventArgs e)
+    {
+        CopyCompactScheduleToAdvanced();
+        ScheduleAutomationToggle.IsOn = CompactScheduleAutomationToggle.IsOn;
+        if (SaveScheduleSettings())
+        {
+            await EvaluateAndApplyScheduleAsync();
+            UpdateThemeScheduleTimer();
+            CompactStatusText.Text = "Theme schedule saved.";
+        }
+        else
+        {
+            CompactStatusText.Text = "Theme schedule could not be saved. Open Advanced for details.";
         }
     }
 
@@ -1120,6 +1159,7 @@ public sealed partial class MainWindow : Window, IDisposable
             var result = _themeScheduleSettingsStore.Load();
             LightScheduleTimePicker.Time = result.Schedule.LightTime.ToTimeSpan();
             DarkScheduleTimePicker.Time = result.Schedule.DarkTime.ToTimeSpan();
+            CopyAdvancedScheduleToCompact();
             _savedThemeSchedule = result.Schedule;
             _scheduleWasLoadedFromDisk = result.WasLoadedFromDisk;
             _scheduleAutomationEnabled = result.AutomationEnabled;
@@ -1161,6 +1201,7 @@ public sealed partial class MainWindow : Window, IDisposable
         var defaults = JsonThemeScheduleSettingsStore.CreateDefault();
         LightScheduleTimePicker.Time = defaults.LightTime.ToTimeSpan();
         DarkScheduleTimePicker.Time = defaults.DarkTime.ToTimeSpan();
+        CopyAdvancedScheduleToCompact();
         _savedThemeSchedule = defaults;
         _scheduleWasLoadedFromDisk = false;
         _scheduleAutomationEnabled = false;
@@ -1204,6 +1245,7 @@ public sealed partial class MainWindow : Window, IDisposable
             _scheduleWasLoadedFromDisk = true;
             _manualScheduleOverrideUntil = null;
             _scheduleSettingsError = null;
+            CopyAdvancedScheduleToCompact();
             SchedulePersistenceStatusText.Text = _scheduleAutomationEnabled
                 ? "Saved the schedule; automatic switching is enabled while the app runs."
                 : "Saved the schedule; automatic switching is disabled.";
@@ -1231,6 +1273,18 @@ public sealed partial class MainWindow : Window, IDisposable
             ReportScheduleSaveFailure(exception);
             return false;
         }
+    }
+
+    private void CopyCompactScheduleToAdvanced()
+    {
+        LightScheduleTimePicker.Time = CompactLightScheduleTimePicker.Time;
+        DarkScheduleTimePicker.Time = CompactDarkScheduleTimePicker.Time;
+    }
+
+    private void CopyAdvancedScheduleToCompact()
+    {
+        CompactLightScheduleTimePicker.Time = LightScheduleTimePicker.Time;
+        CompactDarkScheduleTimePicker.Time = DarkScheduleTimePicker.Time;
     }
 
     private void ReportScheduleSaveFailure(Exception exception)
