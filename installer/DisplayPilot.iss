@@ -61,6 +61,75 @@ Type: files; Name: "{app}\WebView2Loader.dll"
 Type: dirifempty; Name: "{app}"
 
 [Code]
+var
+  ExistingInstallRemoved: Boolean;
+
+function RemoveExistingInstallation(): String;
+var
+  ResultCode: Integer;
+  UninstallKey: String;
+  UninstallerPath: String;
+begin
+  Result := '';
+  UninstallKey := 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{B98DDFE4-C70B-49F4-95A8-A11D47393F66}_is1';
+  if ExistingInstallRemoved then
+    Exit;
+
+  if not RegQueryStringValue(
+       HKLM64,
+       UninstallKey,
+       'UninstallString',
+       UninstallerPath) then
+  begin
+    ExistingInstallRemoved := True;
+    Exit;
+  end;
+
+  UninstallerPath := RemoveQuotes(UninstallerPath);
+  if not FileExists(UninstallerPath) then
+  begin
+    Result :=
+      'The existing DisplayPilot uninstaller could not be found at ' +
+      UninstallerPath + '. Setup cannot safely replace the installation.';
+    Exit;
+  end;
+
+  { Older releases did not always stop the notification-area process. }
+  Exec(
+    ExpandConstant('{sys}\taskkill.exe'),
+    '/F /T /IM {#MyAppExeName}',
+    '',
+    SW_HIDE,
+    ewWaitUntilTerminated,
+    ResultCode);
+
+  WizardForm.StatusLabel.Caption :=
+    'Removing the existing DisplayPilot installation...';
+  Log('Starting existing DisplayPilot uninstaller: ' + UninstallerPath);
+  if not Exec(
+       UninstallerPath,
+       '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART',
+       '',
+       SW_HIDE,
+       ewWaitUntilTerminated,
+       ResultCode) then
+  begin
+    Result := 'The existing DisplayPilot uninstaller could not be started.';
+    Exit;
+  end;
+
+  Log('Existing DisplayPilot uninstaller exit code: ' + IntToStr(ResultCode));
+  if ResultCode <> 0 then
+  begin
+    Result :=
+      'Removing the existing DisplayPilot installation failed with exit code ' +
+      IntToStr(ResultCode) + '. Setup cannot continue.';
+    Exit;
+  end;
+
+  ExistingInstallRemoved := True;
+end;
+
 function IsSuccessfulRuntimeExitCode(ResultCode: Integer): Boolean;
 begin
   Result :=
@@ -106,6 +175,10 @@ end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
+  Result := RemoveExistingInstallation();
+  if Result <> '' then
+    Exit;
+
   Result := RunRuntimeInstaller(
     '.NET 10 Desktop Runtime',
     'windowsdesktop-runtime-win-x64.exe',
