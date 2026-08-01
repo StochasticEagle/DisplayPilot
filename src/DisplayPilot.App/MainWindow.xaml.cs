@@ -1779,7 +1779,7 @@ public sealed partial class MainWindow : Window, IDisposable
             .PhysicalMonitors.FirstOrDefault(result =>
                 result.Status == DdcVcpFeatureStatus.ReadSucceeded);
 
-    private IReadOnlyList<ColorTemperaturePresetViewModel> GetColorTemperaturePresets(
+    private ColorTemperaturePresetViewModel[] GetColorTemperaturePresets(
         string devicePath)
     {
         var capabilities = _lastDdcCapabilities.FirstOrDefault(candidate => string.Equals(
