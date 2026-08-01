@@ -9,7 +9,7 @@ namespace DisplayPilot.Windows.Settings;
 
 public sealed class JsonThemeScheduleSettingsStore : IThemeScheduleSettingsStore
 {
-    private const int CurrentVersion = 2;
+    private const int CurrentVersion = 3;
     private const int FirstSupportedVersion = 1;
     private const int MinutesPerDay = 24 * 60;
     private static readonly JsonSerializerOptions SerializerOptions = new()
@@ -41,7 +41,10 @@ public sealed class JsonThemeScheduleSettingsStore : IThemeScheduleSettingsStore
             return new ThemeScheduleSettingsLoadResult(
                 CreateDefault(),
                 WasLoadedFromDisk: false,
-                AutomationEnabled: false);
+                AutomationEnabled: false,
+                ReduceBrightness: false,
+                BrightnessReductionActive: false,
+                BrightnessRestoreValues: new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase));
         }
 
         var json = File.ReadAllText(_filePath, Encoding.UTF8);
@@ -67,12 +70,16 @@ public sealed class JsonThemeScheduleSettingsStore : IThemeScheduleSettingsStore
 
         try
         {
+            var restoreValues = ValidateRestoreValues(stored);
             return new ThemeScheduleSettingsLoadResult(
                 new CustomThemeSchedule(
                     TimeOnly.FromTimeSpan(TimeSpan.FromMinutes(stored.LightMinutes)),
                     TimeOnly.FromTimeSpan(TimeSpan.FromMinutes(stored.DarkMinutes))),
                 WasLoadedFromDisk: true,
-                AutomationEnabled: stored.Version >= 2 && stored.AutomationEnabled);
+                AutomationEnabled: stored.Version >= 2 && stored.AutomationEnabled,
+                ReduceBrightness: stored.Version >= 3 && stored.ReduceBrightness,
+                BrightnessReductionActive: stored.Version >= 3 && restoreValues.Count > 0,
+                BrightnessRestoreValues: restoreValues);
         }
         catch (ArgumentException exception)
         {
@@ -80,7 +87,12 @@ public sealed class JsonThemeScheduleSettingsStore : IThemeScheduleSettingsStore
         }
     }
 
-    public void Save(CustomThemeSchedule schedule, bool automationEnabled)
+    public void Save(
+        CustomThemeSchedule schedule,
+        bool automationEnabled,
+        bool reduceBrightness,
+        bool brightnessReductionActive,
+        IReadOnlyDictionary<string, int> brightnessRestoreValues)
     {
         ArgumentNullException.ThrowIfNull(schedule);
 
@@ -94,6 +106,12 @@ public sealed class JsonThemeScheduleSettingsStore : IThemeScheduleSettingsStore
             LightMinutes = ToMinuteOfDay(schedule.LightTime),
             DarkMinutes = ToMinuteOfDay(schedule.DarkTime),
             AutomationEnabled = automationEnabled,
+            ReduceBrightness = reduceBrightness,
+            BrightnessReductionActive = brightnessReductionActive,
+            BrightnessRestoreValues = brightnessRestoreValues.ToDictionary(
+                pair => pair.Key,
+                pair => pair.Value,
+                StringComparer.OrdinalIgnoreCase),
         };
         var json = JsonSerializer.Serialize(stored, SerializerOptions);
         var temporaryPath = _filePath + ".tmp";
@@ -108,6 +126,24 @@ public sealed class JsonThemeScheduleSettingsStore : IThemeScheduleSettingsStore
 
     private static int ToMinuteOfDay(TimeOnly value) => (value.Hour * 60) + value.Minute;
 
+    private static IReadOnlyDictionary<string, int> ValidateRestoreValues(StoredSettings stored)
+    {
+        if (stored.Version < 3 || stored.BrightnessRestoreValues is null)
+        {
+            return new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        if (stored.BrightnessRestoreValues.Any(pair =>
+                string.IsNullOrWhiteSpace(pair.Key) || pair.Value is < 0 or > 100))
+        {
+            throw new InvalidDataException("Saved brightness restoration values must be between 0 and 100 percent.");
+        }
+
+        return new Dictionary<string, int>(
+            stored.BrightnessRestoreValues,
+            StringComparer.OrdinalIgnoreCase);
+    }
+
     private sealed class StoredSettings
     {
         public int Version { get; init; }
@@ -117,5 +153,11 @@ public sealed class JsonThemeScheduleSettingsStore : IThemeScheduleSettingsStore
         public int DarkMinutes { get; init; }
 
         public bool AutomationEnabled { get; init; }
+
+        public bool ReduceBrightness { get; init; }
+
+        public bool BrightnessReductionActive { get; init; }
+
+        public Dictionary<string, int>? BrightnessRestoreValues { get; init; }
     }
 }

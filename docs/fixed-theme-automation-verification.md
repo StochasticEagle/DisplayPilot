@@ -17,7 +17,13 @@ and arms one Windows thread-pool timer for the next schedule boundary.
 - The setting persists, but automation runs only while DisplayPilot is open.
 - No startup registration, tray/background lifetime, or Windows service is included.
 - DST or time-zone changes exactly on a boundary remain intentionally out of scope.
-- Scheduled theme changes do not issue DDC/CI or WMI monitor commands.
+- Optional scheduled brightness reduction records each controllable monitor's exact
+  brightness before the Dark boundary. Values above 10% are reduced using integer
+  division by two; values at or below 10% are set to 0%.
+- The Light boundary restores each recorded value exactly. Restoration state is
+  persisted per monitor so restarting during dark hours cannot halve a display twice.
+- Disabling either schedule automation or brightness reduction restores recorded
+  values as soon as the corresponding monitor is available.
 
 ## Windows test
 
@@ -33,9 +39,19 @@ and arms one Windows thread-pool timer for the next schedule boundary.
 6. Restart DisplayPilot and confirm the enabled state and saved times return and are
    evaluated immediately.
 7. Disable automatic switching, save, and confirm no later transition occurs.
-8. Confirm display discovery, brightness control, and **Copy diagnostic report**
+8. Enable **Reduce screen brightness**, set a display above 10%, cross the Dark
+   boundary, and confirm the result is the original value divided by two using
+   integer division.
+9. Repeat from 10% and confirm the Dark boundary sets the display to 0%.
+10. Restart DisplayPilot during dark hours and confirm the display is not reduced a
+   second time.
+11. Cross the Light boundary and confirm every available display returns to its exact
+   recorded value. Repeat with two monitors when multi-monitor hardware is available.
+12. Disable automation while brightness is reduced and confirm the original values
+   are restored immediately.
+13. Confirm display discovery, brightness control, and **Copy diagnostic report**
    continue to work normally.
-9. Copy the diagnostic report and confirm **Schedule timer active** is `True` and
+14. Copy the diagnostic report and confirm **Schedule timer active** is `True` and
    **Schedule timer due** matches the next saved boundary while automation is enabled.
 
 Run the sequence on both Windows 10 and Windows 11 before merging this checkpoint.

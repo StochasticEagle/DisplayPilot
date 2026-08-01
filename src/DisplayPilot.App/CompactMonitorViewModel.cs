@@ -4,6 +4,7 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using DisplayPilot.Display.Rotation;
+using Microsoft.UI.Xaml;
 
 namespace DisplayPilot.App;
 
@@ -16,6 +17,7 @@ public sealed class CompactMonitorViewModel : INotifyPropertyChanged
 
     public CompactMonitorViewModel(
         string devicePath,
+        string gdiDeviceName,
         string friendlyName,
         bool isBrightnessAvailable,
         double brightnessPercent,
@@ -28,6 +30,7 @@ public sealed class CompactMonitorViewModel : INotifyPropertyChanged
         string status)
     {
         DevicePath = devicePath;
+        GdiDeviceName = gdiDeviceName;
         FriendlyName = friendlyName;
         IsBrightnessAvailable = isBrightnessAvailable;
         _brightnessPercent = brightnessPercent;
@@ -51,17 +54,31 @@ public sealed class CompactMonitorViewModel : INotifyPropertyChanged
 
     public string DevicePath { get; }
 
+    public string GdiDeviceName { get; }
+
     public string FriendlyName { get; }
 
     public bool IsBrightnessAvailable { get; }
 
     public bool IsContrastAvailable { get; }
 
+    public Visibility ContrastVisibility => IsContrastAvailable
+        ? Visibility.Visible
+        : Visibility.Collapsed;
+
     public bool IsColorTemperatureAvailable => ColorTemperaturePresets.Count > 0;
+
+    public Visibility ColorTemperatureVisibility => IsColorTemperatureAvailable
+        ? Visibility.Visible
+        : Visibility.Collapsed;
 
     public IReadOnlyList<ColorTemperaturePresetViewModel> ColorTemperaturePresets { get; }
 
     public bool IsRotationAvailable { get; }
+
+    public Visibility RotationVisibility => IsRotationAvailable
+        ? Visibility.Visible
+        : Visibility.Collapsed;
 
     public IReadOnlyList<RotationOptionViewModel> RotationOptions { get; }
 

@@ -43,6 +43,9 @@ public sealed class JsonThemeScheduleSettingsStoreTests
         Assert.AreEqual(new TimeOnly(7, 0), result.Schedule.LightTime);
         Assert.AreEqual(new TimeOnly(19, 0), result.Schedule.DarkTime);
         Assert.IsFalse(result.AutomationEnabled);
+        Assert.IsFalse(result.ReduceBrightness);
+        Assert.IsFalse(result.BrightnessReductionActive);
+        Assert.AreEqual(0, result.BrightnessRestoreValues.Count);
         Assert.IsFalse(File.Exists(_settingsPath));
     }
 
@@ -52,13 +55,21 @@ public sealed class JsonThemeScheduleSettingsStoreTests
         var store = new JsonThemeScheduleSettingsStore(_settingsPath);
         var expected = new CustomThemeSchedule(new TimeOnly(6, 45), new TimeOnly(22, 15));
 
-        store.Save(expected, automationEnabled: true);
+        store.Save(
+            expected,
+            automationEnabled: true,
+            reduceBrightness: true,
+            brightnessReductionActive: true,
+            brightnessRestoreValues: new Dictionary<string, int> { [@"\\.\DISPLAY1"] = 67 });
         var result = store.Load();
 
         Assert.IsTrue(result.WasLoadedFromDisk);
         Assert.AreEqual(expected, result.Schedule);
         Assert.IsTrue(result.AutomationEnabled);
-        StringAssert.Contains(File.ReadAllText(_settingsPath, Encoding.UTF8), "\"version\": 2");
+        Assert.IsTrue(result.ReduceBrightness);
+        Assert.IsTrue(result.BrightnessReductionActive);
+        Assert.AreEqual(67, result.BrightnessRestoreValues[@"\\.\DISPLAY1"]);
+        StringAssert.Contains(File.ReadAllText(_settingsPath, Encoding.UTF8), "\"version\": 3");
     }
 
     [TestMethod]
@@ -76,6 +87,42 @@ public sealed class JsonThemeScheduleSettingsStoreTests
         Assert.AreEqual(new TimeOnly(6, 45), result.Schedule.LightTime);
         Assert.AreEqual(new TimeOnly(22, 15), result.Schedule.DarkTime);
         Assert.IsFalse(result.AutomationEnabled);
+        Assert.IsFalse(result.ReduceBrightness);
+        Assert.IsFalse(result.BrightnessReductionActive);
+    }
+
+    [TestMethod]
+    public void VersionTwoScheduleMigratesWithoutBrightnessReduction()
+    {
+        Directory.CreateDirectory(_testDirectory);
+        File.WriteAllText(
+            _settingsPath,
+            "{\"version\":2,\"lightMinutes\":405,\"darkMinutes\":1335,\"automationEnabled\":true}",
+            Encoding.UTF8);
+
+        var result = new JsonThemeScheduleSettingsStore(_settingsPath).Load();
+
+        Assert.IsTrue(result.AutomationEnabled);
+        Assert.IsFalse(result.ReduceBrightness);
+        Assert.IsFalse(result.BrightnessReductionActive);
+        Assert.AreEqual(0, result.BrightnessRestoreValues.Count);
+    }
+
+    [TestMethod]
+    public void InvalidBrightnessRestoreValueIsRejected()
+    {
+        Directory.CreateDirectory(_testDirectory);
+        File.WriteAllText(
+            _settingsPath,
+            "{\"version\":3,\"lightMinutes\":405,\"darkMinutes\":1335," +
+            "\"automationEnabled\":true,\"reduceBrightness\":true," +
+            "\"brightnessReductionActive\":true," +
+            "\"brightnessRestoreValues\":{\"display\":101}}",
+            Encoding.UTF8);
+
+        var store = new JsonThemeScheduleSettingsStore(_settingsPath);
+
+        Assert.ThrowsExactly<InvalidDataException>(() => store.Load());
     }
 
     [TestMethod]
