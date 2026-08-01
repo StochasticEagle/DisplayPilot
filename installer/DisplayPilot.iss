@@ -318,3 +318,14 @@ begin
 end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+begin
+  if CurUninstallStep = usUninstall then
+  begin
+    DeleteFile(ExpandConstant('{commonstartup}\{#MyAppName}.lnk'));
+    UpdateAllProfileStartupShortcuts(False);
+    RegDeleteValue(
+      HKCU,
+      'Software\Microsoft\Windows\CurrentVersion\Run',
+      'DisplayPilot');
+  end;
+end;
