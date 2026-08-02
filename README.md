@@ -3,7 +3,7 @@
 [![Build](https://github.com/StochasticEagle/DisplayPilot/actions/workflows/build.yml/badge.svg?branch=master)](https://github.com/StochasticEagle/DisplayPilot/actions/workflows/build.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078D4.svg)](#system-requirements)
-[![Release](https://img.shields.io/badge/release-0.9.0%20beta-orange.svg)](https://github.com/StochasticEagle/DisplayPilot/releases)
+[![Release](https://img.shields.io/badge/release-0.9.1%20beta-orange.svg)](https://github.com/StochasticEagle/DisplayPilot/releases)
 
 DisplayPilot is an open-source notification-area application for Windows 10 and
 Windows 11 that combines monitor controls with automatic Light and Dark theme
@@ -16,7 +16,7 @@ not affiliated with or supported by Microsoft.
 
 ## Release status
 
-DisplayPilot 0.9.0 is a beta release. The final installer regression suite has
+DisplayPilot 0.9.1 is a beta release. The final installer regression suite has
 passed on Windows 11. Windows 10 installer regression testing remains outstanding,
 and broader mixed-monitor testing is still recommended before a 1.0 release.
 
