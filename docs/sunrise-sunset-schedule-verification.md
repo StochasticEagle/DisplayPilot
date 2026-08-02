@@ -39,7 +39,7 @@ or requested once through the Windows location service.
    DisplayPilot holds Light or Dark mode respectively and recalculates after local
    midnight.
 5. Copy the diagnostic report and confirm it contains the schedule mode, Windows
-   time zone, solar condition, and calculated times. The report also contains the
-   saved coordinates and should be reviewed or redacted before sharing.
+   time zone, solar condition, and calculated times. Confirm the saved label,
+   latitude, and longitude are not included.
 
 Run the applicable checks on Windows 10 and Windows 11 before merging this checkpoint.

@@ -714,6 +714,7 @@ public sealed partial class MainWindow : Window, IDisposable
                 TimeSpan.FromSeconds(15));
             var point = position.Coordinate.Point.Position;
             SetSolarLocationInputs(point.Latitude, point.Longitude, "Windows location");
+            RefreshSchedulePreview();
             SolarLocationStatusText.Text = string.Format(
                 CultureInfo.CurrentCulture,
                 "Windows location acquired (accuracy approximately {0:F0} m).",
@@ -1343,6 +1344,7 @@ public sealed partial class MainWindow : Window, IDisposable
                     DateOnly.FromDateTime(localNow.DateTime),
                     location,
                     TimeZoneInfo.Local);
+                UpdateSolarTimeDisplays(solar);
                 if (solar.Condition != SolarDayCondition.Normal)
                 {
                     _customThemeSchedule = null;
@@ -1361,6 +1363,7 @@ public sealed partial class MainWindow : Window, IDisposable
             }
             else
             {
+                UpdateSolarTimeDisplays(null);
                 _customThemeSchedule = new CustomThemeSchedule(
                     TimeOnly.FromTimeSpan(LightScheduleTimePicker.Time),
                     TimeOnly.FromTimeSpan(DarkScheduleTimePicker.Time));
@@ -1390,6 +1393,7 @@ public sealed partial class MainWindow : Window, IDisposable
         }
         catch (ArgumentException exception)
         {
+            UpdateSolarTimeDisplays(null);
             _customThemeSchedule = null;
             _lastScheduleEvaluation = null;
             ScheduleStatusText.Text = exception.Message;
@@ -1683,6 +1687,7 @@ public sealed partial class MainWindow : Window, IDisposable
         if (_scheduleMode == ThemeScheduleMode.FixedTimes || _solarLocation is null)
         {
             _solarTimes = null;
+            UpdateSolarTimeDisplays(null);
             _savedThemeSchedule = _fixedThemeSchedule;
             return;
         }
@@ -1692,11 +1697,35 @@ public sealed partial class MainWindow : Window, IDisposable
             DateOnly.FromDateTime(localNow.DateTime),
             _solarLocation,
             TimeZoneInfo.Local);
+        UpdateSolarTimeDisplays(_solarTimes);
         _savedThemeSchedule = _solarTimes.Condition == SolarDayCondition.Normal
             ? new CustomThemeSchedule(
                 TimeOnly.FromDateTime(_solarTimes.Sunrise!.Value.DateTime),
                 TimeOnly.FromDateTime(_solarTimes.Sunset!.Value.DateTime))
             : null;
+    }
+
+    private void UpdateSolarTimeDisplays(SolarTimes? solarTimes)
+    {
+        var hasTimes = solarTimes is
+        {
+            Condition: SolarDayCondition.Normal,
+            Sunrise: not null,
+            Sunset: not null,
+        };
+        SolarCalculatedTimes.Visibility = hasTimes ? Visibility.Visible : Visibility.Collapsed;
+        CompactSolarCalculatedTimes.Visibility = hasTimes ? Visibility.Visible : Visibility.Collapsed;
+        if (!hasTimes)
+        {
+            return;
+        }
+
+        var lightTime = solarTimes!.Sunrise!.Value.TimeOfDay;
+        var darkTime = solarTimes.Sunset!.Value.TimeOfDay;
+        SolarLightTimePicker.Time = lightTime;
+        SolarDarkTimePicker.Time = darkTime;
+        CompactSolarLightTimePicker.Time = lightTime;
+        CompactSolarDarkTimePicker.Time = darkTime;
     }
 
     private ThemeScheduleEvaluation? EvaluateSavedSchedule(DateTimeOffset now)
@@ -2554,9 +2583,6 @@ public sealed partial class MainWindow : Window, IDisposable
         report.Append("Saved schedule dark time: ").AppendLine(_savedThemeSchedule?.DarkTime.ToString("HH:mm", CultureInfo.InvariantCulture) ?? "Unavailable");
         report.Append("Schedule mode: ").AppendLine(_scheduleMode.ToString());
         report.Append("Schedule time zone: ").AppendLine(TimeZoneInfo.Local.Id);
-        report.Append("Solar location label: ").AppendLine(_solarLocation?.Label ?? "None");
-        report.Append("Solar latitude: ").AppendLine(_solarLocation?.Latitude.ToString("F6", CultureInfo.InvariantCulture) ?? "Unavailable");
-        report.Append("Solar longitude: ").AppendLine(_solarLocation?.Longitude.ToString("F6", CultureInfo.InvariantCulture) ?? "Unavailable");
         report.Append("Solar condition: ").AppendLine(_solarTimes?.Condition.ToString() ?? "Not applicable");
         report.Append("Solar sunrise: ").AppendLine(_solarTimes?.Sunrise?.ToString("O", CultureInfo.InvariantCulture) ?? "Unavailable");
         report.Append("Solar sunset: ").AppendLine(_solarTimes?.Sunset?.ToString("O", CultureInfo.InvariantCulture) ?? "Unavailable");
@@ -2579,7 +2605,7 @@ public sealed partial class MainWindow : Window, IDisposable
         report.Append("Schedule timer active: ").AppendLine(_themeScheduleTimer.IsArmed.ToString(CultureInfo.InvariantCulture));
         report.Append("Schedule timer due: ").AppendLine(_themeScheduleTimer.DueTime?.ToString("O", CultureInfo.InvariantCulture) ?? "None");
         report.Append("Schedule manual override until: ").AppendLine(_manualScheduleOverrideUntil?.ToString("O", CultureInfo.InvariantCulture) ?? "None");
-        report.AppendLine("Privacy: device paths, WMI instance names, and saved solar coordinates may identify a device or location; review before sharing");
+        report.AppendLine("Privacy: device paths and WMI instance names can identify a local display instance; review before sharing");
         report.AppendLine(ddcProbes is null
             ? "DDC/CI commands issued: no"
             : _lastDdcVcpWriteResult is not null

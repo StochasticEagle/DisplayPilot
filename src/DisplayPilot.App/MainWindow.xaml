@@ -311,6 +311,25 @@
                                         Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                         Text="Coordinates are calculated in the current Windows time zone."
                                         TextWrapping="Wrap" />
+                                    <Grid x:Name="CompactSolarCalculatedTimes" ColumnSpacing="12" Visibility="Collapsed">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <TimePicker
+                                            x:Name="CompactSolarLightTimePicker"
+                                            ClockIdentifier="24HourClock"
+                                            Header="Light starts"
+                                            IsHitTestVisible="False"
+                                            IsTabStop="False" />
+                                        <TimePicker
+                                            x:Name="CompactSolarDarkTimePicker"
+                                            Grid.Column="1"
+                                            ClockIdentifier="24HourClock"
+                                            Header="Dark starts"
+                                            IsHitTestVisible="False"
+                                            IsTabStop="False" />
+                                    </Grid>
                                 </StackPanel>
 
                                 <CheckBox
@@ -689,6 +708,28 @@
                                         Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                         Text="Coordinates are calculated in the current Windows time zone."
                                         TextWrapping="Wrap" />
+                                    <StackPanel
+                                        x:Name="SolarCalculatedTimes"
+                                        Orientation="Horizontal"
+                                        Spacing="12"
+                                        Visibility="Collapsed">
+                                        <Viewbox Width="220" Height="80" Stretch="Uniform">
+                                            <TimePicker
+                                                x:Name="SolarLightTimePicker"
+                                                ClockIdentifier="24HourClock"
+                                                Header="Light starts"
+                                                IsHitTestVisible="False"
+                                                IsTabStop="False" />
+                                        </Viewbox>
+                                        <Viewbox Width="220" Height="80" Stretch="Uniform">
+                                            <TimePicker
+                                                x:Name="SolarDarkTimePicker"
+                                                ClockIdentifier="24HourClock"
+                                                Header="Dark starts"
+                                                IsHitTestVisible="False"
+                                                IsTabStop="False" />
+                                        </Viewbox>
+                                    </StackPanel>
                                 </StackPanel>
 
                                 <CheckBox
