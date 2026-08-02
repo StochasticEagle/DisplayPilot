@@ -866,11 +866,7 @@ public sealed partial class MainWindow : Window, IDisposable
                 DateTimeOffset.Now);
             CompactStatusText.Text = readableCount == 0
                 ? "Brightness control is unavailable. Open Advanced for details."
-                : string.Format(
-                    CultureInfo.CurrentCulture,
-                    "Brightness is available for {0} display {1}.",
-                    readableCount,
-                    readableCount == 1 ? "path" : "paths");
+                : string.Empty;
             _diagnosticReport = BuildDiagnosticReport(
                 _activeMonitors,
                 probes.Ddc,
