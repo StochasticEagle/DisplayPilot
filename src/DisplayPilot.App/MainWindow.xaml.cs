@@ -108,6 +108,8 @@ public sealed partial class MainWindow : Window, IDisposable
     private int? _lastKeyboardBrightnessPercent;
     private int _lastKeyboardBrightnessTargetCount;
     private int _lastKeyboardBrightnessSuccessCount;
+    private int _pendingRawBrightnessDelta;
+    private CancellationTokenSource? _rawBrightnessCancellation;
     private int? _suppressedWmiBrightnessPercent;
     private DateTimeOffset _suppressWmiBrightnessUntilUtc;
     private NotificationAreaIcon? _notificationAreaIcon;
@@ -159,6 +161,8 @@ public sealed partial class MainWindow : Window, IDisposable
             _notificationAreaIcon.ExitInvoked += NotificationAreaIcon_ExitInvoked;
             _notificationAreaIcon.SessionActivityChanged +=
                 NotificationAreaIcon_SessionActivityChanged;
+            _notificationAreaIcon.BrightnessKeyInvoked +=
+                NotificationAreaIcon_BrightnessKeyInvoked;
             return true;
         }
         catch (Win32Exception exception)
@@ -349,6 +353,97 @@ public sealed partial class MainWindow : Window, IDisposable
         _ = DispatcherQueue.TryEnqueue(() => QueueKeyboardBrightnessSync(args.Brightness));
     }
 
+    private void NotificationAreaIcon_BrightnessKeyInvoked(
+        object? sender,
+        BrightnessKeyDirection direction)
+    {
+        _ = DispatcherQueue.TryEnqueue(() => QueueRawBrightnessKey(direction));
+    }
+
+    private void QueueRawBrightnessKey(BrightnessKeyDirection direction)
+    {
+        _pendingRawBrightnessDelta += direction == BrightnessKeyDirection.Increase ? 10 : -10;
+        _rawBrightnessCancellation?.Cancel();
+        var cancellation = new CancellationTokenSource();
+        _rawBrightnessCancellation = cancellation;
+        _ = ApplyRawBrightnessKeysAsync(cancellation);
+    }
+
+    private async Task ApplyRawBrightnessKeysAsync(CancellationTokenSource cancellation)
+    {
+        try
+        {
+            await Task.Delay(BrightnessChangeDelayMilliseconds, cancellation.Token);
+            var delta = _pendingRawBrightnessDelta;
+            _pendingRawBrightnessDelta = 0;
+            if (delta == 0 || !_sessionIsActive)
+            {
+                return;
+            }
+
+            await InitializeAsync();
+            while (_displayOperationRunning && _sessionIsActive)
+            {
+                await Task.Delay(BrightnessChangeDelayMilliseconds, cancellation.Token);
+            }
+
+            var internalProbe = _lastWmiProbes.FirstOrDefault(probe =>
+                probe.Status == WmiBrightnessProbeStatus.ReadSucceeded);
+            if (internalProbe is not null)
+            {
+                _suppressedWmiBrightnessPercent = Math.Clamp(
+                    internalProbe.CurrentBrightness + delta,
+                    0,
+                    100);
+                _suppressWmiBrightnessUntilUtc = DateTimeOffset.UtcNow.AddSeconds(2);
+            }
+
+            _displayOperationRunning = true;
+            try
+            {
+                var adjustment = await Task.Run(() =>
+                {
+                    var results = _keyboardBrightnessSyncService.AdjustBy(
+                        delta,
+                        _lastDdcProbes,
+                        _lastWmiProbes);
+                    var probes = (
+                        Ddc: _ddcProbeService.ProbeBrightness(_activeMonitors),
+                        Wmi: _wmiProbeService.ProbeBrightness(_activeMonitors));
+                    return (Results: results, Probes: probes);
+                }, cancellation.Token);
+
+                _lastKeyboardBrightnessTargetCount = adjustment.Results.Count;
+                _lastKeyboardBrightnessSuccessCount =
+                    adjustment.Results.Count(result => result.Succeeded);
+                _lastBrightnessWriteResult = adjustment.Results.Count == 0
+                    ? null
+                    : adjustment.Results[^1];
+                _lastDdcProbes = adjustment.Probes.Ddc;
+                _lastWmiProbes = adjustment.Probes.Wmi;
+                UpdateCompactMonitorCards();
+                RefreshDiagnosticReport();
+            }
+            finally
+            {
+                _displayOperationRunning = false;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // A repeated key replaces the pending aggregate before it is written.
+        }
+        finally
+        {
+            if (ReferenceEquals(_rawBrightnessCancellation, cancellation))
+            {
+                _rawBrightnessCancellation = null;
+            }
+
+            cancellation.Dispose();
+        }
+    }
+
     private void QueueKeyboardBrightnessSync(int brightnessPercent)
     {
         if (_suppressedWmiBrightnessPercent == brightnessPercent &&
@@ -357,6 +452,9 @@ public sealed partial class MainWindow : Window, IDisposable
             _suppressedWmiBrightnessPercent = null;
             return;
         }
+
+        _pendingRawBrightnessDelta = 0;
+        _rawBrightnessCancellation?.Cancel();
 
         _keyboardBrightnessEventCount++;
         _lastKeyboardBrightnessEventUtc = DateTimeOffset.UtcNow;
@@ -410,7 +508,9 @@ public sealed partial class MainWindow : Window, IDisposable
                     _lastKeyboardBrightnessTargetCount = synchronization.Results.Count;
                     _lastKeyboardBrightnessSuccessCount =
                         synchronization.Results.Count(result => result.Succeeded);
-                    _lastBrightnessWriteResult = synchronization.Results.LastOrDefault();
+                    _lastBrightnessWriteResult = synchronization.Results.Count == 0
+                        ? null
+                        : synchronization.Results[^1];
                     _lastDdcProbes = synchronization.Probes.Ddc;
                     _lastWmiProbes = synchronization.Probes.Wmi;
                     UpdateCompactMonitorCards();
@@ -550,6 +650,8 @@ public sealed partial class MainWindow : Window, IDisposable
         _pendingBrightnessPercent = requestedPercent;
         _brightnessChangeCancellation?.Cancel();
         _brightnessChangeCancellation?.Dispose();
+        _rawBrightnessCancellation?.Cancel();
+        _rawBrightnessCancellation?.Dispose();
         _contrastChangeCancellation?.Cancel();
         _contrastChangeCancellation?.Dispose();
         var cancellation = new CancellationTokenSource();
@@ -1962,6 +2064,8 @@ public sealed partial class MainWindow : Window, IDisposable
             _notificationAreaIcon.ExitInvoked -= NotificationAreaIcon_ExitInvoked;
             _notificationAreaIcon.SessionActivityChanged -=
                 NotificationAreaIcon_SessionActivityChanged;
+            _notificationAreaIcon.BrightnessKeyInvoked -=
+                NotificationAreaIcon_BrightnessKeyInvoked;
             _notificationAreaIcon.Dispose();
         }
 
@@ -2694,6 +2798,14 @@ public sealed partial class MainWindow : Window, IDisposable
             notificationDiagnostics is null
                 ? "None"
                 : $"0x{unchecked((uint)notificationDiagnostics.Value.LastContextMenuError):X8}");
+        report.Append("Raw brightness input registered: ").AppendLine(
+            (notificationDiagnostics?.RawBrightnessInputRegistered ?? false).ToString(CultureInfo.InvariantCulture));
+        report.Append("Raw brightness input error: ").AppendLine(
+            notificationDiagnostics is null
+                ? "None"
+                : $"0x{unchecked((uint)notificationDiagnostics.Value.RawBrightnessInputError):X8}");
+        report.Append("Raw brightness input events: ").AppendLine(
+            (notificationDiagnostics?.RawBrightnessInputCount ?? 0).ToString(CultureInfo.InvariantCulture));
         report.Append("Window mode: ").AppendLine(_isCompactMode ? "Compact" : "Advanced");
         report.Append("Window visible: ").AppendLine(AppWindow.IsVisible.ToString(CultureInfo.InvariantCulture));
         report.Append("Start at sign-in: ").AppendLine(_startupRegistrationStatus.ToString());

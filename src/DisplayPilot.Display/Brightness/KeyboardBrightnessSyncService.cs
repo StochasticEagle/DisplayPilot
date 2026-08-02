@@ -14,16 +14,20 @@ namespace DisplayPilot.Display.Brightness;
 public sealed class KeyboardBrightnessSyncService
 {
     private readonly IBrightnessWriter _ddcWriter;
+    private readonly IBrightnessWriter _wmiWriter;
 
     public KeyboardBrightnessSyncService()
-        : this(new WindowsDdcBrightnessWriter())
+        : this(new WindowsDdcBrightnessWriter(), new WindowsWmiBrightnessWriter())
     {
     }
 
-    public KeyboardBrightnessSyncService(IBrightnessWriter ddcWriter)
+    public KeyboardBrightnessSyncService(
+        IBrightnessWriter ddcWriter,
+        IBrightnessWriter? wmiWriter = null)
     {
         ArgumentNullException.ThrowIfNull(ddcWriter);
         _ddcWriter = ddcWriter;
+        _wmiWriter = wmiWriter ?? ddcWriter;
     }
 
     public IReadOnlyList<BrightnessWriteResult> Synchronize(
@@ -48,6 +52,44 @@ public sealed class KeyboardBrightnessSyncService
             }
 
             results.Add(_ddcWriter.WriteBrightness(ddcProbe.Display, brightnessPercent));
+        }
+
+        return results;
+    }
+
+    public IReadOnlyList<BrightnessWriteResult> AdjustBy(
+        int deltaPercent,
+        IReadOnlyList<MonitorDdcProbeInfo> ddcProbes,
+        IReadOnlyList<WmiBrightnessProbeResult> wmiProbes)
+    {
+        var results = new List<BrightnessWriteResult>();
+        foreach (var ddcProbe in ddcProbes)
+        {
+            var wmiProbe = wmiProbes.FirstOrDefault(probe => string.Equals(
+                probe.Display.DevicePath,
+                ddcProbe.Display.DevicePath,
+                StringComparison.OrdinalIgnoreCase));
+            if (wmiProbe?.Status == WmiBrightnessProbeStatus.ReadSucceeded)
+            {
+                var requested = Math.Clamp(wmiProbe.CurrentBrightness + deltaPercent, 0, 100);
+                results.Add(_wmiWriter.WriteBrightness(ddcProbe.Display, requested));
+                continue;
+            }
+
+            var readableDdc = ddcProbe.PhysicalMonitors.FirstOrDefault(result =>
+                result.Status == DdcBrightnessProbeStatus.ReadSucceeded &&
+                result.MaximumValue > 0);
+            if (readableDdc is null)
+            {
+                continue;
+            }
+
+            var currentPercent = (int)Math.Round(
+                readableDdc.CurrentValue * 100d / readableDdc.MaximumValue,
+                MidpointRounding.AwayFromZero);
+            results.Add(_ddcWriter.WriteBrightness(
+                ddcProbe.Display,
+                Math.Clamp(currentPercent + deltaPercent, 0, 100)));
         }
 
         return results;

@@ -65,6 +65,39 @@ public sealed class KeyboardBrightnessSyncServiceTests
         Assert.AreEqual(100, writer.RequestedPercents.Single());
     }
 
+    [TestMethod]
+    public void AdjustByChangesInternalAndExternalDisplaysFromTheirCurrentValues()
+    {
+        var panel = Display("PANEL", @"\\.\DISPLAY1");
+        var external = Display("EXT", @"\\.\DISPLAY2");
+        var ddcWriter = new StubWriter();
+        var wmiWriter = new StubWriter();
+
+        var results = new KeyboardBrightnessSyncService(ddcWriter, wmiWriter).AdjustBy(
+            -10,
+            [DdcProbe(panel, true), DdcProbe(external, true)],
+            [WmiProbe(panel, WmiBrightnessProbeStatus.ReadSucceeded),
+                WmiProbe(external, WmiBrightnessProbeStatus.NotAvailable)]);
+
+        Assert.AreEqual(2, results.Count);
+        Assert.AreEqual(40, wmiWriter.RequestedPercents.Single());
+        Assert.AreEqual(40, ddcWriter.RequestedPercents.Single());
+    }
+
+    [TestMethod]
+    public void AdjustByClampsEachDisplayAtBrightnessLimits()
+    {
+        var panel = Display("PANEL", @"\\.\DISPLAY1");
+        var writer = new StubWriter();
+
+        _ = new KeyboardBrightnessSyncService(writer, writer).AdjustBy(
+            -80,
+            [DdcProbe(panel, true)],
+            [WmiProbe(panel, WmiBrightnessProbeStatus.ReadSucceeded)]);
+
+        Assert.AreEqual(0, writer.RequestedPercents.Single());
+    }
+
     private static MonitorDisplayInfo Display(string identifier, string gdiName) =>
         new($@"\\?\DISPLAY#{identifier}#4&abc&0&UID111#{{guid}}", gdiName, identifier, 1);
 
