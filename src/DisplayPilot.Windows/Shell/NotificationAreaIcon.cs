@@ -156,7 +156,7 @@ public sealed partial class NotificationAreaIcon : IDisposable
 
     public event EventHandler<bool>? SessionActivityChanged;
 
-    public event EventHandler<BrightnessKeyDirection>? BrightnessKeyInvoked;
+    public event EventHandler<BrightnessKeyEventArgs>? BrightnessKeyInvoked;
 
     public static uint ActivationGuardDurationMilliseconds =>
         Math.Max(GetDoubleClickTime(), 1u);
@@ -164,6 +164,12 @@ public sealed partial class NotificationAreaIcon : IDisposable
     public bool TryBringWindowToForeground()
     {
         return !_disposed && SetForegroundWindow(_ownerWindow);
+    }
+
+    public bool TryGetCursorMonitorDeviceName(out string gdiDeviceName)
+    {
+        gdiDeviceName = GetCursorMonitorDeviceName();
+        return !string.IsNullOrWhiteSpace(gdiDeviceName);
     }
 
     public void InvokeContextMenuCommand(NotificationAreaMenuCommand command)
@@ -587,9 +593,11 @@ public sealed partial class NotificationAreaIcon : IDisposable
                         _rawBrightnessInputCount++;
                         BrightnessKeyInvoked?.Invoke(
                             this,
-                            usage == BrightnessIncrementUsage
-                                ? BrightnessKeyDirection.Increase
-                                : BrightnessKeyDirection.Decrease);
+                            new BrightnessKeyEventArgs(
+                                usage == BrightnessIncrementUsage
+                                    ? BrightnessKeyDirection.Increase
+                                    : BrightnessKeyDirection.Decrease,
+                                GetCursorMonitorDeviceName()));
                         return;
                     }
                 }
@@ -598,6 +606,34 @@ public sealed partial class NotificationAreaIcon : IDisposable
         finally
         {
             Marshal.FreeHGlobal(buffer);
+        }
+    }
+
+    private static unsafe string GetCursorMonitorDeviceName()
+    {
+        if (!GetCursorPos(out var point))
+        {
+            return string.Empty;
+        }
+
+        var monitor = MonitorFromPoint(point, 2);
+        if (monitor == 0)
+        {
+            return string.Empty;
+        }
+
+        var info = new MonitorInfoEx
+        {
+            Size = (uint)sizeof(MonitorInfoEx),
+        };
+        if (!GetMonitorInfo(monitor, ref info))
+        {
+            return string.Empty;
+        }
+
+        fixed (char* device = info.Device)
+        {
+            return new string(device).TrimEnd('\0');
         }
     }
 
@@ -752,6 +788,17 @@ public sealed partial class NotificationAreaIcon : IDisposable
 
     [LibraryImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool GetCursorPos(out NativePoint point);
+
+    [LibraryImport("user32.dll")]
+    private static partial nint MonitorFromPoint(NativePoint point, uint flags);
+
+    [LibraryImport("user32.dll", EntryPoint = "GetMonitorInfoW", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool GetMonitorInfo(nint monitor, ref MonitorInfoEx monitorInfo);
+
+    [LibraryImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool RegisterRawInputDevices(
         in RawInputDevice devices,
         uint deviceCount,
@@ -829,6 +876,23 @@ public sealed partial class NotificationAreaIcon : IDisposable
     }
 
     [StructLayout(LayoutKind.Sequential)]
+    private struct NativePoint
+    {
+        internal int X;
+        internal int Y;
+    }
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private unsafe struct MonitorInfoEx
+    {
+        internal uint Size;
+        internal NativeRect Monitor;
+        internal NativeRect Work;
+        internal uint Flags;
+        internal fixed char Device[32];
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
     private struct RawInputDevice
     {
         internal ushort UsagePage;
@@ -858,6 +922,15 @@ public enum BrightnessKeyDirection
 {
     Decrease = -1,
     Increase = 1,
+}
+
+public sealed class BrightnessKeyEventArgs(
+    BrightnessKeyDirection direction,
+    string gdiDeviceName) : EventArgs
+{
+    public BrightnessKeyDirection Direction { get; } = direction;
+
+    public string GdiDeviceName { get; } = gdiDeviceName;
 }
 
 public readonly record struct NotificationAreaIconDiagnostics(

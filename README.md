@@ -31,7 +31,8 @@ and broader mixed-monitor testing is still recommended before a 1.0 release.
 - Detect multiple active display paths and expose controls according to each
   monitor's reported capabilities.
 - Apply brightness and contrast changes dynamically in 1% increments.
-- Mirror supported laptop brightness-key changes to external DDC/CI displays.
+- Route supported brightness-key changes to the display containing the mouse
+  pointer and synchronize the Windows brightness state to its actual value.
 - Refresh monitor state whenever the notification-area flyout opens.
 
 Unsupported controls are hidden. DisplayPilot verifies monitor writes by reading
