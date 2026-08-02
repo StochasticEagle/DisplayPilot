@@ -221,6 +221,7 @@ jobs:
           fi
           version="${tag#v}"
           gh release create "$tag" \
+            --repo "$GITHUB_REPOSITORY" \
             release/DisplayPilot-Setup-win-x64.exe \
             release/DisplayPilot-Setup-win-x64.exe.sha256 \
             --generate-notes \
