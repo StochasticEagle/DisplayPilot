@@ -9,7 +9,7 @@ namespace DisplayPilot.Windows.Settings;
 
 public sealed class JsonThemeScheduleSettingsStore : IThemeScheduleSettingsStore
 {
-    private const int CurrentVersion = 3;
+    private const int CurrentVersion = 4;
     private const int FirstSupportedVersion = 1;
     private const int MinutesPerDay = 24 * 60;
     private static readonly JsonSerializerOptions SerializerOptions = new()
@@ -44,7 +44,9 @@ public sealed class JsonThemeScheduleSettingsStore : IThemeScheduleSettingsStore
                 AutomationEnabled: false,
                 ReduceBrightness: false,
                 BrightnessReductionActive: false,
-                BrightnessRestoreValues: new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase));
+                BrightnessRestoreValues: new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase),
+                ScheduleMode: ThemeScheduleMode.FixedTimes,
+                SolarLocation: null);
         }
 
         var json = File.ReadAllText(_filePath, Encoding.UTF8);
@@ -71,6 +73,8 @@ public sealed class JsonThemeScheduleSettingsStore : IThemeScheduleSettingsStore
         try
         {
             var restoreValues = ValidateRestoreValues(stored);
+            var scheduleMode = ReadScheduleMode(stored);
+            var solarLocation = ReadSolarLocation(stored, scheduleMode);
             return new ThemeScheduleSettingsLoadResult(
                 new CustomThemeSchedule(
                     TimeOnly.FromTimeSpan(TimeSpan.FromMinutes(stored.LightMinutes)),
@@ -79,7 +83,9 @@ public sealed class JsonThemeScheduleSettingsStore : IThemeScheduleSettingsStore
                 AutomationEnabled: stored.Version >= 2 && stored.AutomationEnabled,
                 ReduceBrightness: stored.Version >= 3 && stored.ReduceBrightness,
                 BrightnessReductionActive: stored.Version >= 3 && restoreValues.Count > 0,
-                BrightnessRestoreValues: restoreValues);
+                BrightnessRestoreValues: restoreValues,
+                ScheduleMode: scheduleMode,
+                SolarLocation: solarLocation);
         }
         catch (ArgumentException exception)
         {
@@ -92,9 +98,20 @@ public sealed class JsonThemeScheduleSettingsStore : IThemeScheduleSettingsStore
         bool automationEnabled,
         bool reduceBrightness,
         bool brightnessReductionActive,
-        IReadOnlyDictionary<string, int> brightnessRestoreValues)
+        IReadOnlyDictionary<string, int> brightnessRestoreValues,
+        ThemeScheduleMode scheduleMode,
+        SolarLocation? solarLocation)
     {
         ArgumentNullException.ThrowIfNull(schedule);
+        if (!Enum.IsDefined(scheduleMode))
+        {
+            throw new ArgumentOutOfRangeException(nameof(scheduleMode));
+        }
+
+        if (scheduleMode == ThemeScheduleMode.SunriseSunset && solarLocation is null)
+        {
+            throw new ArgumentNullException(nameof(solarLocation));
+        }
 
         var directory = Path.GetDirectoryName(_filePath)
             ?? throw new InvalidOperationException("The theme schedule settings path has no directory.");
@@ -112,6 +129,10 @@ public sealed class JsonThemeScheduleSettingsStore : IThemeScheduleSettingsStore
                 pair => pair.Key,
                 pair => pair.Value,
                 StringComparer.OrdinalIgnoreCase),
+            ScheduleMode = (int)scheduleMode,
+            Latitude = solarLocation?.Latitude,
+            Longitude = solarLocation?.Longitude,
+            LocationLabel = solarLocation?.Label,
         };
         var json = JsonSerializer.Serialize(stored, SerializerOptions);
         var temporaryPath = _filePath + ".tmp";
@@ -144,6 +165,48 @@ public sealed class JsonThemeScheduleSettingsStore : IThemeScheduleSettingsStore
             StringComparer.OrdinalIgnoreCase);
     }
 
+    private static ThemeScheduleMode ReadScheduleMode(StoredSettings stored)
+    {
+        if (stored.Version < 4)
+        {
+            return ThemeScheduleMode.FixedTimes;
+        }
+
+        if (!Enum.IsDefined(typeof(ThemeScheduleMode), stored.ScheduleMode))
+        {
+            throw new InvalidDataException("The saved theme schedule mode is not supported.");
+        }
+
+        return (ThemeScheduleMode)stored.ScheduleMode;
+    }
+
+    private static SolarLocation? ReadSolarLocation(
+        StoredSettings stored,
+        ThemeScheduleMode scheduleMode)
+    {
+        if (scheduleMode == ThemeScheduleMode.FixedTimes)
+        {
+            return null;
+        }
+
+        if (stored.Latitude is null || stored.Longitude is null)
+        {
+            throw new InvalidDataException("Sunrise/sunset scheduling requires a saved location.");
+        }
+
+        try
+        {
+            return new SolarLocation(
+                stored.Latitude.Value,
+                stored.Longitude.Value,
+                stored.LocationLabel);
+        }
+        catch (ArgumentOutOfRangeException exception)
+        {
+            throw new InvalidDataException("The saved solar location is outside the valid coordinate range.", exception);
+        }
+    }
+
     private sealed class StoredSettings
     {
         public int Version { get; init; }
@@ -159,5 +222,13 @@ public sealed class JsonThemeScheduleSettingsStore : IThemeScheduleSettingsStore
         public bool BrightnessReductionActive { get; init; }
 
         public Dictionary<string, int>? BrightnessRestoreValues { get; init; }
+
+        public int ScheduleMode { get; init; }
+
+        public double? Latitude { get; init; }
+
+        public double? Longitude { get; init; }
+
+        public string? LocationLabel { get; init; }
     }
 }

@@ -14,5 +14,7 @@ public interface IThemeScheduleSettingsStore
         bool automationEnabled,
         bool reduceBrightness,
         bool brightnessReductionActive,
-        IReadOnlyDictionary<string, int> brightnessRestoreValues);
+        IReadOnlyDictionary<string, int> brightnessRestoreValues,
+        ThemeScheduleMode scheduleMode,
+        SolarLocation? solarLocation);
 }

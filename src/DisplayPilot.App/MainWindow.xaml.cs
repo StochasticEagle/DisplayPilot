@@ -24,6 +24,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.ApplicationModel.DataTransfer;
+using Windows.Devices.Geolocation;
 using Windows.Graphics;
 using Windows.Storage.Streams;
 
@@ -63,11 +64,16 @@ public sealed partial class MainWindow : Window, IDisposable
     private ThemeState? _themeState;
     private ThemeApplyResult? _lastThemeResult;
     private CustomThemeSchedule? _customThemeSchedule;
+    private CustomThemeSchedule? _fixedThemeSchedule;
     private CustomThemeSchedule? _savedThemeSchedule;
     private ThemeScheduleEvaluation? _lastScheduleEvaluation;
     private bool _scheduleWasLoadedFromDisk;
     private bool _scheduleAutomationEnabled;
     private bool _reduceBrightnessOnSchedule;
+    private ThemeScheduleMode _scheduleMode = ThemeScheduleMode.FixedTimes;
+    private SolarLocation? _solarLocation;
+    private SolarTimes? _solarTimes;
+    private bool _locationRequestRunning;
     private bool _brightnessReductionActive;
     private readonly Dictionary<string, int> _brightnessRestoreValues =
         new(StringComparer.OrdinalIgnoreCase);
@@ -630,6 +636,115 @@ public sealed partial class MainWindow : Window, IDisposable
         {
             await EvaluateAndApplyScheduleAsync();
             UpdateThemeScheduleTimer();
+        }
+    }
+
+    private void CompactScheduleModeComboBox_SelectionChanged(
+        object sender,
+        SelectionChangedEventArgs e)
+    {
+        if (_updatingCompactControls)
+        {
+            return;
+        }
+
+        _updatingCompactControls = true;
+        try
+        {
+            ScheduleModeComboBox.SelectedIndex = CompactScheduleModeComboBox.SelectedIndex;
+        }
+        finally
+        {
+            _updatingCompactControls = false;
+        }
+
+        UpdateScheduleModeVisibility();
+    }
+
+    private void ScheduleModeComboBox_SelectionChanged(
+        object sender,
+        SelectionChangedEventArgs e)
+    {
+        if (_updatingCompactControls)
+        {
+            return;
+        }
+
+        _updatingCompactControls = true;
+        try
+        {
+            CompactScheduleModeComboBox.SelectedIndex = ScheduleModeComboBox.SelectedIndex;
+        }
+        finally
+        {
+            _updatingCompactControls = false;
+        }
+
+        UpdateScheduleModeVisibility();
+    }
+
+    private async void UseWindowsLocationButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_locationRequestRunning)
+        {
+            return;
+        }
+
+        _locationRequestRunning = true;
+        UseWindowsLocationButton.IsEnabled = false;
+        CompactUseWindowsLocationButton.IsEnabled = false;
+        SolarLocationStatusText.Text = "Requesting a one-time location from Windows...";
+        CompactSolarLocationStatusText.Text = SolarLocationStatusText.Text;
+        try
+        {
+            var access = await Geolocator.RequestAccessAsync();
+            if (access != GeolocationAccessStatus.Allowed)
+            {
+                SolarLocationStatusText.Text = "Windows location access was not granted. Enter coordinates manually.";
+                CompactSolarLocationStatusText.Text = SolarLocationStatusText.Text;
+                return;
+            }
+
+            var geolocator = new Geolocator
+            {
+                DesiredAccuracy = PositionAccuracy.Default,
+            };
+            var position = await geolocator.GetGeopositionAsync(
+                TimeSpan.FromMinutes(5),
+                TimeSpan.FromSeconds(15));
+            var point = position.Coordinate.Point.Position;
+            SetSolarLocationInputs(point.Latitude, point.Longitude, "Windows location");
+            SolarLocationStatusText.Text = string.Format(
+                CultureInfo.CurrentCulture,
+                "Windows location acquired (accuracy approximately {0:F0} m).",
+                position.Coordinate.Accuracy);
+            CompactSolarLocationStatusText.Text = SolarLocationStatusText.Text;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            SolarLocationStatusText.Text = "Windows location is disabled or denied. Enter coordinates manually.";
+            CompactSolarLocationStatusText.Text = SolarLocationStatusText.Text;
+        }
+        catch (COMException exception)
+        {
+            SolarLocationStatusText.Text = $"Windows location is unavailable (0x{exception.HResult:X8}).";
+            CompactSolarLocationStatusText.Text = SolarLocationStatusText.Text;
+        }
+        catch (TimeoutException)
+        {
+            SolarLocationStatusText.Text = "Windows did not return a location within 15 seconds. Try again or enter coordinates manually.";
+            CompactSolarLocationStatusText.Text = SolarLocationStatusText.Text;
+        }
+        catch (OperationCanceledException)
+        {
+            SolarLocationStatusText.Text = "Windows did not return a location. Try again or enter coordinates manually.";
+            CompactSolarLocationStatusText.Text = SolarLocationStatusText.Text;
+        }
+        finally
+        {
+            _locationRequestRunning = false;
+            UseWindowsLocationButton.IsEnabled = true;
+            CompactUseWindowsLocationButton.IsEnabled = true;
         }
     }
 
@@ -1219,9 +1334,38 @@ public sealed partial class MainWindow : Window, IDisposable
     {
         try
         {
-            _customThemeSchedule = new CustomThemeSchedule(
-                TimeOnly.FromTimeSpan(LightScheduleTimePicker.Time),
-                TimeOnly.FromTimeSpan(DarkScheduleTimePicker.Time));
+            var mode = GetSelectedScheduleMode();
+            if (mode == ThemeScheduleMode.SunriseSunset)
+            {
+                var location = ReadSolarLocationInputs();
+                var localNow = TimeZoneInfo.ConvertTime(DateTimeOffset.Now, TimeZoneInfo.Local);
+                var solar = LocalSolarCalculator.Calculate(
+                    DateOnly.FromDateTime(localNow.DateTime),
+                    location,
+                    TimeZoneInfo.Local);
+                if (solar.Condition != SolarDayCondition.Normal)
+                {
+                    _customThemeSchedule = null;
+                    _lastScheduleEvaluation = null;
+                    ScheduleStatusText.Text = solar.Condition == SolarDayCondition.PolarDay
+                        ? "The sun does not set today at this location; Light mode remains active and tomorrow is recalculated at midnight."
+                        : "The sun does not rise today at this location; Dark mode remains active and tomorrow is recalculated at midnight.";
+                    CompactScheduleStatusText.Text = ScheduleStatusText.Text;
+                    RefreshDiagnosticReport();
+                    return;
+                }
+
+                _customThemeSchedule = new CustomThemeSchedule(
+                    TimeOnly.FromDateTime(solar.Sunrise!.Value.DateTime),
+                    TimeOnly.FromDateTime(solar.Sunset!.Value.DateTime));
+            }
+            else
+            {
+                _customThemeSchedule = new CustomThemeSchedule(
+                    TimeOnly.FromTimeSpan(LightScheduleTimePicker.Time),
+                    TimeOnly.FromTimeSpan(DarkScheduleTimePicker.Time));
+            }
+
             _lastScheduleEvaluation = CustomThemeScheduleEvaluator.Evaluate(
                 _customThemeSchedule,
                 TimeOnly.FromDateTime(DateTime.Now));
@@ -1232,7 +1376,8 @@ public sealed partial class MainWindow : Window, IDisposable
                 : "Preview only; automatic switching is disabled.";
             ScheduleStatusText.Text = string.Format(
                 CultureInfo.CurrentCulture,
-                "Selected: Light {0} · Dark {1}. Now: {2}. Next: {3} at {4} ({5} minute(s)). {6}",
+                "{0}: Light {1} · Dark {2}. Now: {3}. Next: {4} at {5} ({6} minute(s)). {7}",
+                mode == ThemeScheduleMode.SunriseSunset ? "Solar schedule" : "Fixed schedule",
                 _customThemeSchedule.LightTime.ToString("HH:mm", CultureInfo.InvariantCulture),
                 _customThemeSchedule.DarkTime.ToString("HH:mm", CultureInfo.InvariantCulture),
                 _lastScheduleEvaluation.ActiveMode,
@@ -1240,6 +1385,7 @@ public sealed partial class MainWindow : Window, IDisposable
                 FormatTime(_lastScheduleEvaluation.NextTransitionTime),
                 remainingMinutes,
                 automationStatus);
+            CompactScheduleStatusText.Text = ScheduleStatusText.Text;
             RefreshDiagnosticReport();
         }
         catch (ArgumentException exception)
@@ -1259,7 +1405,10 @@ public sealed partial class MainWindow : Window, IDisposable
             LightScheduleTimePicker.Time = result.Schedule.LightTime.ToTimeSpan();
             DarkScheduleTimePicker.Time = result.Schedule.DarkTime.ToTimeSpan();
             CopyAdvancedScheduleToCompact();
-            _savedThemeSchedule = result.Schedule;
+            _fixedThemeSchedule = result.Schedule;
+            _scheduleMode = result.ScheduleMode;
+            _solarLocation = result.SolarLocation;
+            RefreshEffectiveSchedule(DateTimeOffset.Now);
             _scheduleWasLoadedFromDisk = result.WasLoadedFromDisk;
             _scheduleAutomationEnabled = result.AutomationEnabled;
             _reduceBrightnessOnSchedule = result.ReduceBrightness;
@@ -1276,10 +1425,20 @@ public sealed partial class MainWindow : Window, IDisposable
                 CompactScheduleAutomationToggle.IsOn = result.AutomationEnabled;
                 ReduceBrightnessCheckBox.IsChecked = result.ReduceBrightness;
                 CompactReduceBrightnessCheckBox.IsChecked = result.ReduceBrightness;
+                ScheduleModeComboBox.SelectedIndex = (int)result.ScheduleMode;
+                CompactScheduleModeComboBox.SelectedIndex = (int)result.ScheduleMode;
             }
             finally
             {
                 _updatingCompactControls = false;
+            }
+
+            if (result.SolarLocation is not null)
+            {
+                SetSolarLocationInputs(
+                    result.SolarLocation.Latitude,
+                    result.SolarLocation.Longitude,
+                    result.SolarLocation.Label);
             }
 
             _scheduleSettingsError = null;
@@ -1290,6 +1449,7 @@ public sealed partial class MainWindow : Window, IDisposable
                 : "Using the default schedule; select Save schedule to persist it.";
             UpdateCompactScheduleStatus();
             UpdateScheduleOptionsVisibility();
+            UpdateScheduleModeVisibility();
         }
         catch (IOException exception)
         {
@@ -1311,7 +1471,11 @@ public sealed partial class MainWindow : Window, IDisposable
         LightScheduleTimePicker.Time = defaults.LightTime.ToTimeSpan();
         DarkScheduleTimePicker.Time = defaults.DarkTime.ToTimeSpan();
         CopyAdvancedScheduleToCompact();
+        _fixedThemeSchedule = defaults;
         _savedThemeSchedule = defaults;
+        _scheduleMode = ThemeScheduleMode.FixedTimes;
+        _solarLocation = null;
+        _solarTimes = null;
         _scheduleWasLoadedFromDisk = false;
         _scheduleAutomationEnabled = false;
         _reduceBrightnessOnSchedule = false;
@@ -1324,6 +1488,8 @@ public sealed partial class MainWindow : Window, IDisposable
             CompactScheduleAutomationToggle.IsOn = false;
             ReduceBrightnessCheckBox.IsChecked = false;
             CompactReduceBrightnessCheckBox.IsChecked = false;
+            ScheduleModeComboBox.SelectedIndex = (int)ThemeScheduleMode.FixedTimes;
+            CompactScheduleModeComboBox.SelectedIndex = (int)ThemeScheduleMode.FixedTimes;
         }
         finally
         {
@@ -1334,6 +1500,7 @@ public sealed partial class MainWindow : Window, IDisposable
         SchedulePersistenceStatusText.Text = "Saved schedule could not be loaded; using safe defaults.";
         UpdateCompactScheduleStatus();
         UpdateScheduleOptionsVisibility();
+        UpdateScheduleModeVisibility();
     }
 
     private bool SaveScheduleSettings()
@@ -1345,13 +1512,22 @@ public sealed partial class MainWindow : Window, IDisposable
                 TimeOnly.FromTimeSpan(DarkScheduleTimePicker.Time));
             var automationEnabled = ScheduleAutomationToggle.IsOn;
             var reduceBrightness = ReduceBrightnessCheckBox.IsChecked == true;
+            var scheduleMode = GetSelectedScheduleMode();
+            var solarLocation = scheduleMode == ThemeScheduleMode.SunriseSunset
+                ? ReadSolarLocationInputs()
+                : null;
             _themeScheduleSettingsStore.Save(
                 schedule,
                 automationEnabled,
                 reduceBrightness,
                 _brightnessReductionActive,
-                _brightnessRestoreValues);
-            _savedThemeSchedule = schedule;
+                _brightnessRestoreValues,
+                scheduleMode,
+                solarLocation);
+            _fixedThemeSchedule = schedule;
+            _scheduleMode = scheduleMode;
+            _solarLocation = solarLocation;
+            RefreshEffectiveSchedule(DateTimeOffset.Now);
             _scheduleAutomationEnabled = automationEnabled;
             _reduceBrightnessOnSchedule = reduceBrightness;
             _updatingCompactControls = true;
@@ -1375,6 +1551,7 @@ public sealed partial class MainWindow : Window, IDisposable
             RefreshSchedulePreview();
             UpdateCompactScheduleStatus();
             UpdateScheduleOptionsVisibility();
+            UpdateScheduleModeVisibility();
             return true;
         }
         catch (ArgumentException)
@@ -1404,6 +1581,10 @@ public sealed partial class MainWindow : Window, IDisposable
         LightScheduleTimePicker.Time = CompactLightScheduleTimePicker.Time;
         DarkScheduleTimePicker.Time = CompactDarkScheduleTimePicker.Time;
         ReduceBrightnessCheckBox.IsChecked = CompactReduceBrightnessCheckBox.IsChecked;
+        ScheduleModeComboBox.SelectedIndex = CompactScheduleModeComboBox.SelectedIndex;
+        SolarLatitudeNumberBox.Value = CompactSolarLatitudeNumberBox.Value;
+        SolarLongitudeNumberBox.Value = CompactSolarLongitudeNumberBox.Value;
+        SolarLocationLabelTextBox.Text = CompactSolarLocationLabelTextBox.Text;
     }
 
     private void CopyAdvancedScheduleToCompact()
@@ -1411,21 +1592,27 @@ public sealed partial class MainWindow : Window, IDisposable
         CompactLightScheduleTimePicker.Time = LightScheduleTimePicker.Time;
         CompactDarkScheduleTimePicker.Time = DarkScheduleTimePicker.Time;
         CompactReduceBrightnessCheckBox.IsChecked = ReduceBrightnessCheckBox.IsChecked;
+        CompactScheduleModeComboBox.SelectedIndex = ScheduleModeComboBox.SelectedIndex;
+        CompactSolarLatitudeNumberBox.Value = SolarLatitudeNumberBox.Value;
+        CompactSolarLongitudeNumberBox.Value = SolarLongitudeNumberBox.Value;
+        CompactSolarLocationLabelTextBox.Text = SolarLocationLabelTextBox.Text;
     }
 
     private void SaveBrightnessScheduleState()
     {
-        if (_savedThemeSchedule is null)
+        if (_fixedThemeSchedule is null)
         {
             return;
         }
 
         _themeScheduleSettingsStore.Save(
-            _savedThemeSchedule,
+            _fixedThemeSchedule,
             _scheduleAutomationEnabled,
             _reduceBrightnessOnSchedule,
             _brightnessReductionActive,
-            _brightnessRestoreValues);
+            _brightnessRestoreValues,
+            _scheduleMode,
+            _solarLocation);
     }
 
     private void UpdateScheduleOptionsVisibility()
@@ -1443,6 +1630,104 @@ public sealed partial class MainWindow : Window, IDisposable
                 : Visibility.Collapsed;
         ReduceBrightnessCheckBox.Visibility = brightnessOptionVisibility;
         CompactReduceBrightnessCheckBox.Visibility = brightnessOptionVisibility;
+    }
+
+    private void UpdateScheduleModeVisibility()
+    {
+        var solarMode = GetSelectedScheduleMode() == ThemeScheduleMode.SunriseSunset;
+        FixedScheduleOptions.Visibility = solarMode ? Visibility.Collapsed : Visibility.Visible;
+        CompactFixedScheduleOptions.Visibility = solarMode ? Visibility.Collapsed : Visibility.Visible;
+        SolarScheduleOptions.Visibility = solarMode ? Visibility.Visible : Visibility.Collapsed;
+        CompactSolarScheduleOptions.Visibility = solarMode ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private ThemeScheduleMode GetSelectedScheduleMode() =>
+        ScheduleModeComboBox.SelectedIndex == (int)ThemeScheduleMode.SunriseSunset
+            ? ThemeScheduleMode.SunriseSunset
+            : ThemeScheduleMode.FixedTimes;
+
+    private SolarLocation ReadSolarLocationInputs()
+    {
+        if (double.IsNaN(SolarLatitudeNumberBox.Value) ||
+            double.IsNaN(SolarLongitudeNumberBox.Value))
+        {
+            throw new ArgumentException("Latitude and longitude are required for sunrise/sunset scheduling.");
+        }
+
+        return new SolarLocation(
+            SolarLatitudeNumberBox.Value,
+            SolarLongitudeNumberBox.Value,
+            SolarLocationLabelTextBox.Text);
+    }
+
+    private void SetSolarLocationInputs(double latitude, double longitude, string? label)
+    {
+        _updatingCompactControls = true;
+        try
+        {
+            SolarLatitudeNumberBox.Value = latitude;
+            SolarLongitudeNumberBox.Value = longitude;
+            SolarLocationLabelTextBox.Text = label ?? string.Empty;
+            CompactSolarLatitudeNumberBox.Value = latitude;
+            CompactSolarLongitudeNumberBox.Value = longitude;
+            CompactSolarLocationLabelTextBox.Text = label ?? string.Empty;
+        }
+        finally
+        {
+            _updatingCompactControls = false;
+        }
+    }
+
+    private void RefreshEffectiveSchedule(DateTimeOffset now)
+    {
+        if (_scheduleMode == ThemeScheduleMode.FixedTimes || _solarLocation is null)
+        {
+            _solarTimes = null;
+            _savedThemeSchedule = _fixedThemeSchedule;
+            return;
+        }
+
+        var localNow = TimeZoneInfo.ConvertTime(now, TimeZoneInfo.Local);
+        _solarTimes = LocalSolarCalculator.Calculate(
+            DateOnly.FromDateTime(localNow.DateTime),
+            _solarLocation,
+            TimeZoneInfo.Local);
+        _savedThemeSchedule = _solarTimes.Condition == SolarDayCondition.Normal
+            ? new CustomThemeSchedule(
+                TimeOnly.FromDateTime(_solarTimes.Sunrise!.Value.DateTime),
+                TimeOnly.FromDateTime(_solarTimes.Sunset!.Value.DateTime))
+            : null;
+    }
+
+    private ThemeScheduleEvaluation? EvaluateSavedSchedule(DateTimeOffset now)
+    {
+        if (_scheduleMode == ThemeScheduleMode.SunriseSunset)
+        {
+            RefreshEffectiveSchedule(now);
+
+            if (_solarTimes?.Condition is SolarDayCondition.PolarDay or SolarDayCondition.PolarNight)
+            {
+                var activeMode = _solarTimes.Condition == SolarDayCondition.PolarDay
+                    ? ThemeMode.Light
+                    : ThemeMode.Dark;
+                var localNow = TimeZoneInfo.ConvertTime(now, TimeZoneInfo.Local);
+                var nextMidnightLocal = localNow.Date.AddDays(1);
+                var nextMidnight = new DateTimeOffset(
+                    nextMidnightLocal,
+                    TimeZoneInfo.Local.GetUtcOffset(nextMidnightLocal));
+                return new ThemeScheduleEvaluation(
+                    activeMode,
+                    TimeOnly.MinValue,
+                    activeMode,
+                    nextMidnight - now);
+            }
+        }
+
+        return _savedThemeSchedule is null
+            ? null
+            : CustomThemeScheduleEvaluator.Evaluate(
+                _savedThemeSchedule,
+                TimeOnly.FromDateTime(TimeZoneInfo.ConvertTime(now, TimeZoneInfo.Local).DateTime));
     }
 
     private void ReportScheduleSaveFailure(Exception exception)
@@ -1638,15 +1923,18 @@ public sealed partial class MainWindow : Window, IDisposable
 
     private async Task EvaluateAndApplyScheduleAsync()
     {
-        if (!_sessionIsActive || _themeOperationRunning || _savedThemeSchedule is null)
+        if (!_sessionIsActive || _themeOperationRunning)
         {
             return;
         }
 
         var now = DateTimeOffset.Now;
-        var scheduledEvaluation = CustomThemeScheduleEvaluator.Evaluate(
-            _savedThemeSchedule,
-            TimeOnly.FromDateTime(now.LocalDateTime));
+        var scheduledEvaluation = EvaluateSavedSchedule(now);
+        if (scheduledEvaluation is null)
+        {
+            return;
+        }
+
         await ReconcileScheduledBrightnessAsync(scheduledEvaluation.ActiveMode);
 
         if (!_scheduleAutomationEnabled)
@@ -1841,16 +2129,13 @@ public sealed partial class MainWindow : Window, IDisposable
             return;
         }
 
-        if (_savedThemeSchedule is null)
+        var now = DateTimeOffset.Now;
+        var scheduledEvaluation = EvaluateSavedSchedule(now);
+        if (scheduledEvaluation is null)
         {
             _manualScheduleOverrideUntil = null;
             return;
         }
-
-        var now = DateTimeOffset.Now;
-        var scheduledEvaluation = CustomThemeScheduleEvaluator.Evaluate(
-            _savedThemeSchedule,
-            TimeOnly.FromDateTime(now.LocalDateTime));
         if (appliedMode == scheduledEvaluation.ActiveMode)
         {
             _manualScheduleOverrideUntil = null;
@@ -1871,8 +2156,7 @@ public sealed partial class MainWindow : Window, IDisposable
     {
         if (!_sessionIsActive ||
             !_scheduleAutomationEnabled ||
-            !_initialScanStarted ||
-            _savedThemeSchedule is null)
+            !_initialScanStarted)
         {
             _themeScheduleTimer.Cancel();
             return;
@@ -1885,9 +2169,13 @@ public sealed partial class MainWindow : Window, IDisposable
         }
 
         var now = DateTimeOffset.Now;
-        var evaluation = CustomThemeScheduleEvaluator.Evaluate(
-            _savedThemeSchedule,
-            TimeOnly.FromDateTime(now.LocalDateTime));
+        var evaluation = EvaluateSavedSchedule(now);
+        if (evaluation is null)
+        {
+            _themeScheduleTimer.Cancel();
+            return;
+        }
+
         _themeScheduleTimer.Arm(now.Add(evaluation.TimeUntilNextTransition));
     }
 
@@ -2159,7 +2447,8 @@ public sealed partial class MainWindow : Window, IDisposable
 
     private void UpdateCompactScheduleStatus()
     {
-        if (_savedThemeSchedule is null)
+        var evaluation = EvaluateSavedSchedule(DateTimeOffset.Now);
+        if (evaluation is null)
         {
             CompactScheduleStatusText.Text = "No valid saved schedule";
             return;
@@ -2175,9 +2464,17 @@ public sealed partial class MainWindow : Window, IDisposable
             return;
         }
 
-        var evaluation = CustomThemeScheduleEvaluator.Evaluate(
-            _savedThemeSchedule,
-            TimeOnly.FromDateTime(DateTime.Now));
+        if (_solarTimes?.Condition is SolarDayCondition.PolarDay or SolarDayCondition.PolarNight)
+        {
+            var state = _solarTimes.Condition == SolarDayCondition.PolarDay
+                ? "polar day (Light)"
+                : "polar night (Dark)";
+            CompactScheduleStatusText.Text = _scheduleAutomationEnabled
+                ? $"On · {state}"
+                : $"Off · {state}";
+            return;
+        }
+
         CompactScheduleStatusText.Text = _scheduleAutomationEnabled
             ? string.Format(
                 CultureInfo.CurrentCulture,
@@ -2187,7 +2484,7 @@ public sealed partial class MainWindow : Window, IDisposable
             : string.Format(
                 CultureInfo.CurrentCulture,
                 "Off · Light {0}, Dark {1}",
-                FormatTime(_savedThemeSchedule.LightTime),
+                FormatTime(_savedThemeSchedule!.LightTime),
                 FormatTime(_savedThemeSchedule.DarkTime));
     }
 
@@ -2255,6 +2552,14 @@ public sealed partial class MainWindow : Window, IDisposable
         report.Append("Schedule dark time: ").AppendLine(_customThemeSchedule is null ? "Invalid" : _customThemeSchedule.DarkTime.ToString("HH:mm", CultureInfo.InvariantCulture));
         report.Append("Saved schedule light time: ").AppendLine(_savedThemeSchedule?.LightTime.ToString("HH:mm", CultureInfo.InvariantCulture) ?? "Unavailable");
         report.Append("Saved schedule dark time: ").AppendLine(_savedThemeSchedule?.DarkTime.ToString("HH:mm", CultureInfo.InvariantCulture) ?? "Unavailable");
+        report.Append("Schedule mode: ").AppendLine(_scheduleMode.ToString());
+        report.Append("Schedule time zone: ").AppendLine(TimeZoneInfo.Local.Id);
+        report.Append("Solar location label: ").AppendLine(_solarLocation?.Label ?? "None");
+        report.Append("Solar latitude: ").AppendLine(_solarLocation?.Latitude.ToString("F6", CultureInfo.InvariantCulture) ?? "Unavailable");
+        report.Append("Solar longitude: ").AppendLine(_solarLocation?.Longitude.ToString("F6", CultureInfo.InvariantCulture) ?? "Unavailable");
+        report.Append("Solar condition: ").AppendLine(_solarTimes?.Condition.ToString() ?? "Not applicable");
+        report.Append("Solar sunrise: ").AppendLine(_solarTimes?.Sunrise?.ToString("O", CultureInfo.InvariantCulture) ?? "Unavailable");
+        report.Append("Solar sunset: ").AppendLine(_solarTimes?.Sunset?.ToString("O", CultureInfo.InvariantCulture) ?? "Unavailable");
         report.Append("Schedule preview mode: ").AppendLine(_lastScheduleEvaluation?.ActiveMode.ToString() ?? "Unavailable");
         report.Append("Schedule next mode: ").AppendLine(_lastScheduleEvaluation?.NextMode.ToString() ?? "Unavailable");
         report.Append("Schedule persisted: ").AppendLine(_scheduleWasLoadedFromDisk.ToString(CultureInfo.InvariantCulture));
@@ -2274,7 +2579,7 @@ public sealed partial class MainWindow : Window, IDisposable
         report.Append("Schedule timer active: ").AppendLine(_themeScheduleTimer.IsArmed.ToString(CultureInfo.InvariantCulture));
         report.Append("Schedule timer due: ").AppendLine(_themeScheduleTimer.DueTime?.ToString("O", CultureInfo.InvariantCulture) ?? "None");
         report.Append("Schedule manual override until: ").AppendLine(_manualScheduleOverrideUntil?.ToString("O", CultureInfo.InvariantCulture) ?? "None");
-        report.AppendLine("Privacy: device paths and WMI instance names can identify a local display instance; review before sharing");
+        report.AppendLine("Privacy: device paths, WMI instance names, and saved solar coordinates may identify a device or location; review before sharing");
         report.AppendLine(ddcProbes is null
             ? "DDC/CI commands issued: no"
             : _lastDdcVcpWriteResult is not null
