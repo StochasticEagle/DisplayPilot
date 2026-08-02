@@ -1441,6 +1441,12 @@ public sealed partial class MainWindow : Window, IDisposable
         CompactScheduleOptions.Visibility = visibility;
         ScheduleStatusText.Visibility = visibility;
         CompactScheduleStatusText.Visibility = visibility;
+        var brightnessOptionVisibility = visibility == Visibility.Visible &&
+            _activeMonitors.Any(display => HasValidatedWritePath(display.DevicePath))
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+        ReduceBrightnessCheckBox.Visibility = brightnessOptionVisibility;
+        CompactReduceBrightnessCheckBox.Visibility = brightnessOptionVisibility;
     }
 
     private void ReportScheduleSaveFailure(Exception exception)
@@ -2069,7 +2075,7 @@ public sealed partial class MainWindow : Window, IDisposable
                 display.GdiDeviceName,
                 display.FriendlyName,
                 isBrightnessAvailable: false,
-                brightnessPercent: 0,
+                brightnessPercent: 100,
                 isContrastAvailable: contrastAvailable,
                 GetCompactContrast(display.DevicePath, contrastPercent),
                 colorTemperaturePresets,
@@ -2100,6 +2106,8 @@ public sealed partial class MainWindow : Window, IDisposable
         {
             _updatingCompactControls = false;
         }
+
+        UpdateScheduleOptionsVisibility();
     }
 
     private double GetCompactBrightness(string devicePath, double verifiedPercent)

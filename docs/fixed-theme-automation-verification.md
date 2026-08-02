@@ -20,6 +20,8 @@ and arms one Windows thread-pool timer for the next schedule boundary.
 - Optional scheduled brightness reduction records each controllable monitor's exact
   brightness before the Dark boundary. Values above 10% are reduced using integer
   division by two; values at or below 10% are set to 0%.
+- The brightness-reduction option is hidden when no active display exposes a verified
+  DDC/CI or WMI brightness write path.
 - The Light boundary restores each recorded value exactly. Restoration state is
   persisted per monitor so restarting during dark hours cannot halve a display twice.
 - Disabling either schedule automation or brightness reduction restores recorded
