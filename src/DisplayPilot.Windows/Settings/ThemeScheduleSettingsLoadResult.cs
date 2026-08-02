@@ -11,4 +11,6 @@ public sealed record ThemeScheduleSettingsLoadResult(
     bool AutomationEnabled,
     bool ReduceBrightness,
     bool BrightnessReductionActive,
-    IReadOnlyDictionary<string, int> BrightnessRestoreValues);
+    IReadOnlyDictionary<string, int> BrightnessRestoreValues,
+    ThemeScheduleMode ScheduleMode,
+    SolarLocation? SolarLocation);

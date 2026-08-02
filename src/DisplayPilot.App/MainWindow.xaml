@@ -247,7 +247,15 @@
                             </Grid>
 
                             <StackPanel x:Name="CompactScheduleOptions" Spacing="10">
-                                <Grid ColumnSpacing="12">
+                                <ComboBox
+                                    x:Name="CompactScheduleModeComboBox"
+                                    Header="Schedule type"
+                                    SelectionChanged="CompactScheduleModeComboBox_SelectionChanged">
+                                    <ComboBoxItem Content="Fixed times" />
+                                    <ComboBoxItem Content="Sunrise and sunset" />
+                                </ComboBox>
+
+                                <Grid x:Name="CompactFixedScheduleOptions" ColumnSpacing="12">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="*" />
@@ -264,6 +272,65 @@
                                         Header="Dark starts"
                                         MinuteIncrement="1" />
                                 </Grid>
+
+                                <StackPanel x:Name="CompactSolarScheduleOptions" Spacing="8" Visibility="Collapsed">
+                                    <TextBlock
+                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                        Text="Enter decimal coordinates (north/east positive, south/west negative), or request them from Windows."
+                                        TextWrapping="Wrap" />
+                                    <TextBox
+                                        x:Name="CompactSolarLocationLabelTextBox"
+                                        Header="Location label (optional)"
+                                        PlaceholderText="Home" />
+                                    <Grid ColumnSpacing="8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <NumberBox
+                                            x:Name="CompactSolarLatitudeNumberBox"
+                                            Header="Latitude"
+                                            Maximum="90"
+                                            Minimum="-90"
+                                            SmallChange="0.1" />
+                                        <NumberBox
+                                            x:Name="CompactSolarLongitudeNumberBox"
+                                            Grid.Column="1"
+                                            Header="Longitude"
+                                            Maximum="180"
+                                            Minimum="-180"
+                                            SmallChange="0.1" />
+                                    </Grid>
+                                    <Button
+                                        x:Name="CompactUseWindowsLocationButton"
+                                        HorizontalAlignment="Left"
+                                        Click="UseWindowsLocationButton_Click"
+                                        Content="Use Windows location" />
+                                    <TextBlock
+                                        x:Name="CompactSolarLocationStatusText"
+                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                        Text="Coordinates are calculated in the current Windows time zone."
+                                        TextWrapping="Wrap" />
+                                    <Grid x:Name="CompactSolarCalculatedTimes" ColumnSpacing="12" Visibility="Collapsed">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <TimePicker
+                                            x:Name="CompactSolarLightTimePicker"
+                                            ClockIdentifier="24HourClock"
+                                            Header="Light starts"
+                                            IsHitTestVisible="False"
+                                            IsTabStop="False" />
+                                        <TimePicker
+                                            x:Name="CompactSolarDarkTimePicker"
+                                            Grid.Column="1"
+                                            ClockIdentifier="24HourClock"
+                                            Header="Dark starts"
+                                            IsHitTestVisible="False"
+                                            IsTabStop="False" />
+                                    </Grid>
+                                </StackPanel>
 
                                 <CheckBox
                                     x:Name="CompactReduceBrightnessCheckBox"
@@ -582,7 +649,15 @@
                                 Toggled="ScheduleAutomationToggle_Toggled" />
 
                             <StackPanel x:Name="ScheduleOptions" Spacing="10">
-                                <StackPanel Orientation="Horizontal" Spacing="12">
+                                <ComboBox
+                                    x:Name="ScheduleModeComboBox"
+                                    Header="Schedule type"
+                                    SelectionChanged="ScheduleModeComboBox_SelectionChanged">
+                                    <ComboBoxItem Content="Fixed times" />
+                                    <ComboBoxItem Content="Sunrise and sunset" />
+                                </ComboBox>
+
+                                <StackPanel x:Name="FixedScheduleOptions" Orientation="Horizontal" Spacing="12">
                                     <Viewbox Width="220" Stretch="Uniform">
                                         <TimePicker
                                             x:Name="LightScheduleTimePicker"
@@ -596,6 +671,65 @@
                                             ClockIdentifier="24HourClock"
                                             Header="Dark starts" />
                                     </Viewbox>
+                                </StackPanel>
+
+                                <StackPanel x:Name="SolarScheduleOptions" Spacing="8" Visibility="Collapsed">
+                                    <TextBlock
+                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                        Text="Enter decimal coordinates (north/east positive, south/west negative), or request them from Windows. No online service is used."
+                                        TextWrapping="Wrap" />
+                                    <TextBox
+                                        x:Name="SolarLocationLabelTextBox"
+                                        Header="Location label (optional)"
+                                        PlaceholderText="Home" />
+                                    <StackPanel Orientation="Horizontal" Spacing="12">
+                                        <NumberBox
+                                            x:Name="SolarLatitudeNumberBox"
+                                            Width="180"
+                                            Header="Latitude"
+                                            Maximum="90"
+                                            Minimum="-90"
+                                            SmallChange="0.1" />
+                                        <NumberBox
+                                            x:Name="SolarLongitudeNumberBox"
+                                            Width="180"
+                                            Header="Longitude"
+                                            Maximum="180"
+                                            Minimum="-180"
+                                            SmallChange="0.1" />
+                                    </StackPanel>
+                                    <Button
+                                        x:Name="UseWindowsLocationButton"
+                                        HorizontalAlignment="Left"
+                                        Click="UseWindowsLocationButton_Click"
+                                        Content="Use Windows location" />
+                                    <TextBlock
+                                        x:Name="SolarLocationStatusText"
+                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                        Text="Coordinates are calculated in the current Windows time zone."
+                                        TextWrapping="Wrap" />
+                                    <StackPanel
+                                        x:Name="SolarCalculatedTimes"
+                                        Orientation="Horizontal"
+                                        Spacing="12"
+                                        Visibility="Collapsed">
+                                        <Viewbox Width="220" Height="80" Stretch="Uniform">
+                                            <TimePicker
+                                                x:Name="SolarLightTimePicker"
+                                                ClockIdentifier="24HourClock"
+                                                Header="Light starts"
+                                                IsHitTestVisible="False"
+                                                IsTabStop="False" />
+                                        </Viewbox>
+                                        <Viewbox Width="220" Height="80" Stretch="Uniform">
+                                            <TimePicker
+                                                x:Name="SolarDarkTimePicker"
+                                                ClockIdentifier="24HourClock"
+                                                Header="Dark starts"
+                                                IsHitTestVisible="False"
+                                                IsTabStop="False" />
+                                        </Viewbox>
+                                    </StackPanel>
                                 </StackPanel>
 
                                 <CheckBox

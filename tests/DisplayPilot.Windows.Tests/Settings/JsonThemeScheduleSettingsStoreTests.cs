@@ -46,6 +46,8 @@ public sealed class JsonThemeScheduleSettingsStoreTests
         Assert.IsFalse(result.ReduceBrightness);
         Assert.IsFalse(result.BrightnessReductionActive);
         Assert.AreEqual(0, result.BrightnessRestoreValues.Count);
+        Assert.AreEqual(ThemeScheduleMode.FixedTimes, result.ScheduleMode);
+        Assert.IsNull(result.SolarLocation);
         Assert.IsFalse(File.Exists(_settingsPath));
     }
 
@@ -60,7 +62,9 @@ public sealed class JsonThemeScheduleSettingsStoreTests
             automationEnabled: true,
             reduceBrightness: true,
             brightnessReductionActive: true,
-            brightnessRestoreValues: new Dictionary<string, int> { [@"\\.\DISPLAY1"] = 67 });
+            brightnessRestoreValues: new Dictionary<string, int> { [@"\\.\DISPLAY1"] = 67 },
+            scheduleMode: ThemeScheduleMode.SunriseSunset,
+            solarLocation: new SolarLocation(40.7128, -74.0060, "New York"));
         var result = store.Load();
 
         Assert.IsTrue(result.WasLoadedFromDisk);
@@ -69,7 +73,11 @@ public sealed class JsonThemeScheduleSettingsStoreTests
         Assert.IsTrue(result.ReduceBrightness);
         Assert.IsTrue(result.BrightnessReductionActive);
         Assert.AreEqual(67, result.BrightnessRestoreValues[@"\\.\DISPLAY1"]);
-        StringAssert.Contains(File.ReadAllText(_settingsPath, Encoding.UTF8), "\"version\": 3");
+        Assert.AreEqual(ThemeScheduleMode.SunriseSunset, result.ScheduleMode);
+        Assert.AreEqual(40.7128, result.SolarLocation?.Latitude);
+        Assert.AreEqual(-74.0060, result.SolarLocation?.Longitude);
+        Assert.AreEqual("New York", result.SolarLocation?.Label);
+        StringAssert.Contains(File.ReadAllText(_settingsPath, Encoding.UTF8), "\"version\": 4");
     }
 
     [TestMethod]
@@ -89,6 +97,7 @@ public sealed class JsonThemeScheduleSettingsStoreTests
         Assert.IsFalse(result.AutomationEnabled);
         Assert.IsFalse(result.ReduceBrightness);
         Assert.IsFalse(result.BrightnessReductionActive);
+        Assert.AreEqual(ThemeScheduleMode.FixedTimes, result.ScheduleMode);
     }
 
     [TestMethod]
@@ -106,6 +115,7 @@ public sealed class JsonThemeScheduleSettingsStoreTests
         Assert.IsFalse(result.ReduceBrightness);
         Assert.IsFalse(result.BrightnessReductionActive);
         Assert.AreEqual(0, result.BrightnessRestoreValues.Count);
+        Assert.AreEqual(ThemeScheduleMode.FixedTimes, result.ScheduleMode);
     }
 
     [TestMethod]
@@ -142,6 +152,32 @@ public sealed class JsonThemeScheduleSettingsStoreTests
         File.WriteAllText(
             _settingsPath,
             "{\"version\":1,\"lightMinutes\":420,\"darkMinutes\":420}",
+            Encoding.UTF8);
+        var store = new JsonThemeScheduleSettingsStore(_settingsPath);
+
+        Assert.ThrowsExactly<InvalidDataException>(() => store.Load());
+    }
+
+    [TestMethod]
+    public void SolarScheduleWithoutCoordinatesIsRejected()
+    {
+        Directory.CreateDirectory(_testDirectory);
+        File.WriteAllText(
+            _settingsPath,
+            "{\"version\":4,\"lightMinutes\":420,\"darkMinutes\":1140,\"scheduleMode\":1}",
+            Encoding.UTF8);
+        var store = new JsonThemeScheduleSettingsStore(_settingsPath);
+
+        Assert.ThrowsExactly<InvalidDataException>(() => store.Load());
+    }
+
+    [TestMethod]
+    public void UnsupportedScheduleModeIsRejected()
+    {
+        Directory.CreateDirectory(_testDirectory);
+        File.WriteAllText(
+            _settingsPath,
+            "{\"version\":4,\"lightMinutes\":420,\"darkMinutes\":1140,\"scheduleMode\":2}",
             Encoding.UTF8);
         var store = new JsonThemeScheduleSettingsStore(_settingsPath);
 
