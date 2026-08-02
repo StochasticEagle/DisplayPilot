@@ -4,7 +4,7 @@ Test the release installer on Windows 10 and Windows 11 x64.
 
 ## Current validation status
 
-- Windows 11: complete for the 0.9.0 beta release candidate.
+- Windows 11: complete for the 0.9.1 beta release candidate.
 - Windows 10: outstanding and required before the 1.0 release.
 
 ## Install
