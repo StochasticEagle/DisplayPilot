@@ -1,6 +1,12 @@
 name: Build
 
 on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release version without the v prefix
+        required: true
+        default: 0.9.0
   push:
     branches:
       - master
@@ -181,7 +187,7 @@ jobs:
 
   release:
     name: Publish GitHub release
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     needs: build
     runs-on: ubuntu-latest
     permissions:
@@ -204,13 +210,21 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          REQUESTED_VERSION: ${{ inputs.version }}
         run: |
-          version="${GITHUB_REF_NAME#v}"
-          gh release create "$GITHUB_REF_NAME" \
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            tag="$GITHUB_REF_NAME"
+            target_arguments=(--verify-tag)
+          else
+            tag="v${REQUESTED_VERSION}"
+            target_arguments=(--target "$GITHUB_SHA")
+          fi
+          version="${tag#v}"
+          gh release create "$tag" \
             release/DisplayPilot-Setup-win-x64.exe \
             release/DisplayPilot-Setup-win-x64.exe.sha256 \
             --generate-notes \
             --notes "Beta release. Windows 11 installer regression testing is complete; Windows 10 installer regression testing remains outstanding. See the README for supported features and current limitations." \
             --prerelease \
             --title "DisplayPilot ${version} beta" \
-            --verify-tag
+            "${target_arguments[@]}"
