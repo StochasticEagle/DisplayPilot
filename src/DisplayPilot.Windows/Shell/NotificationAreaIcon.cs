@@ -166,7 +166,7 @@ public sealed partial class NotificationAreaIcon : IDisposable
         return !_disposed && SetForegroundWindow(_ownerWindow);
     }
 
-    public bool TryGetCursorMonitorDeviceName(out string gdiDeviceName)
+    public static bool TryGetCursorMonitorDeviceName(out string gdiDeviceName)
     {
         gdiDeviceName = GetCursorMonitorDeviceName();
         return !string.IsNullOrWhiteSpace(gdiDeviceName);
@@ -631,10 +631,8 @@ public sealed partial class NotificationAreaIcon : IDisposable
             return string.Empty;
         }
 
-        fixed (char* device = info.Device)
-        {
-            return new string(device).TrimEnd('\0');
-        }
+        char* device = info.Device;
+        return new string(device).TrimEnd('\0');
     }
 
     private void RestoreAfterExplorerRestart()

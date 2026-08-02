@@ -48,7 +48,6 @@ public sealed partial class MainWindow : Window, IDisposable
     private readonly WmiBrightnessProbeService _wmiProbeService = new();
     private readonly BrightnessControlService _brightnessControlService = new();
     private readonly KeyboardBrightnessSyncService _keyboardBrightnessSyncService = new();
-    private readonly WindowsBrightnessStateService _windowsBrightnessStateService = new();
     private readonly WindowsWmiBrightnessEventWatcher _brightnessEventWatcher = new();
     private readonly WindowsThemeService _themeService = new();
     private readonly JsonThemeScheduleSettingsStore _themeScheduleSettingsStore = new();
@@ -464,7 +463,7 @@ public sealed partial class MainWindow : Window, IDisposable
                         TryGetCurrentBrightnessPercent(target.DevicePath, out var targetPercent))
                     {
                         _lastWindowsBrightnessStateResult = await Task.Run(() =>
-                            _windowsBrightnessStateService.SetCurrentBrightness(targetPercent));
+                            WindowsBrightnessStateService.SetCurrentBrightness(targetPercent));
                     }
                 }
 
@@ -508,7 +507,7 @@ public sealed partial class MainWindow : Window, IDisposable
         _lastKeyboardBrightnessPercent = Math.Clamp(brightnessPercent, 0, 100);
         _pendingKeyboardBrightnessPercent = _lastKeyboardBrightnessPercent;
         _pendingKeyboardTargetGdiDeviceName =
-            _notificationAreaIcon?.TryGetCursorMonitorDeviceName(out var targetName) == true
+            NotificationAreaIcon.TryGetCursorMonitorDeviceName(out var targetName)
                 ? targetName
                 : null;
         if (!_keyboardBrightnessSyncRunning)
@@ -1241,7 +1240,7 @@ public sealed partial class MainWindow : Window, IDisposable
             if (!_windowsBrightnessStateSynchronized)
             {
                 _windowsBrightnessStateSynchronized = true;
-                if (_notificationAreaIcon?.TryGetCursorMonitorDeviceName(out var cursorDisplay) == true)
+                if (NotificationAreaIcon.TryGetCursorMonitorDeviceName(out var cursorDisplay))
                 {
                     var startupMonitor = _activeMonitors.FirstOrDefault(monitor => string.Equals(
                         monitor.GdiDeviceName,
@@ -1252,7 +1251,7 @@ public sealed partial class MainWindow : Window, IDisposable
                     {
                         _startupBrightnessSyncCount = 1;
                         _lastWindowsBrightnessStateResult = await Task.Run(() =>
-                            _windowsBrightnessStateService.SetCurrentBrightness(startupPercent));
+                            WindowsBrightnessStateService.SetCurrentBrightness(startupPercent));
                         _startupBrightnessSyncSuccessCount =
                             _lastWindowsBrightnessStateResult.Value.Succeeded ? 1 : 0;
                     }

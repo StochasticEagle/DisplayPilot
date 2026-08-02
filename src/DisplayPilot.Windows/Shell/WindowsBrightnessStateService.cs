@@ -17,7 +17,7 @@ public sealed partial class WindowsBrightnessStateService
     private static readonly Guid VideoBrightnessSetting =
         new("aded5e82-b909-4619-9949-f5d71dac0bcb");
 
-    public WindowsBrightnessStateResult SetCurrentBrightness(int brightnessPercent)
+    public static WindowsBrightnessStateResult SetCurrentBrightness(int brightnessPercent)
     {
         brightnessPercent = Math.Clamp(brightnessPercent, 0, 100);
         var activeSchemeResult = PowerGetActiveScheme(0, out var schemePointer);
