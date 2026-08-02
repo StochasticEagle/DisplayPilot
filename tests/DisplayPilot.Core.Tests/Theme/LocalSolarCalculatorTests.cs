@@ -46,7 +46,7 @@ public sealed class LocalSolarCalculatorTests
     public void LocationRejectsOutOfRangeCoordinates(double latitude, double longitude)
     {
         Assert.ThrowsExactly<ArgumentOutOfRangeException>(() =>
-            new SolarLocation(latitude, longitude));
+            Assert.IsNotNull(new SolarLocation(latitude, longitude)));
     }
 
     private static void AssertTimeWithin(
