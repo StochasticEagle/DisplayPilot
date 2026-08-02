@@ -1,10 +1,16 @@
 # Installer and startup verification
 
-Test the Release installer artifact on Windows 10 and Windows 11 x64.
+Test the release installer on Windows 10 and Windows 11 x64.
+
+## Current validation status
+
+- Windows 11: complete for the 0.9.0 beta release candidate.
+- Windows 10: outstanding and required before the 1.0 release.
 
 ## Install
 
-1. Download `DisplayPilot-Setup-win-x64.exe` from the workflow artifacts.
+1. Download `DisplayPilot-Setup-win-x64.exe` and its checksum from the applicable
+   GitHub release.
 2. Run the installer and approve the prerequisite elevation request.
 3. Confirm that DisplayPilot is installed under Program Files.
 4. Confirm that the .NET 10 Desktop, Windows App SDK 2.3, and Microsoft Visual

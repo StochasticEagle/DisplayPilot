@@ -1,0 +1,84 @@
+name: DDC/CI hardware report
+description: Report monitor-control compatibility, failures, retries, or incorrect values.
+title: "[DDC/CI]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        DDC/CI behavior depends on the complete display path. Do not post unredacted device paths, serial numbers, WMI instance names, or precise location data.
+  - type: input
+    id: version
+    attributes:
+      label: DisplayPilot version
+      placeholder: 0.9.0 beta
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows edition and build
+      placeholder: Windows 11 24H2, build 26100
+    validations:
+      required: true
+  - type: input
+    id: monitor
+    attributes:
+      label: Monitor manufacturer and model
+    validations:
+      required: true
+  - type: input
+    id: gpu
+    attributes:
+      label: GPU and driver version
+    validations:
+      required: true
+  - type: textarea
+    id: connection
+    attributes:
+      label: Connection path
+      description: List the cable type, adapter, dock, KVM, or direct connection for each affected display.
+      placeholder: GPU DisplayPort -> passive DP-to-HDMI cable -> monitor HDMI 1
+    validations:
+      required: true
+  - type: dropdown
+    id: ddc-enabled
+    attributes:
+      label: DDC/CI enabled in the monitor menu
+      options:
+        - "Yes"
+        - "No"
+        - "No setting is available"
+        - "Unknown"
+    validations:
+      required: true
+  - type: checkboxes
+    id: controls
+    attributes:
+      label: Affected controls
+      options:
+        - label: Brightness
+        - label: Contrast
+        - label: Color temperature
+        - label: Display discovery
+        - label: Other
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Observed behavior
+      description: Include whether retrying succeeds and whether the monitor on-screen value agrees.
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Redacted diagnostic excerpt
+      description: Remove device paths, WMI instance names, serial numbers, usernames, and other identifying information.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Submission checks
+      options:
+        - label: I searched existing issues for this monitor or connection path.
+          required: true
+        - label: I removed sensitive and identifying information.
+          required: true

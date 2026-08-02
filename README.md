@@ -3,6 +3,7 @@
 [![Build](https://github.com/StochasticEagle/DisplayPilot/actions/workflows/build.yml/badge.svg?branch=master)](https://github.com/StochasticEagle/DisplayPilot/actions/workflows/build.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078D4.svg)](#system-requirements)
+[![Release](https://img.shields.io/badge/release-0.9.0%20beta-orange.svg)](https://github.com/StochasticEagle/DisplayPilot/releases)
 
 DisplayPilot is an open-source notification-area application for Windows 10 and
 Windows 11 that combines monitor controls with automatic Light and Dark theme
@@ -12,6 +13,12 @@ Advanced view for device information, configuration, and diagnostics.
 DisplayPilot is a standalone application inspired by the Microsoft PowerToys
 Light Switch and Power Display utilities. It does not require PowerToys and is
 not affiliated with or supported by Microsoft.
+
+## Release status
+
+DisplayPilot 0.9.0 is a beta release. The final installer regression suite has
+passed on Windows 11. Windows 10 installer regression testing remains outstanding,
+and broader mixed-monitor testing is still recommended before a 1.0 release.
 
 ## Features
 
@@ -69,12 +76,10 @@ ARM64 is not currently supported.
 
 ## Installation
 
-The current installer is produced by the GitHub Actions build workflow:
-
-1. Open the latest successful [Build workflow](https://github.com/StochasticEagle/DisplayPilot/actions/workflows/build.yml).
-2. Download the `DisplayPilot-Setup-win-x64` artifact.
-3. Extract and run `DisplayPilot-Setup-win-x64.exe`.
-4. Choose whether DisplayPilot should start when users sign in.
+1. Open the [DisplayPilot releases page](https://github.com/StochasticEagle/DisplayPilot/releases).
+2. Select the most recent beta release and download `DisplayPilot-Setup-win-x64.exe`.
+3. Optionally verify the installer with the accompanying `.sha256` checksum.
+4. Run the installer and choose whether DisplayPilot should start when users sign in.
 
 The installer places DisplayPilot under Program Files and installs the required
 .NET Desktop, Windows App SDK, and Microsoft Visual C++ runtimes system-wide.
@@ -116,6 +121,8 @@ on-screen menu and test a direct display connection where practical.
 - Virtual displays generally do not expose DDC/CI or WMI brightness control.
 - Multi-monitor logic is implemented, but broader testing across mixed monitor,
   adapter, dock, and DPI configurations is still desirable.
+- The complete installer regression suite has passed on Windows 11; the equivalent
+  Windows 10 regression run is pending.
 - Theme automation runs while DisplayPilot is active; start-at-sign-in keeps it
   available across normal desktop sessions.
 - Volume, monitor input switching, display power control, and saved monitor
@@ -177,3 +184,6 @@ extraction policy.
 DisplayPilot is distributed under the [MIT License](LICENSE). Portions are based
 on Microsoft PowerToys source licensed under MIT. See [Notices](NOTICE.md) and
 [Third-party notices](THIRD-PARTY-NOTICES.md) for attribution.
+
+Security reports and contribution requirements are documented in
+[Security policy](SECURITY.md) and [Contributing](CONTRIBUTING.md).

@@ -1,0 +1,63 @@
+name: Bug report
+description: Report a reproducible DisplayPilot defect that is not specific to DDC/CI hardware support.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not include secrets, precise location data, or unredacted device paths. Use the dedicated hardware template for DDC/CI behavior.
+  - type: input
+    id: version
+    attributes:
+      label: DisplayPilot version
+      placeholder: 0.9.0 beta
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows edition and build
+      placeholder: Windows 11 24H2, build 26100
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Problem
+      description: Describe the defect and its impact.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      placeholder: |
+        1. Open...
+        2. Select...
+        3. Observe...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Redacted diagnostics or event details
+      description: Remove display paths, WMI instance names, usernames, and other identifying information.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Submission checks
+      options:
+        - label: I searched existing issues for this problem.
+          required: true
+        - label: I removed sensitive and identifying information.
+          required: true
+        - label: This report does not contain a security vulnerability.
+          required: true

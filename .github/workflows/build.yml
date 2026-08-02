@@ -5,9 +5,17 @@ on:
     branches:
       - master
       - development/**
+    tags:
+      - v*
+    paths-ignore:
+      - "**/*.md"
+      - ".github/ISSUE_TEMPLATE/**"
   pull_request:
     branches:
       - master
+    paths-ignore:
+      - "**/*.md"
+      - ".github/ISSUE_TEMPLATE/**"
 
 permissions:
   contents: read
@@ -170,3 +178,39 @@ jobs:
           name: DisplayPilot-Setup-win-x64
           path: artifacts/installer/DisplayPilot-Setup-win-x64.exe
           if-no-files-found: error
+
+  release:
+    name: Publish GitHub release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download installer
+        uses: actions/download-artifact@v7
+        with:
+          name: DisplayPilot-Setup-win-x64
+          path: release
+
+      - name: Create SHA-256 checksum
+        shell: bash
+        run: |
+          cd release
+          sha256sum DisplayPilot-Setup-win-x64.exe > DisplayPilot-Setup-win-x64.exe.sha256
+
+      - name: Publish beta release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          gh release create "$GITHUB_REF_NAME" \
+            release/DisplayPilot-Setup-win-x64.exe \
+            release/DisplayPilot-Setup-win-x64.exe.sha256 \
+            --generate-notes \
+            --notes "Beta release. Windows 11 installer regression testing is complete; Windows 10 installer regression testing remains outstanding. See the README for supported features and current limitations." \
+            --prerelease \
+            --title "DisplayPilot ${version} beta" \
+            --verify-tag
