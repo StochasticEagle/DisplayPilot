@@ -23,6 +23,15 @@ public sealed partial class NotificationAreaIcon : IDisposable
     private const uint NotifyKeySelect = 0x0401;
     private const uint ContextMenu = 0x007B;
     private const uint SessionChangeMessage = 0x02B1;
+    private const uint RawInputMessage = 0x00FF;
+    private const uint RawInputDataCommand = 0x10000003;
+    private const uint RawInputTypeHid = 2;
+    private const uint RawInputSink = 0x00000100;
+    private const uint RawInputDeviceNotify = 0x00002000;
+    private const ushort ConsumerUsagePage = 0x000C;
+    private const ushort ConsumerControlUsage = 0x0001;
+    private const ushort BrightnessIncrementUsage = 0x006F;
+    private const ushort BrightnessDecrementUsage = 0x0070;
     private const uint ConsoleConnect = 0x1;
     private const uint ConsoleDisconnect = 0x2;
     private const uint RemoteConnect = 0x3;
@@ -65,6 +74,9 @@ public sealed partial class NotificationAreaIcon : IDisposable
     private long _contextMenuRequestCount;
     private string _lastContextMenuStage = "None";
     private int _lastContextMenuError;
+    private bool _rawBrightnessInputRegistered;
+    private int _rawBrightnessInputError;
+    private long _rawBrightnessInputCount;
 
     public NotificationAreaIcon(nint window, byte[]? iconData = null)
     {
@@ -114,6 +126,7 @@ public sealed partial class NotificationAreaIcon : IDisposable
             _sessionNotificationsRegistered = WtsRegisterSessionNotification(
                 _messageWindow,
                 NotifyForThisSession);
+            RegisterBrightnessRawInput();
             var loadedIcon = LoadNotificationIcon(iconData);
             _iconHandle = loadedIcon.Handle;
             _ownsIconHandle = loadedIcon.OwnsHandle;
@@ -143,12 +156,20 @@ public sealed partial class NotificationAreaIcon : IDisposable
 
     public event EventHandler<bool>? SessionActivityChanged;
 
+    public event EventHandler<BrightnessKeyEventArgs>? BrightnessKeyInvoked;
+
     public static uint ActivationGuardDurationMilliseconds =>
         Math.Max(GetDoubleClickTime(), 1u);
 
     public bool TryBringWindowToForeground()
     {
         return !_disposed && SetForegroundWindow(_ownerWindow);
+    }
+
+    public static bool TryGetCursorMonitorDeviceName(out string gdiDeviceName)
+    {
+        gdiDeviceName = GetCursorMonitorDeviceName();
+        return !string.IsNullOrWhiteSpace(gdiDeviceName);
     }
 
     public void InvokeContextMenuCommand(NotificationAreaMenuCommand command)
@@ -173,6 +194,9 @@ public sealed partial class NotificationAreaIcon : IDisposable
                 _contextMenuRequestCount,
                 _lastContextMenuStage,
                 _lastContextMenuError,
+                _rawBrightnessInputRegistered,
+                _rawBrightnessInputError,
+                _rawBrightnessInputCount,
                 _recentNotificationCodes.ToArray());
         }
     }
@@ -464,6 +488,12 @@ public sealed partial class NotificationAreaIcon : IDisposable
             return 0;
         }
 
+        if (message == RawInputMessage)
+        {
+            ProcessRawInput(lParam);
+            return DefWindowProc(window, message, wParam, lParam);
+        }
+
         if (message != CallbackMessage)
         {
             return DefWindowProc(window, message, wParam, lParam);
@@ -481,6 +511,128 @@ public sealed partial class NotificationAreaIcon : IDisposable
         }
 
         return 0;
+    }
+
+    private void RegisterBrightnessRawInput()
+    {
+        var device = new RawInputDevice
+        {
+            UsagePage = ConsumerUsagePage,
+            Usage = ConsumerControlUsage,
+            Flags = RawInputSink | RawInputDeviceNotify,
+            TargetWindow = _messageWindow,
+        };
+        _rawBrightnessInputRegistered = RegisterRawInputDevices(
+            in device,
+            1,
+            (uint)Marshal.SizeOf<RawInputDevice>());
+        _rawBrightnessInputError = _rawBrightnessInputRegistered
+            ? 0
+            : Marshal.GetLastPInvokeError();
+    }
+
+    private void ProcessRawInput(nint rawInputHandle)
+    {
+        var headerSize = (uint)Marshal.SizeOf<RawInputHeader>();
+        uint bufferSize = 0;
+        if (GetRawInputData(
+                rawInputHandle,
+                RawInputDataCommand,
+                0,
+                ref bufferSize,
+                headerSize) != 0 || bufferSize < headerSize + 8)
+        {
+            return;
+        }
+
+        var buffer = Marshal.AllocHGlobal(checked((int)bufferSize));
+        try
+        {
+            var copiedSize = bufferSize;
+            if (GetRawInputData(
+                    rawInputHandle,
+                    RawInputDataCommand,
+                    buffer,
+                    ref copiedSize,
+                    headerSize) != copiedSize)
+            {
+                return;
+            }
+
+            var header = Marshal.PtrToStructure<RawInputHeader>(buffer);
+            if (header.Type != RawInputTypeHid)
+            {
+                return;
+            }
+
+            var hidOffset = checked((int)headerSize);
+            var reportSize = Marshal.ReadInt32(buffer, hidOffset);
+            var reportCount = Marshal.ReadInt32(buffer, hidOffset + 4);
+            if (reportSize <= 0 || reportCount <= 0)
+            {
+                return;
+            }
+
+            var reportBytes = checked(reportSize * reportCount);
+            if ((uint)(hidOffset + 8 + reportBytes) > copiedSize)
+            {
+                return;
+            }
+
+            var reports = new byte[reportBytes];
+            Marshal.Copy(buffer + hidOffset + 8, reports, 0, reports.Length);
+            for (var reportIndex = 0; reportIndex < reportCount; reportIndex++)
+            {
+                var reportStart = reportIndex * reportSize;
+                for (var offset = 0; offset + 1 < reportSize; offset++)
+                {
+                    var usage = (ushort)(reports[reportStart + offset] |
+                        (reports[reportStart + offset + 1] << 8));
+                    if (usage is BrightnessIncrementUsage or BrightnessDecrementUsage)
+                    {
+                        _rawBrightnessInputCount++;
+                        BrightnessKeyInvoked?.Invoke(
+                            this,
+                            new BrightnessKeyEventArgs(
+                                usage == BrightnessIncrementUsage
+                                    ? BrightnessKeyDirection.Increase
+                                    : BrightnessKeyDirection.Decrease,
+                                GetCursorMonitorDeviceName()));
+                        return;
+                    }
+                }
+            }
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(buffer);
+        }
+    }
+
+    private static unsafe string GetCursorMonitorDeviceName()
+    {
+        if (!GetCursorPos(out var point))
+        {
+            return string.Empty;
+        }
+
+        var monitor = MonitorFromPoint(point, 2);
+        if (monitor == 0)
+        {
+            return string.Empty;
+        }
+
+        var info = new MonitorInfoEx
+        {
+            Size = (uint)sizeof(MonitorInfoEx),
+        };
+        if (!GetMonitorInfo(monitor, ref info))
+        {
+            return string.Empty;
+        }
+
+        char* device = info.Device;
+        return new string(device).TrimEnd('\0');
     }
 
     private void RestoreAfterExplorerRestart()
@@ -632,6 +784,32 @@ public sealed partial class NotificationAreaIcon : IDisposable
     [LibraryImport("user32.dll")]
     private static partial uint GetDoubleClickTime();
 
+    [LibraryImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool GetCursorPos(out NativePoint point);
+
+    [LibraryImport("user32.dll")]
+    private static partial nint MonitorFromPoint(NativePoint point, uint flags);
+
+    [LibraryImport("user32.dll", EntryPoint = "GetMonitorInfoW", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool GetMonitorInfo(nint monitor, ref MonitorInfoEx monitorInfo);
+
+    [LibraryImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool RegisterRawInputDevices(
+        in RawInputDevice devices,
+        uint deviceCount,
+        uint structureSize);
+
+    [LibraryImport("user32.dll", SetLastError = true)]
+    private static partial uint GetRawInputData(
+        nint rawInput,
+        uint command,
+        nint data,
+        ref uint size,
+        uint headerSize);
+
     [LibraryImport("wtsapi32.dll", EntryPoint = "WTSRegisterSessionNotification", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool WtsRegisterSessionNotification(nint window, uint flags);
@@ -695,12 +873,62 @@ public sealed partial class NotificationAreaIcon : IDisposable
         internal int Bottom;
     }
 
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativePoint
+    {
+        internal int X;
+        internal int Y;
+    }
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private unsafe struct MonitorInfoEx
+    {
+        internal uint Size;
+        internal NativeRect Monitor;
+        internal NativeRect Work;
+        internal uint Flags;
+        internal fixed char Device[32];
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct RawInputDevice
+    {
+        internal ushort UsagePage;
+        internal ushort Usage;
+        internal uint Flags;
+        internal nint TargetWindow;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct RawInputHeader
+    {
+        internal uint Type;
+        internal uint Size;
+        internal nint Device;
+        internal nuint WParam;
+    }
+
 }
 
 public enum NotificationAreaMenuCommand : uint
 {
     Advanced = 1,
     Exit = 2,
+}
+
+public enum BrightnessKeyDirection
+{
+    Decrease = -1,
+    Increase = 1,
+}
+
+public sealed class BrightnessKeyEventArgs(
+    BrightnessKeyDirection direction,
+    string gdiDeviceName) : EventArgs
+{
+    public BrightnessKeyDirection Direction { get; } = direction;
+
+    public string GdiDeviceName { get; } = gdiDeviceName;
 }
 
 public readonly record struct NotificationAreaIconDiagnostics(
@@ -711,4 +939,7 @@ public readonly record struct NotificationAreaIconDiagnostics(
     long ContextMenuRequestCount,
     string LastContextMenuStage,
     int LastContextMenuError,
+    bool RawBrightnessInputRegistered,
+    int RawBrightnessInputError,
+    long RawBrightnessInputCount,
     IReadOnlyList<uint> RecentNotificationCodes);

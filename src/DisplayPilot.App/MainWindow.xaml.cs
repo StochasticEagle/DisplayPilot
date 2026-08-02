@@ -47,6 +47,8 @@ public sealed partial class MainWindow : Window, IDisposable
     private readonly DdcBrightnessProbeService _ddcProbeService = new();
     private readonly WmiBrightnessProbeService _wmiProbeService = new();
     private readonly BrightnessControlService _brightnessControlService = new();
+    private readonly KeyboardBrightnessSyncService _keyboardBrightnessSyncService = new();
+    private readonly WindowsWmiBrightnessEventWatcher _brightnessEventWatcher = new();
     private readonly WindowsThemeService _themeService = new();
     private readonly JsonThemeScheduleSettingsStore _themeScheduleSettingsStore = new();
     private readonly WindowsBoundaryTimer _themeScheduleTimer = new();
@@ -99,6 +101,24 @@ public sealed partial class MainWindow : Window, IDisposable
     private long _compactShowBlockedUntil;
     private bool _exitRequested;
     private bool _disposed;
+    private bool _keyboardBrightnessSyncRunning;
+    private int? _pendingKeyboardBrightnessPercent;
+    private string? _pendingKeyboardTargetGdiDeviceName;
+    private long _keyboardBrightnessEventCount;
+    private DateTimeOffset? _lastKeyboardBrightnessEventUtc;
+    private int? _lastKeyboardBrightnessPercent;
+    private int _lastKeyboardBrightnessTargetCount;
+    private int _lastKeyboardBrightnessSuccessCount;
+    private readonly Dictionary<string, int> _pendingRawBrightnessDeltas =
+        new(StringComparer.OrdinalIgnoreCase);
+    private CancellationTokenSource? _rawBrightnessCancellation;
+    private bool _windowsBrightnessStateSynchronized;
+    private int _startupBrightnessSyncCount;
+    private int _startupBrightnessSyncSuccessCount;
+    private string? _lastKeyboardTargetGdiDeviceName;
+    private WindowsBrightnessStateResult? _lastWindowsBrightnessStateResult;
+    private int? _suppressedWmiBrightnessPercent;
+    private DateTimeOffset _suppressWmiBrightnessUntilUtc;
     private NotificationAreaIcon? _notificationAreaIcon;
     private TrayContextMenuWindow? _trayContextMenuWindow;
     private StartupRegistrationStatus _startupRegistrationStatus =
@@ -117,6 +137,8 @@ public sealed partial class MainWindow : Window, IDisposable
 
         ConfigureCompactWindow();
         _themeScheduleTimer.Elapsed += ThemeScheduleTimer_Elapsed;
+        _brightnessEventWatcher.BrightnessChanged += BrightnessEventWatcher_BrightnessChanged;
+        _brightnessEventWatcher.TryStart();
         Activated += MainWindow_Activated;
         AppWindow.Closing += AppWindow_Closing;
         Closed += MainWindow_Closed;
@@ -129,7 +151,7 @@ public sealed partial class MainWindow : Window, IDisposable
     private static string GetDisplayVersion()
     {
         var version = typeof(MainWindow).Assembly.GetName().Version;
-        return version is null ? "0.9.0" : version.ToString(3);
+        return version is null ? "0.9.1" : version.ToString(3);
     }
 
     public bool InitializeNotificationArea()
@@ -146,6 +168,8 @@ public sealed partial class MainWindow : Window, IDisposable
             _notificationAreaIcon.ExitInvoked += NotificationAreaIcon_ExitInvoked;
             _notificationAreaIcon.SessionActivityChanged +=
                 NotificationAreaIcon_SessionActivityChanged;
+            _notificationAreaIcon.BrightnessKeyInvoked +=
+                NotificationAreaIcon_BrightnessKeyInvoked;
             return true;
         }
         catch (Win32Exception exception)
@@ -205,6 +229,10 @@ public sealed partial class MainWindow : Window, IDisposable
         {
             _displayScanStarted = true;
             await RefreshDisplaysAsync();
+            if (_activeMonitors.Count > 0)
+            {
+                await ProbeDdcBrightnessAsync();
+            }
             await EvaluateAndApplyScheduleAsync();
         }
     }
@@ -324,6 +352,249 @@ public sealed partial class MainWindow : Window, IDisposable
         _ = DispatcherQueue.TryEnqueue(() => SetSessionActivity(isActive));
     }
 
+    private void BrightnessEventWatcher_BrightnessChanged(
+        object? sender,
+        WmiBrightnessChangedEventArgs args)
+    {
+        if (!args.Active)
+        {
+            return;
+        }
+
+        _ = DispatcherQueue.TryEnqueue(() => QueueKeyboardBrightnessSync(args.Brightness));
+    }
+
+    private void NotificationAreaIcon_BrightnessKeyInvoked(
+        object? sender,
+        BrightnessKeyEventArgs args)
+    {
+        _ = DispatcherQueue.TryEnqueue(() => QueueRawBrightnessKey(args));
+    }
+
+    private void QueueRawBrightnessKey(BrightnessKeyEventArgs args)
+    {
+        if (string.IsNullOrWhiteSpace(args.GdiDeviceName))
+        {
+            return;
+        }
+
+        _pendingRawBrightnessDeltas.TryGetValue(args.GdiDeviceName, out var pendingDelta);
+        _pendingRawBrightnessDeltas[args.GdiDeviceName] = pendingDelta +
+            (args.Direction == BrightnessKeyDirection.Increase ? 10 : -10);
+        _lastKeyboardTargetGdiDeviceName = args.GdiDeviceName;
+        _rawBrightnessCancellation?.Cancel();
+        var cancellation = new CancellationTokenSource();
+        _rawBrightnessCancellation = cancellation;
+        _ = ApplyRawBrightnessKeysAsync(cancellation);
+    }
+
+    private async Task ApplyRawBrightnessKeysAsync(CancellationTokenSource cancellation)
+    {
+        try
+        {
+            await Task.Delay(BrightnessChangeDelayMilliseconds, cancellation.Token);
+            var adjustments = _pendingRawBrightnessDeltas.ToArray();
+            _pendingRawBrightnessDeltas.Clear();
+            if (adjustments.Length == 0 || !_sessionIsActive)
+            {
+                return;
+            }
+
+            await InitializeAsync();
+            while (_displayOperationRunning && _sessionIsActive)
+            {
+                await Task.Delay(BrightnessChangeDelayMilliseconds, cancellation.Token);
+            }
+
+            foreach (var pair in adjustments)
+            {
+                var internalProbe = _lastWmiProbes.FirstOrDefault(probe =>
+                    string.Equals(
+                        probe.Display.GdiDeviceName,
+                        pair.Key,
+                        StringComparison.OrdinalIgnoreCase) &&
+                    probe.Status == WmiBrightnessProbeStatus.ReadSucceeded);
+                if (internalProbe is not null)
+                {
+                    _suppressedWmiBrightnessPercent = Math.Clamp(
+                        internalProbe.CurrentBrightness + pair.Value,
+                        0,
+                        100);
+                    _suppressWmiBrightnessUntilUtc = DateTimeOffset.UtcNow.AddSeconds(2);
+                }
+            }
+
+            _displayOperationRunning = true;
+            try
+            {
+                var adjustment = await Task.Run(() =>
+                {
+                    var results = new List<BrightnessWriteResult>();
+                    foreach (var pair in adjustments)
+                    {
+                        results.AddRange(_keyboardBrightnessSyncService.AdjustBy(
+                            pair.Value,
+                            pair.Key,
+                            _lastDdcProbes,
+                            _lastWmiProbes));
+                    }
+
+                    var probes = (
+                        Ddc: _ddcProbeService.ProbeBrightness(_activeMonitors),
+                        Wmi: _wmiProbeService.ProbeBrightness(_activeMonitors));
+                    return (Results: results, Probes: probes);
+                }, cancellation.Token);
+
+                _lastKeyboardBrightnessTargetCount = adjustment.Results.Count;
+                _lastKeyboardBrightnessSuccessCount =
+                    adjustment.Results.Count(result => result.Succeeded);
+                _lastBrightnessWriteResult = adjustment.Results.Count == 0
+                    ? null
+                    : adjustment.Results[^1];
+                _lastDdcProbes = adjustment.Probes.Ddc;
+                _lastWmiProbes = adjustment.Probes.Wmi;
+                if (_lastKeyboardTargetGdiDeviceName is { } targetName)
+                {
+                    var target = _activeMonitors.FirstOrDefault(monitor => string.Equals(
+                        monitor.GdiDeviceName,
+                        targetName,
+                        StringComparison.OrdinalIgnoreCase));
+                    if (target is not null &&
+                        TryGetCurrentBrightnessPercent(target.DevicePath, out var targetPercent))
+                    {
+                        _lastWindowsBrightnessStateResult = await Task.Run(() =>
+                            WindowsBrightnessStateService.SetCurrentBrightness(targetPercent));
+                    }
+                }
+
+                UpdateCompactMonitorCards();
+                RefreshDiagnosticReport();
+            }
+            finally
+            {
+                _displayOperationRunning = false;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // A repeated key replaces the pending aggregate before it is written.
+        }
+        finally
+        {
+            if (ReferenceEquals(_rawBrightnessCancellation, cancellation))
+            {
+                _rawBrightnessCancellation = null;
+            }
+
+            cancellation.Dispose();
+        }
+    }
+
+    private void QueueKeyboardBrightnessSync(int brightnessPercent)
+    {
+        if (_suppressedWmiBrightnessPercent == brightnessPercent &&
+            DateTimeOffset.UtcNow <= _suppressWmiBrightnessUntilUtc)
+        {
+            _suppressedWmiBrightnessPercent = null;
+            return;
+        }
+
+        _pendingRawBrightnessDeltas.Clear();
+        _rawBrightnessCancellation?.Cancel();
+
+        _keyboardBrightnessEventCount++;
+        _lastKeyboardBrightnessEventUtc = DateTimeOffset.UtcNow;
+        _lastKeyboardBrightnessPercent = Math.Clamp(brightnessPercent, 0, 100);
+        _pendingKeyboardBrightnessPercent = _lastKeyboardBrightnessPercent;
+        _pendingKeyboardTargetGdiDeviceName =
+            NotificationAreaIcon.TryGetCursorMonitorDeviceName(out var targetName)
+                ? targetName
+                : null;
+        if (!_keyboardBrightnessSyncRunning)
+        {
+            _ = ProcessKeyboardBrightnessSyncAsync();
+        }
+    }
+
+    private async Task ProcessKeyboardBrightnessSyncAsync()
+    {
+        _keyboardBrightnessSyncRunning = true;
+        try
+        {
+            while (_pendingKeyboardBrightnessPercent is { } requestedPercent)
+            {
+                _pendingKeyboardBrightnessPercent = null;
+                var targetGdiDeviceName = _pendingKeyboardTargetGdiDeviceName;
+                _pendingKeyboardTargetGdiDeviceName = null;
+                await InitializeAsync();
+                if (!_sessionIsActive || string.IsNullOrWhiteSpace(targetGdiDeviceName))
+                {
+                    continue;
+                }
+
+                while (_displayOperationRunning && _sessionIsActive)
+                {
+                    await Task.Delay(BrightnessChangeDelayMilliseconds);
+                }
+
+                if (!_sessionIsActive)
+                {
+                    continue;
+                }
+
+                _displayOperationRunning = true;
+                try
+                {
+                    var synchronization = await Task.Run(() =>
+                    {
+                        var results = _keyboardBrightnessSyncService.Synchronize(
+                            requestedPercent,
+                            targetGdiDeviceName,
+                            _lastDdcProbes,
+                            _lastWmiProbes);
+                        var probes = (
+                            Ddc: _ddcProbeService.ProbeBrightness(_activeMonitors),
+                            Wmi: _wmiProbeService.ProbeBrightness(_activeMonitors));
+                        return (Results: results, Probes: probes);
+                    });
+
+                    _lastKeyboardBrightnessTargetCount = synchronization.Results.Count;
+                    _lastKeyboardBrightnessSuccessCount =
+                        synchronization.Results.Count(result => result.Succeeded);
+                    _lastBrightnessWriteResult = synchronization.Results.Count == 0
+                        ? null
+                        : synchronization.Results[^1];
+                    _lastDdcProbes = synchronization.Probes.Ddc;
+                    _lastWmiProbes = synchronization.Probes.Wmi;
+                    UpdateCompactMonitorCards();
+                    RefreshDiagnosticReport();
+                }
+                finally
+                {
+                    _displayOperationRunning = false;
+                }
+            }
+        }
+        catch (Win32Exception exception)
+        {
+            CompactStatusText.Text = "Keyboard brightness synchronization failed. Open Advanced for details.";
+            _diagnosticReport = BuildDiagnosticReport(
+                _activeMonitors,
+                _lastDdcProbes,
+                _lastWmiProbes,
+                _lastBrightnessWriteResult,
+                exception);
+        }
+        finally
+        {
+            _keyboardBrightnessSyncRunning = false;
+            if (_pendingKeyboardBrightnessPercent is not null)
+            {
+                _ = ProcessKeyboardBrightnessSyncAsync();
+            }
+        }
+    }
+
     private async void SetSessionActivity(bool isActive)
     {
         if (_sessionIsActive == isActive)
@@ -432,6 +703,8 @@ public sealed partial class MainWindow : Window, IDisposable
         _pendingBrightnessPercent = requestedPercent;
         _brightnessChangeCancellation?.Cancel();
         _brightnessChangeCancellation?.Dispose();
+        _rawBrightnessCancellation?.Cancel();
+        _rawBrightnessCancellation?.Dispose();
         _contrastChangeCancellation?.Cancel();
         _contrastChangeCancellation?.Dispose();
         var cancellation = new CancellationTokenSource();
@@ -964,6 +1237,26 @@ public sealed partial class MainWindow : Window, IDisposable
             _lastContrastProbes = probes.Contrast;
             _lastColorTemperatureProbes = probes.ColorTemperature;
             _lastDdcCapabilities = probes.Capabilities;
+            if (!_windowsBrightnessStateSynchronized)
+            {
+                _windowsBrightnessStateSynchronized = true;
+                if (NotificationAreaIcon.TryGetCursorMonitorDeviceName(out var cursorDisplay))
+                {
+                    var startupMonitor = _activeMonitors.FirstOrDefault(monitor => string.Equals(
+                        monitor.GdiDeviceName,
+                        cursorDisplay,
+                        StringComparison.OrdinalIgnoreCase));
+                    if (startupMonitor is not null &&
+                        TryGetCurrentBrightnessPercent(startupMonitor.DevicePath, out var startupPercent))
+                    {
+                        _startupBrightnessSyncCount = 1;
+                        _lastWindowsBrightnessStateResult = await Task.Run(() =>
+                            WindowsBrightnessStateService.SetCurrentBrightness(startupPercent));
+                        _startupBrightnessSyncSuccessCount =
+                            _lastWindowsBrightnessStateResult.Value.Succeeded ? 1 : 0;
+                    }
+                }
+            }
             UpdateCompactMonitorCards();
 
             var readableCount = _activeMonitors.Count(monitor =>
@@ -1046,6 +1339,12 @@ public sealed partial class MainWindow : Window, IDisposable
 
         try
         {
+            if (wmiProbe.Status == WmiBrightnessProbeStatus.ReadSucceeded)
+            {
+                _suppressedWmiBrightnessPercent = Math.Clamp(requestedPercent, 0, 100);
+                _suppressWmiBrightnessUntilUtc = DateTimeOffset.UtcNow.AddSeconds(2);
+            }
+
             writeResult = await Task.Run(() => _brightnessControlService.SetBrightness(
                 display,
                 ddcProbe,
@@ -1828,6 +2127,8 @@ public sealed partial class MainWindow : Window, IDisposable
         AppWindow.Closing -= AppWindow_Closing;
         Closed -= MainWindow_Closed;
         _themeScheduleTimer.Elapsed -= ThemeScheduleTimer_Elapsed;
+        _brightnessEventWatcher.BrightnessChanged -= BrightnessEventWatcher_BrightnessChanged;
+        _brightnessEventWatcher.Dispose();
         if (_notificationAreaIcon is not null)
         {
             _notificationAreaIcon.PrimaryInvoked -= NotificationAreaIcon_PrimaryInvoked;
@@ -1836,6 +2137,8 @@ public sealed partial class MainWindow : Window, IDisposable
             _notificationAreaIcon.ExitInvoked -= NotificationAreaIcon_ExitInvoked;
             _notificationAreaIcon.SessionActivityChanged -=
                 NotificationAreaIcon_SessionActivityChanged;
+            _notificationAreaIcon.BrightnessKeyInvoked -=
+                NotificationAreaIcon_BrightnessKeyInvoked;
             _notificationAreaIcon.Dispose();
         }
 
@@ -2568,10 +2871,42 @@ public sealed partial class MainWindow : Window, IDisposable
             notificationDiagnostics is null
                 ? "None"
                 : $"0x{unchecked((uint)notificationDiagnostics.Value.LastContextMenuError):X8}");
+        report.Append("Raw brightness input registered: ").AppendLine(
+            (notificationDiagnostics?.RawBrightnessInputRegistered ?? false).ToString(CultureInfo.InvariantCulture));
+        report.Append("Raw brightness input error: ").AppendLine(
+            notificationDiagnostics is null
+                ? "None"
+                : $"0x{unchecked((uint)notificationDiagnostics.Value.RawBrightnessInputError):X8}");
+        report.Append("Raw brightness input events: ").AppendLine(
+            (notificationDiagnostics?.RawBrightnessInputCount ?? 0).ToString(CultureInfo.InvariantCulture));
+        report.Append("Last brightness-key target: ").AppendLine(
+            _lastKeyboardTargetGdiDeviceName ?? "None");
         report.Append("Window mode: ").AppendLine(_isCompactMode ? "Compact" : "Advanced");
         report.Append("Window visible: ").AppendLine(AppWindow.IsVisible.ToString(CultureInfo.InvariantCulture));
         report.Append("Start at sign-in: ").AppendLine(_startupRegistrationStatus.ToString());
         report.Append("Startup registration error: ").AppendLine(_startupRegistrationError ?? "None");
+        report.Append("Brightness-key watcher active: ").AppendLine(_brightnessEventWatcher.IsActive.ToString(CultureInfo.InvariantCulture));
+        report.Append("Brightness-key watcher error: ").AppendLine(
+            _brightnessEventWatcher.ErrorMessage is null
+                ? "None"
+                : $"0x{unchecked((uint)_brightnessEventWatcher.ErrorCode):X8} {_brightnessEventWatcher.ErrorMessage}");
+        report.Append("Brightness-key events: ").AppendLine(_keyboardBrightnessEventCount.ToString(CultureInfo.InvariantCulture));
+        report.Append("Last brightness-key event UTC: ").AppendLine(
+            _lastKeyboardBrightnessEventUtc?.ToString("O", CultureInfo.InvariantCulture) ?? "None");
+        report.Append("Last brightness-key percent: ").AppendLine(
+            _lastKeyboardBrightnessPercent?.ToString(CultureInfo.InvariantCulture) ?? "None");
+        report.Append("Last brightness-key DDC targets: ").AppendLine(_lastKeyboardBrightnessTargetCount.ToString(CultureInfo.InvariantCulture));
+        report.Append("Last brightness-key DDC successes: ").AppendLine(_lastKeyboardBrightnessSuccessCount.ToString(CultureInfo.InvariantCulture));
+        report.Append("Startup Windows brightness sync targets: ").AppendLine(_startupBrightnessSyncCount.ToString(CultureInfo.InvariantCulture));
+        report.Append("Startup Windows brightness sync successes: ").AppendLine(_startupBrightnessSyncSuccessCount.ToString(CultureInfo.InvariantCulture));
+        report.Append("Last Windows brightness state percent: ").AppendLine(
+            _lastWindowsBrightnessStateResult?.BrightnessPercent.ToString(CultureInfo.InvariantCulture) ?? "None");
+        report.Append("Last Windows brightness state synchronized: ").AppendLine(
+            _lastWindowsBrightnessStateResult?.Succeeded.ToString(CultureInfo.InvariantCulture) ?? "Not attempted");
+        report.Append("Last Windows brightness state error: ").AppendLine(
+            _lastWindowsBrightnessStateResult is null
+                ? "None"
+                : $"0x{_lastWindowsBrightnessStateResult.Value.ErrorCode:X8}");
         report.Append("Display paths: ").AppendLine(monitors.Count.ToString(CultureInfo.InvariantCulture));
         report.Append("Theme apps: ").AppendLine(_themeState is null ? "Unknown" : _themeState.AppsUseLightTheme ? "Light" : "Dark");
         report.Append("Theme Windows: ").AppendLine(_themeState is null ? "Unknown" : _themeState.SystemUsesLightTheme ? "Light" : "Dark");

@@ -30,11 +30,10 @@ public partial class App : Application
             return;
         }
 
-        var startupLaunch = IsStartupLaunch(args.Arguments);
         var window = new MainWindow();
         _window = window;
         var notificationAreaReady = window.InitializeNotificationArea();
-        await window.InitializeAsync(includeDisplays: !startupLaunch);
+        await window.InitializeAsync();
         if (!notificationAreaReady)
         {
             window.Activate();
