@@ -8,4 +8,7 @@ namespace DisplayPilot.Windows.Settings;
 public sealed record ThemeScheduleSettingsLoadResult(
     CustomThemeSchedule Schedule,
     bool WasLoadedFromDisk,
-    bool AutomationEnabled);
+    bool AutomationEnabled,
+    bool ReduceBrightness,
+    bool BrightnessReductionActive,
+    IReadOnlyDictionary<string, int> BrightnessRestoreValues);

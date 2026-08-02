@@ -118,12 +118,14 @@
                                             <TextBlock
                                                 Grid.Row="2"
                                                 FontWeight="SemiBold"
-                                                Text="Contrast" />
+                                                Text="Contrast"
+                                                Visibility="{x:Bind ContrastVisibility, Mode=OneTime}" />
                                             <TextBlock
                                                 Grid.Row="2"
                                                 Grid.Column="1"
                                                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                                Text="{x:Bind ContrastText, Mode=OneWay}" />
+                                                Text="{x:Bind ContrastText, Mode=OneWay}"
+                                                Visibility="{x:Bind ContrastVisibility, Mode=OneTime}" />
                                             <Slider
                                                 Grid.Row="3"
                                                 Grid.ColumnSpan="2"
@@ -133,12 +135,14 @@
                                                 StepFrequency="1"
                                                 Tag="{x:Bind}"
                                                 ValueChanged="CompactContrastSlider_ValueChanged"
-                                                Value="{x:Bind ContrastPercent, Mode=TwoWay}" />
+                                                Value="{x:Bind ContrastPercent, Mode=TwoWay}"
+                                                Visibility="{x:Bind ContrastVisibility, Mode=OneTime}" />
                                             <TextBlock
                                                 Grid.Row="4"
                                                 VerticalAlignment="Center"
                                                 FontWeight="SemiBold"
-                                                Text="Color temperature" />
+                                                Text="Color temperature"
+                                                Visibility="{x:Bind ColorTemperatureVisibility, Mode=OneTime}" />
                                             <ComboBox
                                                 Grid.Row="4"
                                                 Grid.Column="1"
@@ -148,17 +152,20 @@
                                                 ItemsSource="{x:Bind ColorTemperaturePresets, Mode=OneTime}"
                                                 SelectionChanged="CompactColorTemperature_SelectionChanged"
                                                 SelectedItem="{x:Bind SelectedColorTemperaturePreset, Mode=TwoWay}"
-                                                Tag="{x:Bind}" />
+                                                Tag="{x:Bind}"
+                                                Visibility="{x:Bind ColorTemperatureVisibility, Mode=OneTime}" />
                                             <TextBlock
                                                 Grid.Row="5"
                                                 VerticalAlignment="Center"
                                                 FontWeight="SemiBold"
-                                                Text="Rotation" />
+                                                Text="Rotation"
+                                                Visibility="{x:Bind RotationVisibility, Mode=OneTime}" />
                                             <StackPanel
                                                 Grid.Row="5"
                                                 Grid.Column="1"
                                                 Orientation="Horizontal"
-                                                Spacing="6">
+                                                Spacing="6"
+                                                Visibility="{x:Bind RotationVisibility, Mode=OneTime}">
                                                 <ComboBox
                                                     MinWidth="170"
                                                     DisplayMemberPath="DisplayName"
@@ -239,28 +246,34 @@
                                     Toggled="CompactScheduleAutomationToggle_Toggled" />
                             </Grid>
 
-                            <Grid ColumnSpacing="12">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="*" />
-                                </Grid.ColumnDefinitions>
-                                <TimePicker
-                                    x:Name="CompactLightScheduleTimePicker"
-                                    ClockIdentifier="24HourClock"
-                                    Header="Light starts"
-                                    MinuteIncrement="1" />
-                                <TimePicker
-                                    x:Name="CompactDarkScheduleTimePicker"
-                                    Grid.Column="1"
-                                    ClockIdentifier="24HourClock"
-                                    Header="Dark starts"
-                                    MinuteIncrement="1" />
-                            </Grid>
+                            <StackPanel x:Name="CompactScheduleOptions" Spacing="10">
+                                <Grid ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TimePicker
+                                        x:Name="CompactLightScheduleTimePicker"
+                                        ClockIdentifier="24HourClock"
+                                        Header="Light starts"
+                                        MinuteIncrement="1" />
+                                    <TimePicker
+                                        x:Name="CompactDarkScheduleTimePicker"
+                                        Grid.Column="1"
+                                        ClockIdentifier="24HourClock"
+                                        Header="Dark starts"
+                                        MinuteIncrement="1" />
+                                </Grid>
 
-                            <Button
-                                HorizontalAlignment="Left"
-                                Click="SaveCompactScheduleButton_Click"
-                                Content="Save schedule" />
+                                <CheckBox
+                                    x:Name="CompactReduceBrightnessCheckBox"
+                                    Content="Reduce screen brightness during dark hours" />
+
+                                <Button
+                                    HorizontalAlignment="Left"
+                                    Click="SaveCompactScheduleButton_Click"
+                                    Content="Save schedule" />
+                            </StackPanel>
                         </StackPanel>
                     </Border>
                 </StackPanel>
@@ -348,52 +361,135 @@
                 <ListView
                     x:Name="MonitorList"
                     HorizontalContentAlignment="Stretch"
-                    SelectionChanged="MonitorList_SelectionChanged"
-                    SelectionMode="Single"
+                    SelectionMode="None"
                     VerticalAlignment="Stretch">
                     <ListView.ItemTemplate>
-                        <DataTemplate x:DataType="local:MonitorCardViewModel">
+                        <DataTemplate x:DataType="local:CompactMonitorViewModel">
                             <Border
                                 Margin="0,0,0,10"
                                 Padding="16"
                                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                                 BorderThickness="1"
                                 CornerRadius="8">
-                                <StackPanel Spacing="6">
+                                <StackPanel Spacing="10">
                                     <TextBlock Style="{StaticResource SubtitleTextBlockStyle}" Text="{x:Bind FriendlyName, Mode=OneTime}" />
 
-                                    <Grid ColumnSpacing="12">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto" />
-                                            <ColumnDefinition Width="*" />
-                                        </Grid.ColumnDefinitions>
-                                        <TextBlock FontWeight="SemiBold" Text="Windows name" />
-                                        <TextBlock
-                                            Grid.Column="1"
-                                            FontFamily="Consolas"
-                                            Text="{x:Bind GdiDeviceName, Mode=OneTime}" />
-                                    </Grid>
-
-                                    <TextBlock FontWeight="SemiBold" Text="Stable device path" />
-                                    <TextBox
-                                        Padding="0"
-                                        Background="Transparent"
-                                        BorderThickness="0"
-                                        FontFamily="Consolas"
-                                        IsHitTestVisible="False"
-                                        IsReadOnly="True"
-                                        IsTabStop="False"
-                                        Text="{x:Bind DevicePath, Mode=OneTime}"
-                                        TextWrapping="Wrap" />
-
-                                    <TextBlock
-                                        Margin="0,6,0,0"
-                                        FontWeight="SemiBold"
-                                        Text="{x:Bind DdcStatus, Mode=OneTime}" />
                                     <TextBlock
                                         Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                        Text="{x:Bind DdcDetails, Mode=OneTime}"
-                                        TextWrapping="Wrap" />
+                                        Text="{x:Bind Status, Mode=OneTime}" />
+
+                                    <Expander Header="Display details">
+                                        <StackPanel Spacing="6">
+                                            <TextBlock FontWeight="SemiBold" Text="Windows name" />
+                                            <TextBlock
+                                                FontFamily="Consolas"
+                                                Text="{x:Bind GdiDeviceName, Mode=OneTime}" />
+                                            <TextBlock FontWeight="SemiBold" Text="Stable device path" />
+                                            <TextBox
+                                                Padding="0"
+                                                Background="Transparent"
+                                                BorderThickness="0"
+                                                FontFamily="Consolas"
+                                                IsHitTestVisible="False"
+                                                IsReadOnly="True"
+                                                IsTabStop="False"
+                                                Text="{x:Bind DevicePath, Mode=OneTime}"
+                                                TextWrapping="Wrap" />
+                                        </StackPanel>
+                                    </Expander>
+
+                                    <Grid ColumnSpacing="12" RowSpacing="6">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                        </Grid.RowDefinitions>
+
+                                        <TextBlock FontWeight="SemiBold" Text="Brightness" />
+                                        <TextBlock
+                                            Grid.Column="1"
+                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                            Text="{x:Bind BrightnessText, Mode=OneWay}" />
+                                        <Slider
+                                            Grid.Row="1"
+                                            Grid.ColumnSpan="2"
+                                            Minimum="0"
+                                            Maximum="100"
+                                            IsEnabled="{x:Bind IsBrightnessAvailable, Mode=OneTime}"
+                                            StepFrequency="1"
+                                            Tag="{x:Bind}"
+                                            ValueChanged="CompactBrightnessSlider_ValueChanged"
+                                            Value="{x:Bind BrightnessPercent, Mode=TwoWay}" />
+
+                                        <TextBlock
+                                            Grid.Row="2"
+                                            FontWeight="SemiBold"
+                                            Text="Contrast"
+                                            Visibility="{x:Bind ContrastVisibility, Mode=OneTime}" />
+                                        <TextBlock
+                                            Grid.Row="2"
+                                            Grid.Column="1"
+                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                            Text="{x:Bind ContrastText, Mode=OneWay}"
+                                            Visibility="{x:Bind ContrastVisibility, Mode=OneTime}" />
+                                        <Slider
+                                            Grid.Row="3"
+                                            Grid.ColumnSpan="2"
+                                            Minimum="0"
+                                            Maximum="100"
+                                            StepFrequency="1"
+                                            Tag="{x:Bind}"
+                                            ValueChanged="CompactContrastSlider_ValueChanged"
+                                            Value="{x:Bind ContrastPercent, Mode=TwoWay}"
+                                            Visibility="{x:Bind ContrastVisibility, Mode=OneTime}" />
+
+                                        <TextBlock
+                                            Grid.Row="4"
+                                            VerticalAlignment="Center"
+                                            FontWeight="SemiBold"
+                                            Text="Color temperature"
+                                            Visibility="{x:Bind ColorTemperatureVisibility, Mode=OneTime}" />
+                                        <ComboBox
+                                            Grid.Row="4"
+                                            Grid.Column="1"
+                                            MinWidth="170"
+                                            DisplayMemberPath="DisplayName"
+                                            ItemsSource="{x:Bind ColorTemperaturePresets, Mode=OneTime}"
+                                            SelectionChanged="CompactColorTemperature_SelectionChanged"
+                                            SelectedItem="{x:Bind SelectedColorTemperaturePreset, Mode=TwoWay}"
+                                            Tag="{x:Bind}"
+                                            Visibility="{x:Bind ColorTemperatureVisibility, Mode=OneTime}" />
+
+                                        <TextBlock
+                                            Grid.Row="5"
+                                            VerticalAlignment="Center"
+                                            FontWeight="SemiBold"
+                                            Text="Rotation"
+                                            Visibility="{x:Bind RotationVisibility, Mode=OneTime}" />
+                                        <StackPanel
+                                            Grid.Row="5"
+                                            Grid.Column="1"
+                                            Orientation="Horizontal"
+                                            Spacing="6"
+                                            Visibility="{x:Bind RotationVisibility, Mode=OneTime}">
+                                            <ComboBox
+                                                MinWidth="190"
+                                                DisplayMemberPath="DisplayName"
+                                                ItemsSource="{x:Bind RotationOptions, Mode=OneTime}"
+                                                SelectedItem="{x:Bind SelectedRotation, Mode=TwoWay}" />
+                                            <Button
+                                                Click="CompactApplyRotationButton_Click"
+                                                Content="Apply"
+                                                Tag="{x:Bind}" />
+                                        </StackPanel>
+                                    </Grid>
                                 </StackPanel>
                             </Border>
                         </DataTemplate>
@@ -470,7 +566,7 @@
                         CornerRadius="8">
                         <StackPanel Spacing="10">
                             <StackPanel Spacing="3">
-                                <TextBlock FontWeight="SemiBold" Text="Custom theme schedule preview" />
+                                <TextBlock FontWeight="SemiBold" Text="Theme schedule" />
                                 <TextBlock
                                     x:Name="ScheduleStatusText"
                                     Foreground="{ThemeResource TextFillColorSecondaryBrush}"
@@ -478,38 +574,45 @@
                                     TextWrapping="Wrap" />
                             </StackPanel>
 
-                            <StackPanel Orientation="Horizontal" Spacing="12">
-                                <Viewbox Width="220" Stretch="Uniform">
-                                    <TimePicker
-                                        x:Name="LightScheduleTimePicker"
-                                        ClockIdentifier="24HourClock"
-                                        Header="Light starts" />
-                                 </Viewbox>
-
-                                <Viewbox Width="220" Height="80" Stretch="Uniform">
-                                    <TimePicker
-                                        x:Name="DarkScheduleTimePicker"
-                                        ClockIdentifier="24HourClock"
-                                        Header="Dark starts" />
-                                 </Viewbox>
-                            </StackPanel>
-
                             <ToggleSwitch
                                 x:Name="ScheduleAutomationToggle"
                                 Header="Automatic switching"
                                 OffContent="Off"
-                                OnContent="On while DisplayPilot is running" />
+                                OnContent="On while DisplayPilot is running"
+                                Toggled="ScheduleAutomationToggle_Toggled" />
 
-                            <StackPanel Orientation="Horizontal" Spacing="12">
-                                <Button Click="PreviewScheduleButton_Click" Content="Preview schedule" />
-                                <Button Click="SaveScheduleButton_Click" Content="Save schedule" />
+                            <StackPanel x:Name="ScheduleOptions" Spacing="10">
+                                <StackPanel Orientation="Horizontal" Spacing="12">
+                                    <Viewbox Width="220" Stretch="Uniform">
+                                        <TimePicker
+                                            x:Name="LightScheduleTimePicker"
+                                            ClockIdentifier="24HourClock"
+                                            Header="Light starts" />
+                                    </Viewbox>
+
+                                    <Viewbox Width="220" Height="80" Stretch="Uniform">
+                                        <TimePicker
+                                            x:Name="DarkScheduleTimePicker"
+                                            ClockIdentifier="24HourClock"
+                                            Header="Dark starts" />
+                                    </Viewbox>
+                                </StackPanel>
+
+                                <CheckBox
+                                    x:Name="ReduceBrightnessCheckBox"
+                                    Content="Reduce screen brightness during dark hours" />
+
+                                <StackPanel Orientation="Horizontal" Spacing="12">
+                                    <Button Click="PreviewScheduleButton_Click" Content="Preview schedule" />
+                                    <Button Click="SaveScheduleButton_Click" Content="Save schedule" />
+                                </StackPanel>
+
+                                <TextBlock
+                                    x:Name="SchedulePersistenceStatusText"
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                    Text="Schedule settings have not been loaded."
+                                    TextWrapping="Wrap" />
                             </StackPanel>
-
-                            <TextBlock
-                                x:Name="SchedulePersistenceStatusText"
-                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                Text="Schedule settings have not been loaded."
-                                TextWrapping="Wrap" />
                         </StackPanel>
                     </Border>
 
@@ -540,40 +643,10 @@
                     <InfoBar
                         IsClosable="False"
                         IsOpen="True"
-                        Message="DisplayPilot verifies brightness, contrast, and advertised color-temperature changes with an immediate read-back. Unsupported DDC/CI controls remain disabled."
+                        Message="DisplayPilot verifies brightness, contrast, and advertised color-temperature changes with an immediate read-back. Unsupported optional controls are hidden."
                         Severity="Warning"
                         Title="Display-control verification" />
 
-                    <!-- Brightness Control -->
-                    <Grid HorizontalAlignment="Stretch">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-
-                        <!-- Brightness Control (Left) -->
-                        <NumberBox
-                            x:Name="BrightnessValue"
-                            Grid.Column="0"
-                            Width="160"
-                            Header="Brightness %"
-                            Maximum="100"
-                            Minimum="0"
-                            SmallChange="1"
-                            SpinButtonPlacementMode="Inline"
-                            Value="50"
-                            HorizontalAlignment="Left" />
-
-                        <!-- Button (Right) -->
-                        <Button
-                            x:Name="SetBrightnessButton"
-                            Grid.Column="1"
-                            VerticalAlignment="Bottom"
-                            HorizontalAlignment="Right"
-                            Click="SetBrightnessButton_Click"
-                            Content="Set selected"
-                            IsEnabled="False" />            
-                    </Grid>
                 </StackPanel>
             </ScrollViewer>
         </Grid>

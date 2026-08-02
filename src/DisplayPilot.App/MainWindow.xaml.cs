@@ -67,6 +67,10 @@ public sealed partial class MainWindow : Window, IDisposable
     private ThemeScheduleEvaluation? _lastScheduleEvaluation;
     private bool _scheduleWasLoadedFromDisk;
     private bool _scheduleAutomationEnabled;
+    private bool _reduceBrightnessOnSchedule;
+    private bool _brightnessReductionActive;
+    private readonly Dictionary<string, int> _brightnessRestoreValues =
+        new(StringComparer.OrdinalIgnoreCase);
     private DateTimeOffset? _manualScheduleOverrideUntil;
     private string? _scheduleSettingsError;
     private BrightnessWriteResult? _lastBrightnessWriteResult;
@@ -195,6 +199,7 @@ public sealed partial class MainWindow : Window, IDisposable
         {
             _displayScanStarted = true;
             await RefreshDisplaysAsync();
+            await EvaluateAndApplyScheduleAsync();
         }
     }
 
@@ -232,6 +237,7 @@ public sealed partial class MainWindow : Window, IDisposable
         if (_activeMonitors.Count > 0)
         {
             await ProbeDdcBrightnessAsync();
+            await EvaluateAndApplyScheduleAsync();
         }
     }
 
@@ -289,9 +295,15 @@ public sealed partial class MainWindow : Window, IDisposable
 
     private void NotificationAreaIcon_AdvancedInvoked(object? sender, EventArgs e)
     {
-        _ = DispatcherQueue.TryEnqueue(() =>
+        _ = DispatcherQueue.TryEnqueue(async () =>
         {
+            await InitializeAsync();
             ShowAdvancedView();
+            if (_activeMonitors.Count > 0)
+            {
+                await ProbeDdcBrightnessAsync();
+                await EvaluateAndApplyScheduleAsync();
+            }
             RefreshDiagnosticReport();
         });
     }
@@ -331,6 +343,7 @@ public sealed partial class MainWindow : Window, IDisposable
         if (displaysWereInitialized)
         {
             await RefreshDisplaysAsync();
+            await EvaluateAndApplyScheduleAsync();
         }
     }
 
@@ -363,6 +376,7 @@ public sealed partial class MainWindow : Window, IDisposable
     private async void CompactReadBrightnessButton_Click(object sender, RoutedEventArgs e)
     {
         await ProbeDdcBrightnessAsync();
+        await EvaluateAndApplyScheduleAsync();
     }
 
     private async void OpenStartupSettingsButton_Click(
@@ -562,7 +576,16 @@ public sealed partial class MainWindow : Window, IDisposable
         }
 
         CopyCompactScheduleToAdvanced();
-        ScheduleAutomationToggle.IsOn = CompactScheduleAutomationToggle.IsOn;
+        _updatingCompactControls = true;
+        try
+        {
+            ScheduleAutomationToggle.IsOn = CompactScheduleAutomationToggle.IsOn;
+        }
+        finally
+        {
+            _updatingCompactControls = false;
+        }
+        UpdateScheduleOptionsVisibility();
         if (SaveScheduleSettings())
         {
             await EvaluateAndApplyScheduleAsync();
@@ -585,10 +608,43 @@ public sealed partial class MainWindow : Window, IDisposable
         }
     }
 
+    private async void ScheduleAutomationToggle_Toggled(object sender, RoutedEventArgs e)
+    {
+        if (_updatingCompactControls)
+        {
+            return;
+        }
+
+        _updatingCompactControls = true;
+        try
+        {
+            CompactScheduleAutomationToggle.IsOn = ScheduleAutomationToggle.IsOn;
+        }
+        finally
+        {
+            _updatingCompactControls = false;
+        }
+
+        UpdateScheduleOptionsVisibility();
+        if (SaveScheduleSettings())
+        {
+            await EvaluateAndApplyScheduleAsync();
+            UpdateThemeScheduleTimer();
+        }
+    }
+
     private async void SaveCompactScheduleButton_Click(object sender, RoutedEventArgs e)
     {
         CopyCompactScheduleToAdvanced();
-        ScheduleAutomationToggle.IsOn = CompactScheduleAutomationToggle.IsOn;
+        _updatingCompactControls = true;
+        try
+        {
+            ScheduleAutomationToggle.IsOn = CompactScheduleAutomationToggle.IsOn;
+        }
+        finally
+        {
+            _updatingCompactControls = false;
+        }
         if (SaveScheduleSettings())
         {
             await EvaluateAndApplyScheduleAsync();
@@ -639,23 +695,13 @@ public sealed partial class MainWindow : Window, IDisposable
     private async void RescanButton_Click(object sender, RoutedEventArgs e)
     {
         await RefreshDisplaysAsync();
+        await EvaluateAndApplyScheduleAsync();
     }
 
     private async void ProbeDdcButton_Click(object sender, RoutedEventArgs e)
     {
         await ProbeDdcBrightnessAsync();
-    }
-
-    private async void SetBrightnessButton_Click(object sender, RoutedEventArgs e)
-    {
-        await SetSelectedBrightnessAsync();
-    }
-
-    private void MonitorList_SelectionChanged(
-        object sender,
-        Microsoft.UI.Xaml.Controls.SelectionChangedEventArgs e)
-    {
-        SetBrightnessButton.IsEnabled = CanSetSelectedDisplay();
+        await EvaluateAndApplyScheduleAsync();
     }
 
     private void CopyReportButton_Click(object sender, RoutedEventArgs e)
@@ -692,9 +738,9 @@ public sealed partial class MainWindow : Window, IDisposable
         _displayOperationRunning = true;
         RescanButton.IsEnabled = false;
         ProbeDdcButton.IsEnabled = false;
-        SetBrightnessButton.IsEnabled = false;
         CompactReadBrightnessButton.IsEnabled = false;
         CompactMonitorList.IsEnabled = false;
+        MonitorList.IsEnabled = false;
         CopyReportButton.IsEnabled = false;
         CopyReportButton.Content = "Copy diagnostic report";
         StatusText.Text = "Scanning active Windows display paths...";
@@ -714,7 +760,6 @@ public sealed partial class MainWindow : Window, IDisposable
             _lastContrastProbes = [];
             _lastColorTemperatureProbes = [];
             _lastDdcCapabilities = [];
-            MonitorList.ItemsSource = monitors.Select(MonitorCardViewModel.NotProbed).ToArray();
             UpdateCompactMonitorCards();
             EmptyState.Visibility = monitors.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
             StatusText.Text = string.Format(
@@ -761,6 +806,7 @@ public sealed partial class MainWindow : Window, IDisposable
             ProbeDdcButton.IsEnabled = _activeMonitors.Count > 0;
             CompactReadBrightnessButton.IsEnabled = _activeMonitors.Count > 0;
             CompactMonitorList.IsEnabled = true;
+            MonitorList.IsEnabled = true;
             CopyReportButton.IsEnabled = true;
         }
     }
@@ -775,9 +821,9 @@ public sealed partial class MainWindow : Window, IDisposable
         _displayOperationRunning = true;
         RescanButton.IsEnabled = false;
         ProbeDdcButton.IsEnabled = false;
-        SetBrightnessButton.IsEnabled = false;
         CompactReadBrightnessButton.IsEnabled = false;
         CompactMonitorList.IsEnabled = false;
+        MonitorList.IsEnabled = false;
         CopyReportButton.IsEnabled = false;
         CopyReportButton.Content = "Copy diagnostic report";
         StatusText.Text = "Reading external DDC/CI and internal WMI brightness...";
@@ -802,7 +848,6 @@ public sealed partial class MainWindow : Window, IDisposable
             _lastContrastProbes = probes.Contrast;
             _lastColorTemperatureProbes = probes.ColorTemperature;
             _lastDdcCapabilities = probes.Capabilities;
-            UpdateMonitorCards(selectedDevicePath: null);
             UpdateCompactMonitorCards();
 
             var readableCount = _activeMonitors.Count(monitor =>
@@ -821,11 +866,7 @@ public sealed partial class MainWindow : Window, IDisposable
                 DateTimeOffset.Now);
             CompactStatusText.Text = readableCount == 0
                 ? "Brightness control is unavailable. Open Advanced for details."
-                : string.Format(
-                    CultureInfo.CurrentCulture,
-                    "Brightness is available for {0} display {1}.",
-                    readableCount,
-                    readableCount == 1 ? "path" : "paths");
+                : string.Empty;
             _diagnosticReport = BuildDiagnosticReport(
                 _activeMonitors,
                 probes.Ddc,
@@ -849,31 +890,18 @@ public sealed partial class MainWindow : Window, IDisposable
             _displayOperationRunning = false;
             RescanButton.IsEnabled = true;
             ProbeDdcButton.IsEnabled = _activeMonitors.Count > 0;
-            SetBrightnessButton.IsEnabled = CanSetSelectedDisplay();
             CompactReadBrightnessButton.IsEnabled = _activeMonitors.Count > 0;
             CompactMonitorList.IsEnabled = true;
+            MonitorList.IsEnabled = true;
             CopyReportButton.IsEnabled = true;
         }
     }
 
-    private async Task SetSelectedBrightnessAsync()
-    {
-        if (MonitorList.SelectedItem is not MonitorCardViewModel selected)
-        {
-            return;
-        }
-
-        var requestedPercent = double.IsNaN(BrightnessValue.Value)
-            ? 50
-            : Math.Clamp((int)Math.Round(BrightnessValue.Value), 0, 100);
-        await SetBrightnessAsync(selected.DevicePath, requestedPercent);
-    }
-
-    private async Task SetBrightnessAsync(string devicePath, int requestedPercent)
+    private async Task<bool> SetBrightnessAsync(string devicePath, int requestedPercent)
     {
         if (_displayOperationRunning || !_sessionIsActive)
         {
-            return;
+            return false;
         }
 
         var display = _activeMonitors.First(candidate => string.Equals(
@@ -892,8 +920,9 @@ public sealed partial class MainWindow : Window, IDisposable
         _displayOperationRunning = true;
         RescanButton.IsEnabled = false;
         ProbeDdcButton.IsEnabled = false;
-        SetBrightnessButton.IsEnabled = false;
         CompactReadBrightnessButton.IsEnabled = false;
+        CompactMonitorList.IsEnabled = false;
+        MonitorList.IsEnabled = false;
         CopyReportButton.IsEnabled = false;
         StatusText.Text = $"Setting {display.FriendlyName} brightness to {requestedPercent}%...";
         CompactStatusText.Text = $"Setting {display.FriendlyName} to {requestedPercent}%...";
@@ -912,16 +941,7 @@ public sealed partial class MainWindow : Window, IDisposable
                 Wmi: _wmiProbeService.ProbeBrightness(_activeMonitors)));
             _lastDdcProbes = refreshed.Ddc;
             _lastWmiProbes = refreshed.Wmi;
-            UpdateMonitorCards(display.DevicePath);
-            if (_pendingBrightnessDevicePath is null ||
-                !string.Equals(
-                    _pendingBrightnessDevicePath,
-                    display.DevicePath,
-                    StringComparison.OrdinalIgnoreCase) ||
-                _pendingBrightnessPercent == requestedPercent)
-            {
-                UpdateCompactMonitorCards();
-            }
+            UpdateCompactMonitorCards();
 
             StatusText.Text = writeResult.Succeeded
                 ? string.Format(
@@ -967,11 +987,13 @@ public sealed partial class MainWindow : Window, IDisposable
             _displayOperationRunning = false;
             RescanButton.IsEnabled = true;
             ProbeDdcButton.IsEnabled = _activeMonitors.Count > 0;
-            SetBrightnessButton.IsEnabled = CanSetSelectedDisplay();
             CompactReadBrightnessButton.IsEnabled = _activeMonitors.Count > 0;
             CompactMonitorList.IsEnabled = true;
+            MonitorList.IsEnabled = true;
             CopyReportButton.IsEnabled = true;
         }
+
+        return writeResult?.Succeeded == true;
     }
 
     private async Task SetContrastAsync(string devicePath, int requestedPercent)
@@ -1114,9 +1136,9 @@ public sealed partial class MainWindow : Window, IDisposable
     {
         RescanButton.IsEnabled = enabled;
         ProbeDdcButton.IsEnabled = enabled && _activeMonitors.Count > 0;
-        SetBrightnessButton.IsEnabled = enabled && CanSetSelectedDisplay();
         CompactReadBrightnessButton.IsEnabled = enabled && _activeMonitors.Count > 0;
         CompactMonitorList.IsEnabled = enabled;
+        MonitorList.IsEnabled = enabled;
         CopyReportButton.IsEnabled = enabled;
     }
 
@@ -1240,11 +1262,20 @@ public sealed partial class MainWindow : Window, IDisposable
             _savedThemeSchedule = result.Schedule;
             _scheduleWasLoadedFromDisk = result.WasLoadedFromDisk;
             _scheduleAutomationEnabled = result.AutomationEnabled;
+            _reduceBrightnessOnSchedule = result.ReduceBrightness;
+            _brightnessReductionActive = result.BrightnessReductionActive;
+            _brightnessRestoreValues.Clear();
+            foreach (var pair in result.BrightnessRestoreValues)
+            {
+                _brightnessRestoreValues[pair.Key] = pair.Value;
+            }
             _updatingCompactControls = true;
             try
             {
                 ScheduleAutomationToggle.IsOn = result.AutomationEnabled;
                 CompactScheduleAutomationToggle.IsOn = result.AutomationEnabled;
+                ReduceBrightnessCheckBox.IsChecked = result.ReduceBrightness;
+                CompactReduceBrightnessCheckBox.IsChecked = result.ReduceBrightness;
             }
             finally
             {
@@ -1258,6 +1289,7 @@ public sealed partial class MainWindow : Window, IDisposable
                     : "Loaded the saved per-user schedule; automatic switching is disabled."
                 : "Using the default schedule; select Save schedule to persist it.";
             UpdateCompactScheduleStatus();
+            UpdateScheduleOptionsVisibility();
         }
         catch (IOException exception)
         {
@@ -1282,11 +1314,16 @@ public sealed partial class MainWindow : Window, IDisposable
         _savedThemeSchedule = defaults;
         _scheduleWasLoadedFromDisk = false;
         _scheduleAutomationEnabled = false;
+        _reduceBrightnessOnSchedule = false;
+        _brightnessReductionActive = false;
+        _brightnessRestoreValues.Clear();
         _updatingCompactControls = true;
         try
         {
             ScheduleAutomationToggle.IsOn = false;
             CompactScheduleAutomationToggle.IsOn = false;
+            ReduceBrightnessCheckBox.IsChecked = false;
+            CompactReduceBrightnessCheckBox.IsChecked = false;
         }
         finally
         {
@@ -1296,6 +1333,7 @@ public sealed partial class MainWindow : Window, IDisposable
         _scheduleSettingsError = exception.GetType().Name;
         SchedulePersistenceStatusText.Text = "Saved schedule could not be loaded; using safe defaults.";
         UpdateCompactScheduleStatus();
+        UpdateScheduleOptionsVisibility();
     }
 
     private bool SaveScheduleSettings()
@@ -1306,13 +1344,21 @@ public sealed partial class MainWindow : Window, IDisposable
                 TimeOnly.FromTimeSpan(LightScheduleTimePicker.Time),
                 TimeOnly.FromTimeSpan(DarkScheduleTimePicker.Time));
             var automationEnabled = ScheduleAutomationToggle.IsOn;
-            _themeScheduleSettingsStore.Save(schedule, automationEnabled);
+            var reduceBrightness = ReduceBrightnessCheckBox.IsChecked == true;
+            _themeScheduleSettingsStore.Save(
+                schedule,
+                automationEnabled,
+                reduceBrightness,
+                _brightnessReductionActive,
+                _brightnessRestoreValues);
             _savedThemeSchedule = schedule;
             _scheduleAutomationEnabled = automationEnabled;
+            _reduceBrightnessOnSchedule = reduceBrightness;
             _updatingCompactControls = true;
             try
             {
                 CompactScheduleAutomationToggle.IsOn = automationEnabled;
+                CompactReduceBrightnessCheckBox.IsChecked = reduceBrightness;
             }
             finally
             {
@@ -1328,6 +1374,7 @@ public sealed partial class MainWindow : Window, IDisposable
                 : "Saved the schedule; automatic switching is disabled.";
             RefreshSchedulePreview();
             UpdateCompactScheduleStatus();
+            UpdateScheduleOptionsVisibility();
             return true;
         }
         catch (ArgumentException)
@@ -1356,12 +1403,46 @@ public sealed partial class MainWindow : Window, IDisposable
     {
         LightScheduleTimePicker.Time = CompactLightScheduleTimePicker.Time;
         DarkScheduleTimePicker.Time = CompactDarkScheduleTimePicker.Time;
+        ReduceBrightnessCheckBox.IsChecked = CompactReduceBrightnessCheckBox.IsChecked;
     }
 
     private void CopyAdvancedScheduleToCompact()
     {
         CompactLightScheduleTimePicker.Time = LightScheduleTimePicker.Time;
         CompactDarkScheduleTimePicker.Time = DarkScheduleTimePicker.Time;
+        CompactReduceBrightnessCheckBox.IsChecked = ReduceBrightnessCheckBox.IsChecked;
+    }
+
+    private void SaveBrightnessScheduleState()
+    {
+        if (_savedThemeSchedule is null)
+        {
+            return;
+        }
+
+        _themeScheduleSettingsStore.Save(
+            _savedThemeSchedule,
+            _scheduleAutomationEnabled,
+            _reduceBrightnessOnSchedule,
+            _brightnessReductionActive,
+            _brightnessRestoreValues);
+    }
+
+    private void UpdateScheduleOptionsVisibility()
+    {
+        var visibility = ScheduleAutomationToggle.IsOn
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        ScheduleOptions.Visibility = visibility;
+        CompactScheduleOptions.Visibility = visibility;
+        ScheduleStatusText.Visibility = visibility;
+        CompactScheduleStatusText.Visibility = visibility;
+        var brightnessOptionVisibility = visibility == Visibility.Visible &&
+            _activeMonitors.Any(display => HasValidatedWritePath(display.DevicePath))
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+        ReduceBrightnessCheckBox.Visibility = brightnessOptionVisibility;
+        CompactReduceBrightnessCheckBox.Visibility = brightnessOptionVisibility;
     }
 
     private void ReportScheduleSaveFailure(Exception exception)
@@ -1557,12 +1638,22 @@ public sealed partial class MainWindow : Window, IDisposable
 
     private async Task EvaluateAndApplyScheduleAsync()
     {
-        if (!_sessionIsActive || !_scheduleAutomationEnabled || _themeOperationRunning)
+        if (!_sessionIsActive || _themeOperationRunning || _savedThemeSchedule is null)
         {
             return;
         }
 
         var now = DateTimeOffset.Now;
+        var scheduledEvaluation = CustomThemeScheduleEvaluator.Evaluate(
+            _savedThemeSchedule,
+            TimeOnly.FromDateTime(now.LocalDateTime));
+        await ReconcileScheduledBrightnessAsync(scheduledEvaluation.ActiveMode);
+
+        if (!_scheduleAutomationEnabled)
+        {
+            return;
+        }
+
         if (_manualScheduleOverrideUntil is not null && now < _manualScheduleOverrideUntil)
         {
             SchedulePersistenceStatusText.Text = string.Format(
@@ -1578,15 +1669,6 @@ public sealed partial class MainWindow : Window, IDisposable
             SchedulePersistenceStatusText.Text = "The schedule boundary ended the manual override.";
         }
 
-        if (_savedThemeSchedule is null)
-        {
-            return;
-        }
-
-        var scheduledEvaluation = CustomThemeScheduleEvaluator.Evaluate(
-            _savedThemeSchedule,
-            TimeOnly.FromDateTime(now.LocalDateTime));
-
         RefreshThemeStatus();
         if (_themeState is null)
         {
@@ -1598,6 +1680,157 @@ public sealed partial class MainWindow : Window, IDisposable
             _themeState.SystemUsesLightTheme != shouldBeLight)
         {
             _ = await ApplyThemeAsync(scheduledEvaluation.ActiveMode, isScheduledChange: true);
+        }
+    }
+
+    private async Task ReconcileScheduledBrightnessAsync(ThemeMode scheduledMode)
+    {
+        var shouldReduce = _scheduleAutomationEnabled &&
+            _reduceBrightnessOnSchedule &&
+            scheduledMode == ThemeMode.Dark;
+        if ((!shouldReduce && !_brightnessReductionActive) || _displayOperationRunning)
+        {
+            return;
+        }
+
+        if (_activeMonitors.Count == 0)
+        {
+            return;
+        }
+
+        var hasUnreducedDisplay = shouldReduce && _activeMonitors.Any(display =>
+            !_brightnessRestoreValues.ContainsKey(display.DevicePath));
+        if (hasUnreducedDisplay ||
+            _lastDdcProbes.Count == 0 ||
+            _lastWmiProbes.Count == 0)
+        {
+            await ProbeDdcBrightnessAsync();
+        }
+
+        if (shouldReduce)
+        {
+            await ReduceScheduledBrightnessAsync();
+        }
+        else
+        {
+            await RestoreScheduledBrightnessAsync();
+        }
+    }
+
+    private async Task ReduceScheduledBrightnessAsync()
+    {
+        foreach (var display in _activeMonitors)
+        {
+            if (_brightnessRestoreValues.ContainsKey(display.DevicePath))
+            {
+                continue;
+            }
+
+            if (!TryGetCurrentBrightnessPercent(display.DevicePath, out var currentPercent))
+            {
+                continue;
+            }
+
+            var reducedPercent = ScheduledBrightness.CalculateReducedValue(currentPercent);
+            _brightnessRestoreValues[display.DevicePath] = currentPercent;
+            _brightnessReductionActive = true;
+            if (!TrySaveBrightnessScheduleState())
+            {
+                _brightnessRestoreValues.Remove(display.DevicePath);
+                _brightnessReductionActive = _brightnessRestoreValues.Count > 0;
+                continue;
+            }
+
+            if (!await SetBrightnessAsync(display.DevicePath, reducedPercent))
+            {
+                // Keep the original value: the write may have reached the monitor
+                // even when verification failed, so restoration must remain possible.
+                continue;
+            }
+        }
+    }
+
+    private async Task RestoreScheduledBrightnessAsync()
+    {
+        foreach (var pair in _brightnessRestoreValues.ToArray())
+        {
+            if (!_activeMonitors.Any(display => string.Equals(
+                    display.DevicePath,
+                    pair.Key,
+                    StringComparison.OrdinalIgnoreCase)) ||
+                !HasValidatedWritePath(pair.Key))
+            {
+                continue;
+            }
+
+            if (!await SetBrightnessAsync(pair.Key, pair.Value))
+            {
+                continue;
+            }
+
+            _brightnessRestoreValues.Remove(pair.Key);
+            _brightnessReductionActive = _brightnessRestoreValues.Count > 0;
+            TrySaveBrightnessScheduleState();
+        }
+
+        _brightnessReductionActive = _brightnessRestoreValues.Count > 0;
+        TrySaveBrightnessScheduleState();
+    }
+
+    private bool TryGetCurrentBrightnessPercent(string devicePath, out int percent)
+    {
+        var wmiProbe = _lastWmiProbes.FirstOrDefault(probe =>
+            string.Equals(probe.Display.DevicePath, devicePath, StringComparison.OrdinalIgnoreCase) &&
+            probe.Status == WmiBrightnessProbeStatus.ReadSucceeded);
+        if (wmiProbe is not null)
+        {
+            percent = wmiProbe.CurrentBrightness;
+            return true;
+        }
+
+        var ddcRead = _lastDdcProbes
+            .FirstOrDefault(probe => string.Equals(
+                probe.Display.DevicePath,
+                devicePath,
+                StringComparison.OrdinalIgnoreCase))?
+            .PhysicalMonitors.FirstOrDefault(result =>
+                result.Status == DdcBrightnessProbeStatus.ReadSucceeded &&
+                result.MaximumValue > 0);
+        if (ddcRead is not null)
+        {
+            percent = Math.Clamp(
+                (int)Math.Round(ddcRead.CurrentValue * 100d / ddcRead.MaximumValue),
+                0,
+                100);
+            return true;
+        }
+
+        percent = 0;
+        return false;
+    }
+
+    private bool TrySaveBrightnessScheduleState()
+    {
+        try
+        {
+            SaveBrightnessScheduleState();
+            _scheduleSettingsError = null;
+            return true;
+        }
+        catch (IOException exception)
+        {
+            ReportScheduleSaveFailure(exception);
+            return false;
+        }
+        catch (UnauthorizedAccessException exception)
+        {
+            ReportScheduleSaveFailure(exception);
+            return false;
+        }
+        catch (SecurityException exception)
+        {
+            ReportScheduleSaveFailure(exception);
+            return false;
         }
     }
 
@@ -1758,32 +1991,6 @@ public sealed partial class MainWindow : Window, IDisposable
         CompactDarkModeToggle.IsEnabled = enabled;
     }
 
-    private void UpdateMonitorCards(string? selectedDevicePath)
-    {
-        var cards = _lastDdcProbes.Select(ddcProbe =>
-        {
-            var wmiProbe = _lastWmiProbes.First(candidate => string.Equals(
-                candidate.Display.DevicePath,
-                ddcProbe.Display.DevicePath,
-                StringComparison.OrdinalIgnoreCase));
-            return MonitorCardViewModel.FromProbes(ddcProbe, wmiProbe);
-        }).ToArray();
-        MonitorList.ItemsSource = cards;
-        var selectedCard = selectedDevicePath is null
-            ? null
-            : cards.FirstOrDefault(card => string.Equals(
-                card.DevicePath,
-                selectedDevicePath,
-                StringComparison.OrdinalIgnoreCase));
-        if (selectedCard is null)
-        {
-            var writableCards = cards.Where(card => HasValidatedWritePath(card.DevicePath)).ToArray();
-            selectedCard = writableCards.Length == 1 ? writableCards[0] : null;
-        }
-
-        MonitorList.SelectedItem = selectedCard;
-    }
-
     private void UpdateCompactMonitorCards()
     {
         var cards = _activeMonitors.Select(display =>
@@ -1818,6 +2025,7 @@ public sealed partial class MainWindow : Window, IDisposable
             {
                 return new CompactMonitorViewModel(
                     display.DevicePath,
+                    display.GdiDeviceName,
                     display.FriendlyName,
                     isBrightnessAvailable: true,
                     GetCompactBrightness(display.DevicePath, wmiProbe.CurrentBrightness),
@@ -1845,6 +2053,7 @@ public sealed partial class MainWindow : Window, IDisposable
                     100);
                 return new CompactMonitorViewModel(
                     display.DevicePath,
+                    display.GdiDeviceName,
                     display.FriendlyName,
                     isBrightnessAvailable: true,
                     GetCompactBrightness(display.DevicePath, percent),
@@ -1859,9 +2068,10 @@ public sealed partial class MainWindow : Window, IDisposable
 
             return new CompactMonitorViewModel(
                 display.DevicePath,
+                display.GdiDeviceName,
                 display.FriendlyName,
                 isBrightnessAvailable: false,
-                brightnessPercent: 0,
+                brightnessPercent: 100,
                 isContrastAvailable: contrastAvailable,
                 GetCompactContrast(display.DevicePath, contrastPercent),
                 colorTemperaturePresets,
@@ -1886,11 +2096,14 @@ public sealed partial class MainWindow : Window, IDisposable
         try
         {
             CompactMonitorList.ItemsSource = cards;
+            MonitorList.ItemsSource = cards;
         }
         finally
         {
             _updatingCompactControls = false;
         }
+
+        UpdateScheduleOptionsVisibility();
     }
 
     private double GetCompactBrightness(string devicePath, double verifiedPercent)
@@ -1978,16 +2191,6 @@ public sealed partial class MainWindow : Window, IDisposable
                 FormatTime(_savedThemeSchedule.DarkTime));
     }
 
-    private bool CanSetSelectedDisplay()
-    {
-        if (MonitorList.SelectedItem is not MonitorCardViewModel selected)
-        {
-            return false;
-        }
-
-        return HasValidatedWritePath(selected.DevicePath);
-    }
-
     private bool HasValidatedWritePath(string devicePath)
     {
         return _lastWmiProbes.Any(probe =>
@@ -2057,6 +2260,17 @@ public sealed partial class MainWindow : Window, IDisposable
         report.Append("Schedule persisted: ").AppendLine(_scheduleWasLoadedFromDisk.ToString(CultureInfo.InvariantCulture));
         report.Append("Schedule settings error: ").AppendLine(_scheduleSettingsError ?? "None");
         report.Append("Schedule automatic writes enabled: ").AppendLine(_scheduleAutomationEnabled.ToString(CultureInfo.InvariantCulture));
+        report.Append("Schedule brightness reduction enabled: ").AppendLine(_reduceBrightnessOnSchedule.ToString(CultureInfo.InvariantCulture));
+        report.Append("Schedule brightness reduction active: ").AppendLine(_brightnessReductionActive.ToString(CultureInfo.InvariantCulture));
+        report.Append("Schedule brightness restore values: ").AppendLine(_brightnessRestoreValues.Count.ToString(CultureInfo.InvariantCulture));
+        foreach (var pair in _brightnessRestoreValues.OrderBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase))
+        {
+            report.Append("Schedule brightness restore: ")
+                .Append(pair.Key)
+                .Append(" = ")
+                .Append(pair.Value.ToString(CultureInfo.InvariantCulture))
+                .AppendLine("%");
+        }
         report.Append("Schedule timer active: ").AppendLine(_themeScheduleTimer.IsArmed.ToString(CultureInfo.InvariantCulture));
         report.Append("Schedule timer due: ").AppendLine(_themeScheduleTimer.DueTime?.ToString("O", CultureInfo.InvariantCulture) ?? "None");
         report.Append("Schedule manual override until: ").AppendLine(_manualScheduleOverrideUntil?.ToString("O", CultureInfo.InvariantCulture) ?? "None");

@@ -9,5 +9,10 @@ public interface IThemeScheduleSettingsStore
 {
     ThemeScheduleSettingsLoadResult Load();
 
-    void Save(CustomThemeSchedule schedule, bool automationEnabled);
+    void Save(
+        CustomThemeSchedule schedule,
+        bool automationEnabled,
+        bool reduceBrightness,
+        bool brightnessReductionActive,
+        IReadOnlyDictionary<string, int> brightnessRestoreValues);
 }

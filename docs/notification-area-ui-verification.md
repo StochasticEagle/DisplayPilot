@@ -13,7 +13,8 @@ window remains available as the **Advanced** interface.
   scaled for that window's DPI.
 - The first flyout opening reads DDC/CI and WMI brightness if it has not already
   been read.
-- Brightness changes remain explicit: move a slider, then select **Set**.
+- Brightness and contrast sliders apply changes dynamically in 1% increments.
+- Unsupported contrast, color-temperature, and rotation controls are hidden.
 - Theme and saved-schedule toggles use the same services and settings as
   **Advanced**.
 - Selecting **Advanced** opens the existing full interface.
@@ -30,12 +31,13 @@ window remains available as the **Advanced** interface.
    taskbar or Alt+Tab entry and is brought to the foreground.
 3. Select the icon again, then open the flyout and click elsewhere; confirm both
    actions hide the flyout while the process remains active.
-4. Confirm each readable display shows its current brightness. Move a slider,
-   select **Set**, and verify the reported value and monitor on-screen menu agree.
+4. Confirm each readable display shows its current brightness. Move its slider
+   and verify the reported value and monitor on-screen menu agree.
 5. Switch Light/Dark mode and schedule automation from the compact UI; confirm
    the Advanced UI reflects the same state.
-6. Select **Advanced**, verify the existing display, schedule, brightness, and
-   diagnostic controls, then close the window and confirm the icon remains.
+6. Select **Advanced** and verify every display has brightness plus its supported
+   contrast, color-temperature, and rotation controls. Confirm unsupported optional
+   controls are absent, then close the window and confirm the icon remains.
 7. Use the icon's **Open DisplayPilot** and **Advanced** commands and confirm
    the compact and full interfaces return respectively.
 8. Copy the diagnostic report and confirm **Notification callbacks** is greater
