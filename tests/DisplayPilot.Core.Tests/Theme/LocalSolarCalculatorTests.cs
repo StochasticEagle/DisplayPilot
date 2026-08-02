@@ -20,9 +20,13 @@ public sealed class LocalSolarCalculatorTests
     }
 
     [DataTestMethod]
-    [DataRow(2026, 6, 21, SolarDayCondition.PolarDay)]
-    [DataRow(2026, 12, 21, SolarDayCondition.PolarNight)]
-    public void TromsoReportsPolarCondition(
+    [DataRow(69.6492, 18.9553, 2026, 6, 21, SolarDayCondition.PolarDay)]
+    [DataRow(69.6492, 18.9553, 2026, 12, 21, SolarDayCondition.PolarNight)]
+    [DataRow(-77.8419, 166.6863, 2026, 6, 21, SolarDayCondition.PolarNight)]
+    [DataRow(-77.8419, 166.6863, 2026, 12, 21, SolarDayCondition.PolarDay)]
+    public void PolarRegionsReportTheExpectedCondition(
+        double latitude,
+        double longitude,
         int year,
         int month,
         int day,
@@ -30,7 +34,7 @@ public sealed class LocalSolarCalculatorTests
     {
         var result = LocalSolarCalculator.Calculate(
             new DateOnly(year, month, day),
-            new SolarLocation(69.6492, 18.9553, "Tromsø"),
+            new SolarLocation(latitude, longitude),
             TimeZoneInfo.Utc);
 
         Assert.AreEqual(expected, result.Condition);
@@ -56,7 +60,9 @@ public sealed class LocalSolarCalculatorTests
     {
         Assert.IsNotNull(actual);
         var actualTime = TimeOnly.FromDateTime(actual.Value.DateTime);
-        var difference = Math.Abs((actualTime - expected).TotalMinutes);
+        var directDifference = Math.Abs(
+            (actual.Value.TimeOfDay - expected.ToTimeSpan()).TotalMinutes);
+        var difference = Math.Min(directDifference, TimeSpan.FromDays(1).TotalMinutes - directDifference);
         Assert.IsTrue(
             difference <= toleranceMinutes,
             $"Expected {expected} ± {toleranceMinutes} minutes but calculated {actualTime}.");
