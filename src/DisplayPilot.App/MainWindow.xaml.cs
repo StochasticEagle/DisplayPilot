@@ -129,7 +129,7 @@ public sealed partial class MainWindow : Window, IDisposable
     private static string GetDisplayVersion()
     {
         var version = typeof(MainWindow).Assembly.GetName().Version;
-        return version is null ? "0.5.0" : version.ToString(3);
+        return version is null ? "0.9.0" : version.ToString(3);
     }
 
     public bool InitializeNotificationArea()
