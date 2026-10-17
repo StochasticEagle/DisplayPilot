@@ -86,7 +86,28 @@ public sealed partial class MainWindow : Window, IDisposable
     private DdcVcpWriteResult? _lastDdcVcpWriteResult;
     private DisplayRotationResult? _lastRotationWriteResult;
     private bool _themeOperationRunning;
-    private bool _displayOperationRunning;
+    private bool _displayBusy;
+    private TaskCompletionSource? _displayIdleCompletion;
+
+    private bool _displayOperationRunning
+    {
+        get => _displayBusy;
+        set
+        {
+            if (_displayBusy == value) return;
+            _displayBusy = value;
+            if (value)
+                _displayIdleCompletion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            else
+                _displayIdleCompletion?.TrySetResult();
+        }
+    }
+
+    private async Task WaitForDisplayIdleAsync(CancellationToken cancellationToken = default)
+    {
+        while (_displayOperationRunning && _displayIdleCompletion is { } completion)
+            await completion.Task.WaitAsync(cancellationToken);
+    }
     private bool _initialScanStarted;
     private bool _displayScanStarted;
     private bool _sessionIsActive = true;
@@ -402,10 +423,7 @@ public sealed partial class MainWindow : Window, IDisposable
             }
 
             await InitializeAsync();
-            while (_displayOperationRunning && _sessionIsActive)
-            {
-                await Task.Delay(BrightnessChangeDelayMilliseconds, cancellation.Token);
-            }
+            await WaitForDisplayIdleAsync(cancellation.Token);
 
             foreach (var pair in adjustments)
             {
@@ -533,10 +551,7 @@ public sealed partial class MainWindow : Window, IDisposable
                     continue;
                 }
 
-                while (_displayOperationRunning && _sessionIsActive)
-                {
-                    await Task.Delay(BrightnessChangeDelayMilliseconds);
-                }
+                await WaitForDisplayIdleAsync();
 
                 if (!_sessionIsActive)
                 {
@@ -714,10 +729,7 @@ public sealed partial class MainWindow : Window, IDisposable
         try
         {
             await Task.Delay(BrightnessChangeDelayMilliseconds, cancellation.Token);
-            while (_displayOperationRunning)
-            {
-                await Task.Delay(50, cancellation.Token);
-            }
+            await WaitForDisplayIdleAsync(cancellation.Token);
 
             await SetBrightnessAsync(monitor.DevicePath, requestedPercent);
             if (ReferenceEquals(_brightnessChangeCancellation, cancellation))
@@ -766,10 +778,7 @@ public sealed partial class MainWindow : Window, IDisposable
         try
         {
             await Task.Delay(BrightnessChangeDelayMilliseconds, cancellation.Token);
-            while (_displayOperationRunning)
-            {
-                await Task.Delay(50, cancellation.Token);
-            }
+            await WaitForDisplayIdleAsync(cancellation.Token);
 
             await SetContrastAsync(monitor.DevicePath, requestedPercent);
             if (ReferenceEquals(_contrastChangeCancellation, cancellation))
@@ -809,10 +818,7 @@ public sealed partial class MainWindow : Window, IDisposable
             return;
         }
 
-        while (_displayOperationRunning)
-        {
-            await Task.Delay(50);
-        }
+        await WaitForDisplayIdleAsync();
 
         await SetColorTemperatureAsync(monitor.DevicePath, checked((uint)preset.RawValue));
     }
