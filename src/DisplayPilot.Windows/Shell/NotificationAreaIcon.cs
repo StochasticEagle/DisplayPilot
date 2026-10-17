@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Aaron
 // Licensed under the MIT license. See the LICENSE file in the project root.
 
+using System.Buffers;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -543,73 +544,49 @@ public sealed partial class NotificationAreaIcon : IDisposable
             : Marshal.GetLastPInvokeError();
     }
 
-    private void ProcessRawInput(nint rawInputHandle)
+    private unsafe void ProcessRawInput(nint rawInputHandle)
     {
         var headerSize = (uint)Marshal.SizeOf<RawInputHeader>();
-        uint bufferSize = 0;
-        if (GetRawInputData(
-                rawInputHandle,
-                RawInputDataCommand,
-                0,
-                ref bufferSize,
-                headerSize) != 0 || bufferSize < headerSize + 8)
-        {
+        uint length = 0;
+        if (GetRawInputData(rawInputHandle, RawInputDataCommand, 0, ref length, headerSize) != 0 ||
+            length < headerSize + 8 || length > 65536)
             return;
-        }
 
-        var buffer = Marshal.AllocHGlobal(checked((int)bufferSize));
+        var data = ArrayPool<byte>.Shared.Rent((int)length);
         try
         {
-            var copiedSize = bufferSize;
-            if (GetRawInputData(
-                    rawInputHandle,
-                    RawInputDataCommand,
-                    buffer,
-                    ref copiedSize,
-                    headerSize) != copiedSize)
+            fixed (byte* pointer = data)
             {
-                return;
-            }
+                var copied = length;
+                if (GetRawInputData(rawInputHandle, RawInputDataCommand,
+                        (nint)pointer, ref copied, headerSize) != copied)
+                    return;
+                if (Marshal.PtrToStructure<RawInputHeader>((nint)pointer).Type != RawInputTypeHid)
+                    return;
 
-            var header = Marshal.PtrToStructure<RawInputHeader>(buffer);
-            if (header.Type != RawInputTypeHid)
-            {
-                return;
-            }
+                int start = checked((int)headerSize);
+                int reportLength = Marshal.ReadInt32((nint)pointer, start);
+                int reportCount = Marshal.ReadInt32((nint)pointer, start + 4);
+                if (reportLength <= 0 || reportCount <= 0 ||
+                    (uint)reportCount > (copied - headerSize - 8) / (uint)reportLength)
+                    return;
 
-            var hidOffset = checked((int)headerSize);
-            var reportSize = Marshal.ReadInt32(buffer, hidOffset);
-            var reportCount = Marshal.ReadInt32(buffer, hidOffset + 4);
-            if (reportSize <= 0 || reportCount <= 0)
-            {
-                return;
-            }
-
-            var reportBytes = checked(reportSize * reportCount);
-            if ((uint)(hidOffset + 8 + reportBytes) > copiedSize)
-            {
-                return;
-            }
-
-            var reports = new byte[reportBytes];
-            Marshal.Copy(buffer + hidOffset + 8, reports, 0, reports.Length);
-            for (var reportIndex = 0; reportIndex < reportCount; reportIndex++)
-            {
-                var reportStart = reportIndex * reportSize;
-                for (var offset = 0; offset + 1 < reportSize; offset++)
+                var reports = data.AsSpan(start + 8, reportLength * reportCount);
+                for (int report = 0; report < reportCount; report++)
                 {
-                    var usage = (ushort)(reports[reportStart + offset] |
-                        (reports[reportStart + offset + 1] << 8));
-                    if (usage is BrightnessIncrementUsage or BrightnessDecrementUsage)
+                    int offset = report * reportLength;
+                    for (int i = 0; i + 1 < reportLength; i++)
                     {
+                        ushort usage = (ushort)(reports[offset + i] | (reports[offset + i + 1] << 8));
+                        if (usage is not (BrightnessIncrementUsage or BrightnessDecrementUsage))
+                            continue;
+
                         _rawBrightnessInputCount++;
-                        BrightnessKeyInvoked?.Invoke(
-                            this,
-                            new BrightnessKeyEventArgs(
-                                usage == BrightnessIncrementUsage
-                                    ? BrightnessKeyDirection.Increase
-                                    : BrightnessKeyDirection.Decrease,
-                                GetCursorMonitorDeviceName()));
+                        BrightnessKeyInvoked?.Invoke(this, new BrightnessKeyEventArgs(
+                            usage == BrightnessIncrementUsage
+                                ? BrightnessKeyDirection.Increase
+                                : BrightnessKeyDirection.Decrease,
+                            GetCursorMonitorDeviceName()));
                         return;
                     }
                 }
@@ -617,7 +594,7 @@ public sealed partial class NotificationAreaIcon : IDisposable
         }
         finally
         {
-            Marshal.FreeHGlobal(buffer);
+            ArrayPool<byte>.Shared.Return(data);
         }
     }
 
