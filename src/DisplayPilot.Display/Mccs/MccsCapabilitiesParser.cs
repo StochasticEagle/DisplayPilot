@@ -278,45 +278,25 @@ namespace DisplayPilot.Display.Mccs
             return vcpCodes;
         }
 
-        /// <summary>
-        /// Parse a hex byte list: hex_byte*
-        /// Handles both space-separated (01 02 03) and concatenated (010203) formats.
-        /// </summary>
+        // Decode both adjacent hex pairs and whitespace-separated byte codes.
         private static List<byte> ParseHexList(string content)
         {
             var result = new List<byte>();
-            var span = content.AsSpan();
-            int i = 0;
-
-            while (i < span.Length)
+            for (int i = 0; i < content.Length;)
             {
-                // Skip whitespace
-                while (i < span.Length && char.IsWhiteSpace(span[i]))
+                if (i + 1 < content.Length &&
+                    byte.TryParse(content.AsSpan(i, 2),
+                        NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var value)
+                    && IsHexDigit(content[i]) && IsHexDigit(content[i + 1]))
                 {
-                    i++;
-                }
-
-                if (i >= span.Length)
-                {
-                    break;
-                }
-
-                // Try to read two hex digits
-                if (i + 1 < span.Length && IsHexDigit(span[i]) && IsHexDigit(span[i + 1]))
-                {
-                    if (byte.TryParse(span.Slice(i, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var value))
-                    {
-                        result.Add(value);
-                    }
-
+                    result.Add(value);
                     i += 2;
                 }
                 else
                 {
-                    i++; // Skip invalid character
+                    i++;
                 }
             }
-
             return result;
         }
 
