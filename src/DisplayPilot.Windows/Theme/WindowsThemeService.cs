@@ -43,22 +43,19 @@ public sealed class WindowsThemeService
         var systemChanged = before.SystemUsesLightTheme != shouldBeLight;
 
         if (appsChanged)
-        {
             _store.Write(AppsUseLightTheme, shouldBeLight ? 1 : 0);
-            _notifier.NotifyThemeChanged();
-        }
 
         if (systemChanged)
         {
             _store.Write(SystemUsesLightTheme, shouldBeLight ? 1 : 0);
             if (shouldBeLight)
-            {
                 _store.Write(ColorPrevalence, 0);
-                _notifier.NotifyColorPrevalenceChanged();
-            }
-
-            _notifier.NotifyThemeChanged();
         }
+
+        if (systemChanged && shouldBeLight)
+            _notifier.NotifyColorPrevalenceChanged();
+        else if (appsChanged || systemChanged)
+            _notifier.NotifyThemeChanged();
 
         return new ThemeApplyResult(mode, before, ReadState(), appsChanged, systemChanged);
     }

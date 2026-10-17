@@ -2386,7 +2386,6 @@ public sealed partial class MainWindow : Window, IDisposable
         }
 
         _brightnessReductionActive = _brightnessRestoreValues.Count > 0;
-        TrySaveBrightnessScheduleState();
     }
 
     private bool TryGetCurrentBrightnessPercent(string devicePath, out int percent)
