@@ -12,6 +12,7 @@ using DisplayPilot.Display.Ddc;
 using DisplayPilot.Display.Discovery;
 using DisplayPilot.Display.Interop;
 using DisplayPilot.Display.Mccs;
+using DisplayPilot.Display.Models;
 using DisplayPilot.Display.Rotation;
 using DisplayPilot.Display.Wmi;
 using DisplayPilot.Windows.Scheduling;
@@ -1719,7 +1720,7 @@ public sealed partial class MainWindow : Window, IDisposable
             _brightnessRestoreValues.Clear();
             foreach (var pair in result.BrightnessRestoreValues)
             {
-                _brightnessRestoreValues[pair.Key] = pair.Value;
+                _brightnessRestoreValues[DisplayPathKey.FromDevicePath(pair.Key)] = pair.Value;
             }
             _updatingCompactControls = true;
             try
