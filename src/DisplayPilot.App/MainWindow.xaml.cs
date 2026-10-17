@@ -110,6 +110,8 @@ public sealed partial class MainWindow : Window, IDisposable
     }
     private bool _initialScanStarted;
     private bool _displayScanStarted;
+    private bool _displayInventoryStale;
+    private bool _topologyRefreshQueued;
     private bool _sessionIsActive = true;
     private bool _advancedIconLoaded;
     private bool _updatingCompactControls;
@@ -160,7 +162,6 @@ public sealed partial class MainWindow : Window, IDisposable
         ConfigureCompactWindow();
         _themeScheduleTimer.Elapsed += ThemeScheduleTimer_Elapsed;
         _brightnessEventWatcher.BrightnessChanged += BrightnessEventWatcher_BrightnessChanged;
-        _brightnessEventWatcher.TryStart();
         Activated += MainWindow_Activated;
         AppWindow.Closing += AppWindow_Closing;
         Closed += MainWindow_Closed;
@@ -190,6 +191,7 @@ public sealed partial class MainWindow : Window, IDisposable
             _notificationAreaIcon.ExitInvoked += NotificationAreaIcon_ExitInvoked;
             _notificationAreaIcon.SessionActivityChanged +=
                 NotificationAreaIcon_SessionActivityChanged;
+            _notificationAreaIcon.DisplayConfigurationChanged += NotificationAreaIcon_DisplayConfigurationChanged;
             _notificationAreaIcon.BrightnessKeyInvoked +=
                 NotificationAreaIcon_BrightnessKeyInvoked;
             return true;
@@ -247,11 +249,11 @@ public sealed partial class MainWindow : Window, IDisposable
             }
         }
 
-        if (includeDisplays && !_displayScanStarted && _sessionIsActive)
+        if (includeDisplays && (!_displayScanStarted || _displayInventoryStale) && _sessionIsActive)
         {
             _displayScanStarted = true;
             await RefreshDisplaysAsync();
-            if (_activeMonitors.Count > 0)
+            if (_activeMonitors.Count > 0 && _lastDdcProbes.Count == 0)
             {
                 await ProbeDdcBrightnessAsync();
             }
@@ -290,7 +292,7 @@ public sealed partial class MainWindow : Window, IDisposable
 
         ShowCompactView();
         RefreshDiagnosticReport();
-        if (_activeMonitors.Count > 0)
+        if (_activeMonitors.Count > 0 && _lastDdcProbes.Count == 0)
         {
             await ProbeDdcBrightnessAsync();
             await EvaluateAndApplyScheduleAsync();
@@ -374,16 +376,46 @@ public sealed partial class MainWindow : Window, IDisposable
         _ = DispatcherQueue.TryEnqueue(() => SetSessionActivity(isActive));
     }
 
+    private void NotificationAreaIcon_DisplayConfigurationChanged(object? sender, EventArgs e)
+    {
+        _ = DispatcherQueue.TryEnqueue(() =>
+        {
+            _displayInventoryStale = true;
+            _lastDdcCapabilities = [];
+            if (!_sessionIsActive || !AppWindow.IsVisible || _topologyRefreshQueued) return;
+            _topologyRefreshQueued = true;
+            _ = RefreshTopologyAfterEventAsync();
+        });
+    }
+
+    private async Task RefreshTopologyAfterEventAsync()
+    {
+        try
+        {
+            await WaitForDisplayIdleAsync();
+            if (!_sessionIsActive) return;
+            await RefreshDisplaysAsync();
+            if (_activeMonitors.Count > 0) await ProbeDdcBrightnessAsync();
+        }
+        finally
+        {
+            _topologyRefreshQueued = false;
+        }
+    }
+
     private void BrightnessEventWatcher_BrightnessChanged(
         object? sender,
         WmiBrightnessChangedEventArgs args)
     {
-        if (!args.Active)
+        if (!args.Active || !_sessionIsActive) return;
+        var identity = DisplayPathKey.FromWmiInstance(args.InstanceName);
+        _ = DispatcherQueue.TryEnqueue(() =>
         {
-            return;
-        }
-
-        _ = DispatcherQueue.TryEnqueue(() => QueueKeyboardBrightnessSync(args.Brightness));
+            if (_lastWmiProbes.Any(probe =>
+                    probe.Status == WmiBrightnessProbeStatus.ReadSucceeded &&
+                    string.Equals(probe.Display.DevicePath, identity, StringComparison.OrdinalIgnoreCase)))
+                QueueKeyboardBrightnessSync(args.Brightness);
+        });
     }
 
     private void NotificationAreaIcon_BrightnessKeyInvoked(
@@ -609,20 +641,20 @@ public sealed partial class MainWindow : Window, IDisposable
             _brightnessChangeCancellation?.Cancel();
             _contrastChangeCancellation?.Cancel();
             _themeScheduleTimer.Cancel();
+            _brightnessEventWatcher.Stop();
             _trayContextMenuWindow?.Close();
             AppWindow.Hide();
             return;
         }
 
-        var displaysWereInitialized = _displayScanStarted;
         await InitializeAsync();
-        await EvaluateAndApplyScheduleAsync();
-        UpdateThemeScheduleTimer();
-        if (displaysWereInitialized)
+        if (_displayScanStarted)
         {
             await RefreshDisplaysAsync();
-            await EvaluateAndApplyScheduleAsync();
+            if (_activeMonitors.Count > 0) await ProbeDdcBrightnessAsync();
         }
+        await EvaluateAndApplyScheduleAsync();
+        UpdateThemeScheduleTimer();
     }
 
     public async void ShowFromExternalActivation()
@@ -1133,6 +1165,7 @@ public sealed partial class MainWindow : Window, IDisposable
             var monitors = await Task.Run(_monitorDiscovery.DiscoverActiveMonitors);
 
             _activeMonitors = monitors;
+            _displayInventoryStale = false;
             _lastRotationReads = await Task.Run(() => monitors
                 .Select(monitor => WindowsDisplayRotationService.Read(monitor.GdiDeviceName))
                 .ToArray());
@@ -1220,6 +1253,10 @@ public sealed partial class MainWindow : Window, IDisposable
             _lastContrastProbes = probes.Ddc.Contrast;
             _lastColorTemperatureProbes = probes.Ddc.ColorTemperature;
             _lastDdcCapabilities = probes.Ddc.Capabilities;
+            if (probes.Wmi.Any(item => item.Status == WmiBrightnessProbeStatus.ReadSucceeded))
+                _brightnessEventWatcher.TryStart();
+            else
+                _brightnessEventWatcher.Stop();
             if (!_windowsBrightnessStateSynchronized)
             {
                 _windowsBrightnessStateSynchronized = true;
@@ -2163,6 +2200,7 @@ public sealed partial class MainWindow : Window, IDisposable
             _notificationAreaIcon.ExitInvoked -= NotificationAreaIcon_ExitInvoked;
             _notificationAreaIcon.SessionActivityChanged -=
                 NotificationAreaIcon_SessionActivityChanged;
+            _notificationAreaIcon.DisplayConfigurationChanged -= NotificationAreaIcon_DisplayConfigurationChanged;
             _notificationAreaIcon.BrightnessKeyInvoked -=
                 NotificationAreaIcon_BrightnessKeyInvoked;
             _notificationAreaIcon.Dispose();

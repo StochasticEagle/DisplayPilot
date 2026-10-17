@@ -73,6 +73,17 @@ public sealed class WindowsWmiBrightnessEventWatcher : IDisposable
         return false;
     }
 
+    public void Stop()
+    {
+        var watcher = _watcher;
+        if (watcher is null) return;
+        _watcher = null;
+        watcher.EventArrived -= Watcher_EventArrived;
+        try { watcher.Stop(); }
+        catch (ManagementException) { /* Provider already stopped. */ }
+        watcher.Dispose();
+    }
+
     public void Dispose()
     {
         if (_disposed)
@@ -81,22 +92,7 @@ public sealed class WindowsWmiBrightnessEventWatcher : IDisposable
         }
 
         _disposed = true;
-        if (_watcher is not null)
-        {
-            _watcher.EventArrived -= Watcher_EventArrived;
-            try
-            {
-                _watcher.Stop();
-            }
-            catch (ManagementException)
-            {
-                // The provider may already have stopped during shutdown.
-            }
-
-            _watcher.Dispose();
-            _watcher = null;
-        }
-
+        Stop();
         GC.SuppressFinalize(this);
     }
 

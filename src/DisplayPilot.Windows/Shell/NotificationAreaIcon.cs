@@ -24,6 +24,9 @@ public sealed partial class NotificationAreaIcon : IDisposable
     private const uint ContextMenu = 0x007B;
     private const uint SessionChangeMessage = 0x02B1;
     private const uint RawInputMessage = 0x00FF;
+    private const uint DisplayChangeMessage = 0x007E;
+    private const uint DeviceChangeMessage = 0x0219;
+    private const nuint DeviceNodesChanged = 0x0007;
     private const uint RawInputDataCommand = 0x10000003;
     private const uint RawInputTypeHid = 2;
     private const uint RawInputSink = 0x00000100;
@@ -155,6 +158,8 @@ public sealed partial class NotificationAreaIcon : IDisposable
     public event EventHandler? ExitInvoked;
 
     public event EventHandler<bool>? SessionActivityChanged;
+
+    public event EventHandler? DisplayConfigurationChanged;
 
     public event EventHandler<BrightnessKeyEventArgs>? BrightnessKeyInvoked;
 
@@ -486,6 +491,13 @@ public sealed partial class NotificationAreaIcon : IDisposable
             }
 
             return 0;
+        }
+
+        if (message == DisplayChangeMessage ||
+            (message == DeviceChangeMessage && wParam == DeviceNodesChanged))
+        {
+            DisplayConfigurationChanged?.Invoke(this, EventArgs.Empty);
+            return DefWindowProc(window, message, wParam, lParam);
         }
 
         if (message == RawInputMessage)
