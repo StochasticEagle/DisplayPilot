@@ -1419,6 +1419,28 @@ public sealed partial class MainWindow : Window, IDisposable
         return writeResult?.Succeeded == true;
     }
 
+    private void UpdateVerifiedFeature(string devicePath, DdcVcpWriteResult result)
+    {
+        if (!result.Succeeded || result.VerifiedRawValue is not uint value) return;
+
+        IReadOnlyList<MonitorDdcVcpFeatureInfo> Update(IReadOnlyList<MonitorDdcVcpFeatureInfo> probes)
+            => probes.Select(item =>
+                string.Equals(item.Display.DevicePath, devicePath, StringComparison.OrdinalIgnoreCase)
+                    ? item with
+                    {
+                        PhysicalMonitors = item.PhysicalMonitors.Select(read =>
+                            read.Status == DdcVcpFeatureStatus.ReadSucceeded
+                                ? read with { CurrentValue = value }
+                                : read).ToArray()
+                    }
+                    : item).ToArray();
+
+        if (result.VcpCode == NativeConstants.VcpCodeContrast)
+            _lastContrastProbes = Update(_lastContrastProbes);
+        else if (result.VcpCode == NativeConstants.VcpCodeSelectColorPreset)
+            _lastColorTemperatureProbes = Update(_lastColorTemperatureProbes);
+    }
+
     private async Task SetContrastAsync(string devicePath, int requestedPercent)
     {
         if (_displayOperationRunning || !_sessionIsActive)
@@ -1439,9 +1461,7 @@ public sealed partial class MainWindow : Window, IDisposable
                 NativeConstants.VcpCodeContrast,
                 requestedPercent));
             _lastDdcVcpWriteResult = result;
-            _lastContrastProbes = await Task.Run(() => WindowsDdcVcpFeatureService.ReadFeature(
-                _activeMonitors,
-                NativeConstants.VcpCodeContrast));
+            UpdateVerifiedFeature(display.DevicePath, result);
             UpdateCompactMonitorCards();
             CompactStatusText.Text = result.Succeeded
                 ? $"{display.FriendlyName}: contrast verified at {result.VerifiedPercent}%."
@@ -1479,9 +1499,7 @@ public sealed partial class MainWindow : Window, IDisposable
                 NativeConstants.VcpCodeSelectColorPreset,
                 requestedValue));
             _lastDdcVcpWriteResult = result;
-            _lastColorTemperatureProbes = await Task.Run(() => WindowsDdcVcpFeatureService.ReadFeature(
-                _activeMonitors,
-                NativeConstants.VcpCodeSelectColorPreset));
+            UpdateVerifiedFeature(display.DevicePath, result);
             UpdateCompactMonitorCards();
             CompactStatusText.Text = result.Succeeded
                 ? $"{display.FriendlyName}: color temperature verified as {presetName}."
