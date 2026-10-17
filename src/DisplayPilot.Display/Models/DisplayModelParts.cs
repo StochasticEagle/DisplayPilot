@@ -25,11 +25,11 @@ public sealed class DisplayHardware
 
 public sealed class DisplayValues
 {
-    public int Brightness;
+    internal int Brightness;
     public int Contrast = 50;
     public int Volume = 50;
     public int ColorTemperature = 0x05;
-    public int InputSource;
+    internal int InputSource;
     public int PowerState = 0x01;
-    public int Orientation;
+    internal int Orientation;
 }
