@@ -1,7 +1,7 @@
 # DisplayPilot
 
 [![Build](https://github.com/StochasticEagle/DisplayPilot/actions/workflows/build.yml/badge.svg?branch=master)](https://github.com/StochasticEagle/DisplayPilot/actions/workflows/build.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![License: The Unlicense + MIT](https://img.shields.io/badge/License-Unlicense%20%2B%20MIT-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078D4.svg)](#system-requirements)
 [![Release](https://img.shields.io/badge/release-0.9.1%20beta-orange.svg)](https://github.com/StochasticEagle/DisplayPilot/releases)
 
@@ -184,9 +184,18 @@ extraction policy.
 
 ## License and attribution
 
-DisplayPilot is distributed under the [MIT License](LICENSE). Portions are based
-on Microsoft PowerToys source licensed under MIT. See [Notices](NOTICE.md) and
+The maintainer's original DisplayPilot contributions are released under
+[The Unlicense](LICENSE). Some source files remain available under MIT as well.
+Microsoft PowerToys-derived portions remain under MIT with their required
+copyright and license notices. See [Notices](NOTICE.md) and
 [Third-party notices](THIRD-PARTY-NOTICES.md) for attribution.
+
+Generative AI was used to help design, implement, refactor, and test DisplayPilot.
+AI-assisted changes were reviewed and integrated by the maintainer. To the
+extent the maintainer holds copyright in independently original AI-generated
+or AI-assisted contributions, these rights are dedicated to the public domain.
+This does not relicense pre-existing or derivative Microsoft or other third-party
+code; their applicable licenses and source notices remain in effect.
 
 Security reports and contribution requirements are documented in
 [Security policy](SECURITY.md) and [Contributing](CONTRIBUTING.md).
