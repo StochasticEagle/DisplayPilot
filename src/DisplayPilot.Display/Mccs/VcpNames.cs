@@ -4,8 +4,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using DisplayPilot.Display.Models;
 
 namespace DisplayPilot.Display.Mccs
 {
@@ -428,33 +426,5 @@ namespace DisplayPilot.Display.Mccs
             return $"0x{value:X2}";
         }
 
-        /// <summary>
-        /// Get human-readable name for a VCP value with custom mapping support.
-        /// Custom mappings take priority over built-in mappings.
-        /// </summary>
-        /// <param name="vcpCode">VCP code (e.g., 0x14)</param>
-        /// <param name="value">Value to translate</param>
-        /// <param name="customMappings">Custom mappings that take priority over built-in names</param>
-        /// <param name="monitorId">Monitor ID to filter monitor-specific mappings</param>
-        /// <returns>Name string like "sRGB" or null if unknown</returns>
-        public static string? GetValueName(byte vcpCode, int value, IEnumerable<CustomVcpValueMapping>? customMappings, string monitorId)
-        {
-            // 1. Priority: Check custom mappings first
-            if (customMappings != null)
-            {
-                var custom = customMappings.FirstOrDefault(m =>
-                    m.VcpCode == vcpCode &&
-                    m.Value == value &&
-                    (m.ApplyToAll || (!m.ApplyToAll && MonitorIdComparer.Equal(m.TargetMonitorId, monitorId))));
-
-                if (custom != null && !string.IsNullOrEmpty(custom.CustomName))
-                {
-                    return custom.CustomName;
-                }
-            }
-
-            // 2. Fallback to built-in mappings
-            return GetValueName(vcpCode, value);
-        }
     }
 }

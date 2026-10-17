@@ -27,7 +27,7 @@ public sealed class WindowsWmiBrightnessWriter : IBrightnessWriter
         ArgumentNullException.ThrowIfNull(display);
         requestedPercent = Math.Clamp(requestedPercent, 0, 100);
 
-        var displayId = MonitorIdentity.FromDevicePath(display.DevicePath);
+        var displayId = DisplayPathKey.FromDevicePath(display.DevicePath);
         var brightnessQuery = _brightnessApi.QueryBrightness();
         if (!brightnessQuery.Succeeded)
         {
@@ -37,7 +37,7 @@ public sealed class WindowsWmiBrightnessWriter : IBrightnessWriter
         var brightnessInstance = brightnessQuery.Instances.FirstOrDefault(instance =>
             instance.Active
             && string.Equals(
-                MonitorIdentity.FromInstanceName(instance.InstanceName),
+                DisplayPathKey.FromWmiInstance(instance.InstanceName),
                 displayId,
                 StringComparison.OrdinalIgnoreCase));
         if (brightnessInstance is null)
@@ -55,7 +55,7 @@ public sealed class WindowsWmiBrightnessWriter : IBrightnessWriter
                 using (method)
                 {
                     if (!string.Equals(
-                        MonitorIdentity.FromInstanceName(method["InstanceName"] as string),
+                        DisplayPathKey.FromWmiInstance(method["InstanceName"] as string),
                         displayId,
                         StringComparison.OrdinalIgnoreCase))
                     {
@@ -112,7 +112,7 @@ public sealed class WindowsWmiBrightnessWriter : IBrightnessWriter
             var instance = query.Instances.FirstOrDefault(candidate =>
                 candidate.Active
                 && string.Equals(
-                    MonitorIdentity.FromInstanceName(candidate.InstanceName),
+                    DisplayPathKey.FromWmiInstance(candidate.InstanceName),
                     displayId,
                     StringComparison.OrdinalIgnoreCase));
             if (instance?.CurrentBrightness == appliedPercent)

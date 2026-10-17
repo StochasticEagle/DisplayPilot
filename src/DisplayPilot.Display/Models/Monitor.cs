@@ -20,7 +20,7 @@ namespace DisplayPilot.Display.Models
     /// Format: the Windows DevicePath with the trailing device-class GUID stripped, e.g.
     /// <c>\\?\DISPLAY#DELD1A8#5&amp;abc&amp;0&amp;UID12345</c>. The middle segment is the
     /// PnP instance ID, unique per (physical device × physical port) and stable across
-    /// reboots, sleep/wake, and OS-level monitor reordering. See <see cref="MonitorIdentity.FromDevicePath"/>.
+    /// reboots, sleep/wake, and OS-level monitor reordering. See <see cref="DisplayPathKey.FromDevicePath"/>.
     /// </para>
     /// </remarks>
     public partial class Monitor : INotifyPropertyChanged, IMonitorData

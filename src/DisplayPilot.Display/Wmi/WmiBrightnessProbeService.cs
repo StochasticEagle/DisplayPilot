@@ -47,9 +47,9 @@ public sealed class WmiBrightnessProbeService
         MonitorDisplayInfo display,
         IReadOnlyList<WmiBrightnessInstance> instances)
     {
-        var displayId = MonitorIdentity.FromDevicePath(display.DevicePath);
+        var displayId = DisplayPathKey.FromDevicePath(display.DevicePath);
         var matches = instances.Where(instance => string.Equals(
-            MonitorIdentity.FromInstanceName(instance.InstanceName),
+            DisplayPathKey.FromWmiInstance(instance.InstanceName),
             displayId,
             StringComparison.OrdinalIgnoreCase)).ToArray();
         var match = matches.FirstOrDefault(instance => instance.Active) ?? matches.FirstOrDefault();
