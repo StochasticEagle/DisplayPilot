@@ -7,7 +7,7 @@ using DisplayPilot.Display.Mccs;
 
 namespace DisplayPilot.Display.Models;
 
-public sealed class Monitor : INotifyPropertyChanged, IMonitorData
+public class Monitor : INotifyPropertyChanged, IMonitorData
 {
     public DisplayIdentity Identity { get; } = new();
     public DisplayHardware Hardware { get; } = new();
