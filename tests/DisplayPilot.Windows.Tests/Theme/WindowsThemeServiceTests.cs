@@ -55,7 +55,7 @@ public sealed class WindowsThemeServiceTests
     }
 
     [TestMethod]
-    public void ApplyLightResetsColorPrevalenceLikePowerToys()
+    public void ApplyLightResetsWindowsColorPrevalence()
     {
         var store = new FakeStore
         {

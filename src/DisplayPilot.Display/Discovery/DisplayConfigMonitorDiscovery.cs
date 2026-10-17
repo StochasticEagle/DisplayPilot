@@ -3,6 +3,7 @@
 // See the LICENSE file in the project root for more information.
 
 using DisplayPilot.Display.Interop;
+using DisplayPilot.Display.Models;
 
 namespace DisplayPilot.Display.Discovery;
 
@@ -30,7 +31,7 @@ public sealed class DisplayConfigMonitorDiscovery : IMonitorDiscoveryService
 
         foreach (var path in _displayConfigApi.QueryActiveDisplayPaths().OrderBy(path => path.MonitorNumber))
         {
-            var devicePath = path.DevicePath?.Trim();
+            var devicePath = DisplayPathKey.FromDevicePath(path.DevicePath?.Trim());
             var gdiDeviceName = path.GdiDeviceName?.Trim();
 
             if (string.IsNullOrWhiteSpace(devicePath) || string.IsNullOrWhiteSpace(gdiDeviceName))

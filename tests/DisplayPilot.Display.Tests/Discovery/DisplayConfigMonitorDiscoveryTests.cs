@@ -12,7 +12,7 @@ public sealed class DisplayConfigMonitorDiscoveryTests
         IDisplayConfigApi api = new FakeDisplayConfigApi(
         [
             new("  \\\\?\\DISPLAY#DEL1234#FIRST  ", "  \\\\.\\DISPLAY2  ", "  Office monitor  ", 2),
-            new("\\\\?\\display#del1234#first", "\\\\.\\DISPLAY9", "Duplicate", 9),
+            new("\\\\?\\display#del1234#first#{guid}", "\\\\.\\DISPLAY9", "Duplicate", 9),
             new(null, "\\\\.\\DISPLAY3", "Missing path", 3),
             new("\\\\?\\DISPLAY#ACR0001#SECOND", null, "Missing GDI name", 4),
         ]);

@@ -6,7 +6,7 @@ using DisplayPilot.Core.Theme;
 namespace DisplayPilot.Windows.Theme;
 
 /// <summary>
-/// Applies the same per-user Windows theme values used by PowerToys Light Switch.
+/// Applies per-user Windows application and system theme preferences.
 /// </summary>
 public sealed class WindowsThemeService
 {
