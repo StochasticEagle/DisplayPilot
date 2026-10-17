@@ -15,7 +15,7 @@ public interface IBasicMonitorController
 {
     string Name { get; }
 
-    Task<VcpFeatureValue> GetBrightnessAsync(
+    Task<DisplayControlReading> GetBrightnessAsync(
         Monitor monitor,
         CancellationToken cancellationToken = default);
 

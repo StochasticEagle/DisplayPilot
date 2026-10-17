@@ -21,7 +21,7 @@ public class Monitor : INotifyPropertyChanged, IMonitorData
 
     public nint Handle { get => Hardware.Handle; set => Hardware.Handle = value; }
     public string CommunicationMethod { get => Hardware.CommunicationMethod; set => Hardware.CommunicationMethod = value; }
-    public MonitorCapabilities Capabilities { get => Hardware.Capabilities; set => Hardware.Capabilities = value; }
+    public DisplayControlSupport Capabilities { get => Hardware.Capabilities; set => Hardware.Capabilities = value; }
     public MonitorReadFlags ReadValues { get => Hardware.ReadValues; set => Hardware.ReadValues = value; }
     public string? CapabilitiesRaw { get => Hardware.CapabilitiesRaw; set => Hardware.CapabilitiesRaw = value; }
     public VcpCapabilities? VcpCapabilitiesInfo { get => Hardware.VcpCapabilitiesInfo; set => Hardware.VcpCapabilitiesInfo = value; }
@@ -33,9 +33,9 @@ public class Monitor : INotifyPropertyChanged, IMonitorData
     public IReadOnlyList<int>? SupportedInputSources => VcpCapabilitiesInfo?.GetSupportedValues(0x60);
     public bool SupportsPowerState => VcpCapabilitiesInfo?.SupportsVcpCode(0xD6) == true;
     public IReadOnlyList<int>? SupportedPowerStates => VcpCapabilitiesInfo?.GetSupportedValues(0xD6);
-    public bool SupportsBrightness => Capabilities.HasFlag(MonitorCapabilities.Brightness);
-    public bool SupportsContrast => Capabilities.HasFlag(MonitorCapabilities.Contrast);
-    public bool SupportsVolume => Capabilities.HasFlag(MonitorCapabilities.Volume);
+    public bool SupportsBrightness => Capabilities.HasFlag(DisplayControlSupport.Brightness);
+    public bool SupportsContrast => Capabilities.HasFlag(DisplayControlSupport.Contrast);
+    public bool SupportsVolume => Capabilities.HasFlag(DisplayControlSupport.Volume);
 
     public int CurrentBrightness
     {

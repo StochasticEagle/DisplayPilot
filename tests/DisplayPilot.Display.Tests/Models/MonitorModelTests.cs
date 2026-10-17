@@ -26,7 +26,7 @@ public sealed class MonitorModelTests
     {
         var monitor = new Monitor
         {
-            Capabilities = MonitorCapabilities.Brightness | MonitorCapabilities.Volume,
+            Capabilities = DisplayControlSupport.Brightness | DisplayControlSupport.Volume,
         };
 
         Assert.IsTrue(monitor.SupportsBrightness);

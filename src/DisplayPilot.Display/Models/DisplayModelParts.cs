@@ -13,7 +13,7 @@ public sealed class DisplayHardware
 {
     public nint Handle { get; set; }
     public string CommunicationMethod { get; set; } = "";
-    public MonitorCapabilities Capabilities { get; set; }
+    public DisplayControlSupport Capabilities { get; set; }
     public MonitorReadFlags ReadValues { get; set; }
     public string? CapabilitiesRaw { get; set; }
     public VcpCapabilities? VcpCapabilitiesInfo { get; set; }

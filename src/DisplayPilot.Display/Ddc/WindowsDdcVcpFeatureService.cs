@@ -130,7 +130,7 @@ public static class WindowsDdcVcpFeatureService
                         }
 
                         appliedRaw = continuous
-                            ? (uint)VcpFeatureValue.FromPercentage(checked((int)requestedValue), checked((int)maximum))
+                            ? (uint)DisplayControlReading.FromPercentage(checked((int)requestedValue), checked((int)maximum))
                             : requestedValue;
                         if (!DdcPInvoke.SetVCPFeature(physicalMonitor.Handle, vcpCode, appliedRaw))
                         {
@@ -160,7 +160,7 @@ public static class WindowsDdcVcpFeatureService
                                 return WriteFailure(vcpCode, requestedValue, ErrorInvalidData, "The monitor reported a zero feature maximum.", appliedRaw);
                             }
 
-                            verifiedPercent = new VcpFeatureValue(checked((int)current), checked((int)maximum)).ToPercentage();
+                            verifiedPercent = new DisplayControlReading(checked((int)current), checked((int)maximum)).ToPercentage();
                             if (Math.Abs(verifiedPercent.Value - checked((int)requestedValue)) > 1)
                             {
                                 return new DdcVcpWriteResult(

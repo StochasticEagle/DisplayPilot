@@ -26,10 +26,10 @@ public sealed class MonitorControllerContractTests
     {
         public string Name => "Brightness only";
 
-        public Task<VcpFeatureValue> GetBrightnessAsync(
+        public Task<DisplayControlReading> GetBrightnessAsync(
             Monitor monitor,
             CancellationToken cancellationToken = default)
-            => Task.FromResult(new VcpFeatureValue(monitor.CurrentBrightness, 100));
+            => Task.FromResult(new DisplayControlReading(monitor.CurrentBrightness, 100));
 
         public Task<MonitorOperationResult> SetBrightnessAsync(
             Monitor monitor,

@@ -13,32 +13,32 @@ namespace DisplayPilot.Display.Interfaces;
 /// </summary>
 public interface IDdcController
 {
-    Task<VcpFeatureValue> GetContrastAsync(Monitor monitor, CancellationToken cancellationToken = default)
-        => Task.FromResult(VcpFeatureValue.Invalid);
+    Task<DisplayControlReading> GetContrastAsync(Monitor monitor, CancellationToken cancellationToken = default)
+        => Task.FromResult(DisplayControlReading.Invalid);
 
     Task<MonitorOperationResult> SetContrastAsync(Monitor monitor, int contrast, CancellationToken cancellationToken = default)
         => Unsupported("Contrast");
 
-    Task<VcpFeatureValue> GetVolumeAsync(Monitor monitor, CancellationToken cancellationToken = default)
-        => Task.FromResult(VcpFeatureValue.Invalid);
+    Task<DisplayControlReading> GetVolumeAsync(Monitor monitor, CancellationToken cancellationToken = default)
+        => Task.FromResult(DisplayControlReading.Invalid);
 
     Task<MonitorOperationResult> SetVolumeAsync(Monitor monitor, int volume, CancellationToken cancellationToken = default)
         => Unsupported("Volume");
 
-    Task<VcpFeatureValue> GetColorTemperatureAsync(Monitor monitor, CancellationToken cancellationToken = default)
-        => Task.FromResult(VcpFeatureValue.Invalid);
+    Task<DisplayControlReading> GetColorTemperatureAsync(Monitor monitor, CancellationToken cancellationToken = default)
+        => Task.FromResult(DisplayControlReading.Invalid);
 
     Task<MonitorOperationResult> SetColorTemperatureAsync(Monitor monitor, int colorTemperature, CancellationToken cancellationToken = default)
         => Unsupported("Color temperature");
 
-    Task<VcpFeatureValue> GetInputSourceAsync(Monitor monitor, CancellationToken cancellationToken = default)
-        => Task.FromResult(VcpFeatureValue.Invalid);
+    Task<DisplayControlReading> GetInputSourceAsync(Monitor monitor, CancellationToken cancellationToken = default)
+        => Task.FromResult(DisplayControlReading.Invalid);
 
     Task<MonitorOperationResult> SetInputSourceAsync(Monitor monitor, int inputSource, CancellationToken cancellationToken = default)
         => Unsupported("Input source");
 
-    Task<VcpFeatureValue> GetPowerStateAsync(Monitor monitor, CancellationToken cancellationToken = default)
-        => Task.FromResult(VcpFeatureValue.Invalid);
+    Task<DisplayControlReading> GetPowerStateAsync(Monitor monitor, CancellationToken cancellationToken = default)
+        => Task.FromResult(DisplayControlReading.Invalid);
 
     Task<MonitorOperationResult> SetPowerStateAsync(Monitor monitor, int powerState, CancellationToken cancellationToken = default)
         => Unsupported("Power state");
