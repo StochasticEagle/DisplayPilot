@@ -57,3 +57,9 @@ public sealed record DdcVcpWriteResult(
 {
     public bool Succeeded => Status == DdcVcpWriteStatus.WriteSucceeded;
 }
+
+public sealed record DdcControlSnapshot(
+    IReadOnlyList<MonitorDdcProbeInfo> Brightness,
+    IReadOnlyList<MonitorDdcVcpFeatureInfo> Contrast,
+    IReadOnlyList<MonitorDdcVcpFeatureInfo> ColorTemperature,
+    IReadOnlyList<MonitorDdcCapabilitiesInfo> Capabilities);

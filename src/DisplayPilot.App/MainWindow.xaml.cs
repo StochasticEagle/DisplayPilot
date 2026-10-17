@@ -1222,22 +1222,13 @@ public sealed partial class MainWindow : Window, IDisposable
         try
         {
             var probes = await Task.Run(() => (
-                Ddc: _ddcProbeService.ProbeBrightness(_activeMonitors),
-                Wmi: _wmiProbeService.ProbeBrightness(_activeMonitors),
-                Contrast: WindowsDdcVcpFeatureService.ReadFeature(
-                    _activeMonitors,
-                    NativeConstants.VcpCodeContrast),
-                ColorTemperature: WindowsDdcVcpFeatureService.ReadFeature(
-                    _activeMonitors,
-                    NativeConstants.VcpCodeSelectColorPreset),
-                Capabilities: _lastDdcCapabilities.Count == 0
-                    ? WindowsDdcVcpFeatureService.ReadCapabilities(_activeMonitors)
-                    : _lastDdcCapabilities));
-            _lastDdcProbes = probes.Ddc;
+                Ddc: WindowsDdcVcpFeatureService.ReadSnapshot(_activeMonitors, _lastDdcCapabilities),
+                Wmi: _wmiProbeService.ProbeBrightness(_activeMonitors)));
+            _lastDdcProbes = probes.Ddc.Brightness;
             _lastWmiProbes = probes.Wmi;
-            _lastContrastProbes = probes.Contrast;
-            _lastColorTemperatureProbes = probes.ColorTemperature;
-            _lastDdcCapabilities = probes.Capabilities;
+            _lastContrastProbes = probes.Ddc.Contrast;
+            _lastColorTemperatureProbes = probes.Ddc.ColorTemperature;
+            _lastDdcCapabilities = probes.Ddc.Capabilities;
             if (!_windowsBrightnessStateSynchronized)
             {
                 _windowsBrightnessStateSynchronized = true;
@@ -1261,7 +1252,7 @@ public sealed partial class MainWindow : Window, IDisposable
             UpdateCompactMonitorCards();
 
             var readableCount = _activeMonitors.Count(monitor =>
-                probes.Ddc.Any(probe =>
+                probes.Ddc.Brightness.Any(probe =>
                     string.Equals(probe.Display.DevicePath, monitor.DevicePath, StringComparison.OrdinalIgnoreCase)
                     && probe.PhysicalMonitors.Any(result =>
                         result.Status == DdcBrightnessProbeStatus.ReadSucceeded))
@@ -1279,7 +1270,7 @@ public sealed partial class MainWindow : Window, IDisposable
                 : string.Empty;
             _diagnosticReport = BuildDiagnosticReport(
                 _activeMonitors,
-                probes.Ddc,
+                probes.Ddc.Brightness,
                 probes.Wmi,
                 writeResult: null,
                 error: null);

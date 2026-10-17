@@ -49,6 +49,124 @@ public static class WindowsDdcVcpFeatureService
                     0)])).ToArray();
     }
 
+
+    /// <summary>Read the display's supported controls through one physical-handle acquisition.</summary>
+    public static DdcControlSnapshot ReadSnapshot(
+        IReadOnlyList<MonitorDisplayInfo> displays,
+        IReadOnlyList<MonitorDdcCapabilitiesInfo>? previousCapabilities = null)
+    {
+        ArgumentNullException.ThrowIfNull(displays);
+        var monitors = displays.Count == 0 ? [] : EnumerateLogicalMonitors();
+        var brightness = new List<MonitorDdcProbeInfo>(displays.Count);
+        var contrast = new List<MonitorDdcVcpFeatureInfo>(displays.Count);
+        var temperature = new List<MonitorDdcVcpFeatureInfo>(displays.Count);
+        var capabilities = new List<MonitorDdcCapabilitiesInfo>(displays.Count);
+
+        foreach (var display in displays)
+        {
+            var bright = new List<DdcVcpFeatureResult>();
+            var dark = new List<DdcVcpFeatureResult>();
+            var colors = new List<DdcVcpFeatureResult>();
+            var known = previousCapabilities?.FirstOrDefault(item =>
+                string.Equals(item.Display.DevicePath, display.DevicePath, StringComparison.OrdinalIgnoreCase));
+            var capability = known;
+            var logical = monitors.FirstOrDefault(item =>
+                string.Equals(item.DeviceName, display.GdiDeviceName, StringComparison.OrdinalIgnoreCase));
+            var lastError = ErrorInvalidData;
+            if (logical is not null)
+            {
+                for (int attempt = 1; attempt <= MaximumHandleAttempts; attempt++)
+                {
+                    if (attempt > 1) Thread.Sleep(HandleRetryDelayMilliseconds);
+                    var physical = AcquirePhysicalMonitors(logical.Handle, out lastError);
+                    if (physical is null) continue;
+                    try
+                    {
+                        foreach (var item in physical)
+                        {
+                            bright.Add(ReadSnapshotFeature(display.GdiDeviceName, item,
+                                NativeConstants.VcpCodeBrightness, attempt));
+                            dark.Add(ReadSnapshotFeature(display.GdiDeviceName, item,
+                                NativeConstants.VcpCodeContrast, attempt));
+                            colors.Add(ReadSnapshotFeature(display.GdiDeviceName, item,
+                                NativeConstants.VcpCodeSelectColorPreset, attempt));
+                            if (capability is null || !capability.Succeeded)
+                            {
+                                if (TrySnapshotCapabilities(item.Handle, out var raw, out var parsed, out var error))
+                                    capability = new(display, true, raw, parsed);
+                                else
+                                    lastError = error;
+                            }
+                        }
+                    }
+                    finally
+                    {
+                        DestroyPhysicalMonitors(physical);
+                    }
+                    break;
+                }
+            }
+
+            if (bright.Count == 0)
+            {
+                var status = logical is null ? DdcVcpFeatureStatus.NoPhysicalMonitor :
+                    DdcVcpFeatureStatus.PhysicalMonitorEnumerationFailed;
+                bright.Add(Failure(display.GdiDeviceName, "", NativeConstants.VcpCodeBrightness, status, lastError, 0));
+                dark.Add(Failure(display.GdiDeviceName, "", NativeConstants.VcpCodeContrast, status, lastError, 0));
+                colors.Add(Failure(display.GdiDeviceName, "", NativeConstants.VcpCodeSelectColorPreset, status, lastError, 0));
+            }
+            brightness.Add(new(display, bright.Select(item => new DdcBrightnessProbeResult(
+                item.GdiDeviceName, item.PhysicalMonitorDescription,
+                (DdcBrightnessProbeStatus)(int)item.Status, item.CurrentValue, item.MaximumValue,
+                item.Win32Error, item.AttemptCount, item.HandleAcquisitionAttempts)).ToArray()));
+            contrast.Add(new(display, dark));
+            temperature.Add(new(display, colors));
+            capabilities.Add(capability ?? new(display, false, "", VcpCapabilities.Empty, lastError));
+        }
+        return new(brightness, contrast, temperature, capabilities);
+    }
+
+    private static DdcVcpFeatureResult ReadSnapshotFeature(
+        string device, PhysicalMonitor item, byte code, int attempt)
+    {
+        var description = item.GetDescription();
+        if (item.Handle == 0)
+            return Failure(device, description, code, DdcVcpFeatureStatus.PhysicalMonitorHandleUnavailable, ErrorInvalidData, attempt);
+
+        var worked = TryReadFeature(item.Handle, code, out var current, out var maximum, out var error, out var reads);
+        return new(device, description, code,
+            worked ? DdcVcpFeatureStatus.ReadSucceeded : DdcVcpFeatureStatus.ReadFailed,
+            current, maximum, error, reads, attempt);
+    }
+
+    private static unsafe bool TrySnapshotCapabilities(
+        nint handle, out string raw, out VcpCapabilities parsed, out int error)
+    {
+        raw = "";
+        parsed = VcpCapabilities.Empty;
+        error = ErrorInvalidData;
+        if (handle == 0) return false;
+        if (!DdcPInvoke.GetCapabilitiesStringLength(handle, out var size))
+        {
+            error = Marshal.GetLastPInvokeError();
+            return false;
+        }
+        if (size is 0 or > 65536) return false;
+        var buffer = new byte[size];
+        fixed (byte* address = buffer)
+        {
+            if (!DdcPInvoke.CapabilitiesRequestAndCapabilitiesReply(handle, address, size))
+            {
+                error = Marshal.GetLastPInvokeError();
+                return false;
+            }
+        }
+        raw = Encoding.ASCII.GetString(buffer).TrimEnd('\0');
+        parsed = MccsCapabilitiesParser.Parse(raw).Capabilities;
+        error = 0;
+        return true;
+    }
+
     public static DdcVcpWriteResult WriteContinuousPercent(
         MonitorDisplayInfo display,
         byte vcpCode,
