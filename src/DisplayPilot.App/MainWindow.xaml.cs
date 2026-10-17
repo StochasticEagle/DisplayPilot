@@ -448,30 +448,27 @@ public sealed partial class MainWindow : Window, IDisposable
             {
                 var adjustment = await Task.Run(() =>
                 {
-                    var results = new List<BrightnessWriteResult>();
+                    var results = new List<(string Device, BrightnessWriteResult Result)>();
                     foreach (var pair in adjustments)
                     {
-                        results.AddRange(_keyboardBrightnessSyncService.AdjustBy(
-                            pair.Value,
-                            pair.Key,
-                            _lastDdcProbes,
-                            _lastWmiProbes));
+                        foreach (var result in _keyboardBrightnessSyncService.AdjustBy(
+                            pair.Value, pair.Key, _lastDdcProbes, _lastWmiProbes))
+                        {
+                            results.Add((pair.Key, result));
+                        }
                     }
-
-                    var probes = (
-                        Ddc: _ddcProbeService.ProbeBrightness(_activeMonitors),
-                        Wmi: _wmiProbeService.ProbeBrightness(_activeMonitors));
-                    return (Results: results, Probes: probes);
+                    return results;
                 }, cancellation.Token);
 
-                _lastKeyboardBrightnessTargetCount = adjustment.Results.Count;
-                _lastKeyboardBrightnessSuccessCount =
-                    adjustment.Results.Count(result => result.Succeeded);
-                _lastBrightnessWriteResult = adjustment.Results.Count == 0
-                    ? null
-                    : adjustment.Results[^1];
-                _lastDdcProbes = adjustment.Probes.Ddc;
-                _lastWmiProbes = adjustment.Probes.Wmi;
+                _lastKeyboardBrightnessTargetCount = adjustment.Count;
+                _lastKeyboardBrightnessSuccessCount = adjustment.Count(item => item.Result.Succeeded);
+                _lastBrightnessWriteResult = adjustment.Count == 0 ? null : adjustment[^1].Result;
+                foreach (var (device, result) in adjustment)
+                {
+                    var monitor = _activeMonitors.FirstOrDefault(item =>
+                        string.Equals(item.GdiDeviceName, device, StringComparison.OrdinalIgnoreCase));
+                    if (monitor is not null) UpdateVerifiedBrightness(monitor.DevicePath, result);
+                }
                 if (_lastKeyboardTargetGdiDeviceName is { } targetName)
                 {
                     var target = _activeMonitors.FirstOrDefault(monitor => string.Equals(
@@ -561,27 +558,15 @@ public sealed partial class MainWindow : Window, IDisposable
                 _displayOperationRunning = true;
                 try
                 {
-                    var synchronization = await Task.Run(() =>
-                    {
-                        var results = _keyboardBrightnessSyncService.Synchronize(
-                            requestedPercent,
-                            targetGdiDeviceName,
-                            _lastDdcProbes,
-                            _lastWmiProbes);
-                        var probes = (
-                            Ddc: _ddcProbeService.ProbeBrightness(_activeMonitors),
-                            Wmi: _wmiProbeService.ProbeBrightness(_activeMonitors));
-                        return (Results: results, Probes: probes);
-                    });
-
-                    _lastKeyboardBrightnessTargetCount = synchronization.Results.Count;
-                    _lastKeyboardBrightnessSuccessCount =
-                        synchronization.Results.Count(result => result.Succeeded);
-                    _lastBrightnessWriteResult = synchronization.Results.Count == 0
-                        ? null
-                        : synchronization.Results[^1];
-                    _lastDdcProbes = synchronization.Probes.Ddc;
-                    _lastWmiProbes = synchronization.Probes.Wmi;
+                    var results = await Task.Run(() => _keyboardBrightnessSyncService.Synchronize(
+                        requestedPercent, targetGdiDeviceName, _lastDdcProbes, _lastWmiProbes));
+                    _lastKeyboardBrightnessTargetCount = results.Count;
+                    _lastKeyboardBrightnessSuccessCount = results.Count(result => result.Succeeded);
+                    _lastBrightnessWriteResult = results.Count == 0 ? null : results[^1];
+                    var monitor = _activeMonitors.FirstOrDefault(item =>
+                        string.Equals(item.GdiDeviceName, targetGdiDeviceName, StringComparison.OrdinalIgnoreCase));
+                    if (monitor is not null)
+                        foreach (var result in results) UpdateVerifiedBrightness(monitor.DevicePath, result);
                     UpdateCompactMonitorCards();
                     RefreshDiagnosticReport();
                 }
@@ -1304,6 +1289,35 @@ public sealed partial class MainWindow : Window, IDisposable
         }
     }
 
+    private void UpdateVerifiedBrightness(string devicePath, BrightnessWriteResult result)
+    {
+        if (!result.Succeeded || result.VerifiedPercent is < 0 or > 100) return;
+
+        if (result.Provider == BrightnessWriteProvider.Wmi)
+        {
+            _lastWmiProbes = _lastWmiProbes.Select(item =>
+                string.Equals(item.Display.DevicePath, devicePath, StringComparison.OrdinalIgnoreCase)
+                    ? item with { CurrentBrightness = (byte)result.VerifiedPercent }
+                    : item).ToArray();
+        }
+        else if (result.Provider == BrightnessWriteProvider.DdcCi)
+        {
+            _lastDdcProbes = _lastDdcProbes.Select(item =>
+                string.Equals(item.Display.DevicePath, devicePath, StringComparison.OrdinalIgnoreCase)
+                    ? item with
+                    {
+                        PhysicalMonitors = item.PhysicalMonitors.Select(read =>
+                            read.Status == DdcBrightnessProbeStatus.ReadSucceeded && read.MaximumValue > 0
+                                ? read with
+                                {
+                                    CurrentValue = (uint)Math.Round(result.VerifiedPercent * read.MaximumValue / 100d)
+                                }
+                                : read).ToArray()
+                    }
+                    : item).ToArray();
+        }
+    }
+
     private async Task<bool> SetBrightnessAsync(string devicePath, int requestedPercent)
     {
         if (_displayOperationRunning || !_sessionIsActive)
@@ -1349,11 +1363,7 @@ public sealed partial class MainWindow : Window, IDisposable
                 wmiProbe,
                 requestedPercent));
             _lastBrightnessWriteResult = writeResult;
-            var refreshed = await Task.Run(() => (
-                Ddc: _ddcProbeService.ProbeBrightness(_activeMonitors),
-                Wmi: _wmiProbeService.ProbeBrightness(_activeMonitors)));
-            _lastDdcProbes = refreshed.Ddc;
-            _lastWmiProbes = refreshed.Wmi;
+            UpdateVerifiedBrightness(display.DevicePath, writeResult);
             UpdateCompactMonitorCards();
 
             StatusText.Text = writeResult.Succeeded
@@ -1379,8 +1389,8 @@ public sealed partial class MainWindow : Window, IDisposable
                 : "Brightness did not verify. Open Advanced for details.";
             _diagnosticReport = BuildDiagnosticReport(
                 _activeMonitors,
-                refreshed.Ddc,
-                refreshed.Wmi,
+                _lastDdcProbes,
+                _lastWmiProbes,
                 writeResult,
                 error: null);
         }
