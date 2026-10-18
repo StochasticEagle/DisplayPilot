@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Unlicense
 namespace DisplayPilot.Core.Theme;
 
 /// <summary>
