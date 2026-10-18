@@ -597,7 +597,7 @@ public sealed partial class MainWindow : Window, IDisposable
             string.Equals(probe.Display.DevicePath, sourceDevicePath, StringComparison.OrdinalIgnoreCase)
                 ? probe with { CurrentBrightness = (byte)brightnessPercent }
                 : probe).ToArray();
-        var sourceCard = (CompactMonitorList.ItemsSource as IEnumerable<CompactMonitorViewModel>)?
+        var sourceCard = (_visualsReady ? CompactMonitorList.ItemsSource : null) as IEnumerable<CompactMonitorViewModel>)?
             .FirstOrDefault(item => string.Equals(item.DevicePath, sourceDevicePath, StringComparison.OrdinalIgnoreCase));
         if (sourceCard is not null)
         {
@@ -688,7 +688,7 @@ public sealed partial class MainWindow : Window, IDisposable
         }
         catch (Win32Exception exception)
         {
-            CompactStatusText.Text = "Keyboard brightness synchronization failed. Open Advanced for details.";
+            if (_visualsReady) CompactStatusText.Text = "Keyboard brightness synchronization failed. Open Advanced for details.";
             _lastDiagnosticError = exception;
         }
         finally
@@ -1410,6 +1410,7 @@ public sealed partial class MainWindow : Window, IDisposable
                     : item).ToArray();
         }
         _compactBrightnessValues[devicePath] = result.VerifiedPercent;
+        if (!_visualsReady) return;
         var card = (CompactMonitorList.ItemsSource as IEnumerable<CompactMonitorViewModel>)?
             .FirstOrDefault(item => string.Equals(item.DevicePath, devicePath, StringComparison.OrdinalIgnoreCase));
         if (card is not null)
@@ -1422,34 +1423,23 @@ public sealed partial class MainWindow : Window, IDisposable
 
     private async Task<bool> SetBrightnessAsync(string devicePath, int requestedPercent)
     {
-        if (_displayOperationRunning || !_sessionIsActive)
-        {
-            return false;
-        }
+        if (_displayOperationRunning || !_sessionIsActive) return false;
 
-        var display = _activeMonitors.First(candidate => string.Equals(
-            candidate.DevicePath,
-            devicePath,
-            StringComparison.OrdinalIgnoreCase));
-        var ddcProbe = _lastDdcProbes.First(candidate => string.Equals(
-            candidate.Display.DevicePath,
-            display.DevicePath,
-            StringComparison.OrdinalIgnoreCase));
-        var wmiProbe = _lastWmiProbes.First(candidate => string.Equals(
-            candidate.Display.DevicePath,
-            display.DevicePath,
-            StringComparison.OrdinalIgnoreCase));
+        var display = _activeMonitors.FirstOrDefault(candidate =>
+            string.Equals(candidate.DevicePath, devicePath, StringComparison.OrdinalIgnoreCase));
+        var ddcProbe = _lastDdcProbes.FirstOrDefault(probe =>
+            string.Equals(probe.Display.DevicePath, devicePath, StringComparison.OrdinalIgnoreCase));
+        var wmiProbe = _lastWmiProbes.FirstOrDefault(probe =>
+            string.Equals(probe.Display.DevicePath, devicePath, StringComparison.OrdinalIgnoreCase));
+        if (display is null || ddcProbe is null || wmiProbe is null) return false;
 
         _displayOperationRunning = true;
-        RescanButton.IsEnabled = false;
-        ProbeDdcButton.IsEnabled = false;
-        CompactReadBrightnessButton.IsEnabled = false;
-        CompactMonitorList.IsEnabled = false;
-        MonitorList.IsEnabled = false;
-        CopyReportButton.IsEnabled = false;
-        StatusText.Text = $"Setting {display.FriendlyName} brightness to {requestedPercent}%...";
-        CompactStatusText.Text = $"Setting {display.FriendlyName} to {requestedPercent}%...";
-        BrightnessWriteResult? writeResult = null;
+        if (_visualsReady)
+        {
+            SetDisplayControlsEnabled(false);
+            StatusText.Text = $"Setting {display.FriendlyName} brightness to {requestedPercent}%...";
+            CompactStatusText.Text = $"Setting {display.FriendlyName} to {requestedPercent}%...";
+        }
 
         try
         {
@@ -1459,56 +1449,37 @@ public sealed partial class MainWindow : Window, IDisposable
                 _suppressWmiBrightnessUntilUtc = DateTimeOffset.UtcNow.AddSeconds(2);
             }
 
-            writeResult = await Task.Run(() => _brightnessControlService.SetBrightness(
-                display,
-                ddcProbe,
-                wmiProbe,
-                requestedPercent));
-            _lastBrightnessWriteResult = writeResult;
-            UpdateVerifiedBrightness(display.DevicePath, writeResult);
-            
-
-            StatusText.Text = writeResult.Succeeded
-                ? string.Format(
-                    CultureInfo.CurrentCulture,
-                    "Set {0} through {1}: requested {2}%, applied {3}%, verified {4}%.",
-                    display.FriendlyName,
-                    writeResult.Provider,
-                    writeResult.RequestedPercent,
-                    writeResult.AppliedPercent,
-                    writeResult.VerifiedPercent)
-                : string.Format(
-                    CultureInfo.CurrentCulture,
-                    "Brightness write did not verify ({0}, error 0x{1:X8}).",
-                    writeResult.Status,
-                    unchecked((uint)writeResult.ErrorCode));
-            CompactStatusText.Text = writeResult.Succeeded
-                ? string.Format(
-                    CultureInfo.CurrentCulture,
-                    "{0}: verified at {1}%.",
-                    display.FriendlyName,
-                    writeResult.VerifiedPercent)
-                : "Brightness did not verify. Open Advanced for details.";
+            var write = await Task.Run(() => _brightnessControlService.SetBrightness(
+                display, ddcProbe, wmiProbe, requestedPercent));
+            _lastBrightnessWriteResult = write;
+            UpdateVerifiedBrightness(display.DevicePath, write);
+            if (_visualsReady)
+            {
+                StatusText.Text = write.Succeeded
+                    ? $"Set {display.FriendlyName} through {write.Provider}; verified at {write.VerifiedPercent}%."
+                    : $"Brightness write did not verify ({write.Status}, error 0x{unchecked((uint)write.ErrorCode):X8}).";
+                CompactStatusText.Text = write.Succeeded
+                    ? $"{display.FriendlyName}: verified at {write.VerifiedPercent}%."
+                    : "Brightness did not verify. Open Advanced for details.";
+            }
             _lastDiagnosticError = null;
+            return write.Succeeded;
         }
         catch (Win32Exception exception)
         {
-            StatusText.Text = $"Brightness verification refresh failed: {exception.Message}";
-            CompactStatusText.Text = "Brightness verification failed. Open Advanced for details.";
             _lastDiagnosticError = exception;
+            if (_visualsReady)
+            {
+                StatusText.Text = $"Brightness verification failed: {exception.Message}";
+                CompactStatusText.Text = "Brightness verification failed. Open Advanced for details.";
+            }
+            return false;
         }
         finally
         {
             _displayOperationRunning = false;
-            RescanButton.IsEnabled = true;
-            ProbeDdcButton.IsEnabled = _activeMonitors.Count > 0;
-            CompactReadBrightnessButton.IsEnabled = _activeMonitors.Count > 0;
-            CompactMonitorList.IsEnabled = true;
-            MonitorList.IsEnabled = true;
-            CopyReportButton.IsEnabled = true;
+            if (_visualsReady) SetDisplayControlsEnabled(true);
         }
-
-        return writeResult?.Succeeded == true;
     }
 
     private void UpdateVerifiedFeature(string devicePath, DdcVcpWriteResult result)
