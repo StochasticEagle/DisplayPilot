@@ -6,23 +6,23 @@
 
 namespace displaypilot {
 namespace {
-float windowScale(HWND window) {
-    using DpiFn = UINT(WINAPI*)(HWND);
-    static auto dpi = reinterpret_cast<DpiFn>(
-        GetProcAddress(GetModuleHandleW(L"user32.dll"), "GetDpiForWindow"));
-    if (dpi) return std::max(1.0f, dpi(window) / 96.0f);
-    HDC context = GetDC(window);
-    const float scale = context ? std::max(1.0f,
-                              GetDeviceCaps(context, LOGPIXELSX) / 96.0f) : 1.0f;
-    if (context) ReleaseDC(window, context);
+template<class T> void release(T*& pointer) {
+    if (pointer) pointer->Release();
+    pointer = nullptr;
+}
+float dpiScale(HWND window) {
+    using DpiForWindow = UINT(WINAPI*)(HWND);
+    HMODULE module = GetModuleHandleW(L"user32.dll");
+    const auto getDpi = module ? reinterpret_cast<DpiForWindow>(
+        GetProcAddress(module, "GetDpiForWindow")) : nullptr;
+    if (getDpi) return std::max(1.0f, getDpi(window) / 96.0f);
+    HDC dc = GetDC(window);
+    float scale = dc ? std::max(1.0f, GetDeviceCaps(dc, LOGPIXELSX) / 96.0f) : 1.0f;
+    if (dc) ReleaseDC(window, dc);
     return scale;
 }
-int nearest(int value, int minimum, int maximum) {
-    return std::max(minimum, std::min(maximum, value));
-}
-template<class T> void release(T*& object) {
-    if (object) object->Release();
-    object = nullptr;
+int clampInt(int value, int lo, int hi) {
+    return std::max(lo, std::min(hi, value));
 }
 }
 
@@ -35,110 +35,178 @@ Flyout::~Flyout() {
 }
 
 bool Flyout::create(HINSTANCE instance, HWND owner) {
-    WNDCLASSEXW wc{};
-    wc.cbSize = sizeof(wc);
-    wc.hInstance = instance;
-    wc.lpfnWndProc = procedure;
-    wc.lpszClassName = L"DisplayPilotFlyout";
-    wc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
-    if (!RegisterClassExW(&wc) && GetLastError() != ERROR_CLASS_ALREADY_EXISTS)
+    WNDCLASSEXW cls{};
+    cls.cbSize = sizeof(cls);
+    cls.hInstance = instance;
+    cls.lpfnWndProc = procedure;
+    cls.lpszClassName = L"DisplayPilotFlyout";
+    cls.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+    if (!RegisterClassExW(&cls) && GetLastError() != ERROR_CLASS_ALREADY_EXISTS)
         return false;
-
     window_ = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
-              wc.lpszClassName, L"DisplayPilot", WS_POPUP | WS_CLIPCHILDREN,
-              0, 0, width_, height_, owner, nullptr, instance, this);
+        cls.lpszClassName, L"DisplayPilot", WS_POPUP | WS_CLIPCHILDREN,
+        0, 0, 394, 170, owner, nullptr, instance, this);
     if (!window_) return false;
-
     if (FAILED(D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, &factory_)))
         return false;
-    if (FAILED(DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED,
-        __uuidof(IDWriteFactory), reinterpret_cast<IUnknown**>(&writeFactory_))))
-        return false;
-
+    if (FAILED(DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory),
+        reinterpret_cast<IUnknown**>(&writeFactory_)))) return false;
     if (FAILED(writeFactory_->CreateTextFormat(L"Segoe UI", nullptr,
         DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL,
-        DWRITE_FONT_STRETCH_NORMAL, 13.0f, L"en-us", &text_)))
-        return false;
+        DWRITE_FONT_STRETCH_NORMAL, 13.0f, L"en-us", &text_))) return false;
     if (FAILED(writeFactory_->CreateTextFormat(L"Segoe UI", nullptr,
         DWRITE_FONT_WEIGHT_SEMI_BOLD, DWRITE_FONT_STYLE_NORMAL,
-        DWRITE_FONT_STRETCH_NORMAL, 16.0f, L"en-us", &heading_)))
-        return false;
+        DWRITE_FONT_STRETCH_NORMAL, 17.0f, L"en-us", &heading_))) return false;
     return true;
 }
 
 bool Flyout::visible() const {
     return window_ && IsWindowVisible(window_) != FALSE;
 }
-
+void Flyout::setAppearance(bool supported, bool dark, bool scheduled) {
+    themeSupported_ = supported;
+    themeDark_ = dark;
+    scheduleEnabled_ = scheduled;
+    repaint();
+}
+void Flyout::repaint() const {
+    if (window_) InvalidateRect(window_, nullptr, FALSE);
+}
+float Flyout::rowHeight(const Monitor& row) const {
+    return 55.0f + (row.brightnessAvailable ? 42.0f : 0.0f) +
+           (row.contrastAvailable ? 38.0f : 0.0f) +
+           (row.colorAvailable ? 35.0f : 0.0f);
+}
+float Flyout::contentHeight() const {
+    float y = 79.0f;
+    if (!monitors_ || monitors_->empty()) y += 44.0f;
+    else for (const auto& monitor : *monitors_) y += rowHeight(monitor);
+    y += 10.0f;
+    if (themeSupported_) y += 76.0f;
+    return y + 48.0f;
+}
 void Flyout::show(const RECT& anchor, std::vector<Monitor>* monitors) {
     if (!window_) return;
     monitors_ = monitors;
-    scale_ = windowScale(window_);
-    const int number = static_cast<int>(monitors ? monitors->size() : 0);
-    width_ = static_cast<int>(370 * scale_);
-    height_ = static_cast<int>((number == 0 ? 132 : 94 + 88 * number) * scale_);
-    // Keep the panel within the active work area. Scrolling will be added
-    // when extended monitor lists are implemented.
-    POINT center{(anchor.left + anchor.right) / 2, (anchor.top + anchor.bottom) / 2};
+    scroll_ = 0.0f;
+    scale_ = dpiScale(window_);
+    const POINT center{(anchor.left + anchor.right)/2, (anchor.top + anchor.bottom)/2};
     MONITORINFO info{};
     info.cbSize = sizeof(info);
-    HMONITOR monitor = MonitorFromPoint(center, MONITOR_DEFAULTTONEAREST);
-    if (!GetMonitorInfoW(monitor, &info)) return;
-    RECT work = info.rcWork;
-    width_ = std::min(width_, static_cast<int>(work.right - work.left));
-    height_ = std::min(height_, static_cast<int>(work.bottom - work.top));
-    const int x = nearest(anchor.left, work.left, work.right - width_);
-    const int y = anchor.top > work.top + (work.bottom - work.top) / 2
-        ? std::max(work.top, anchor.top - height_)
-        : std::min(work.bottom - height_, anchor.bottom);
+    if (!GetMonitorInfoW(MonitorFromPoint(center, MONITOR_DEFAULTTONEAREST), &info))
+        return;
+    const RECT work = info.rcWork;
+    width_ = std::min(static_cast<int>(394 * scale_), static_cast<int>(work.right - work.left));
+    height_ = std::min(static_cast<int>(contentHeight() * scale_),
+                       static_cast<int>(work.bottom - work.top));
+    const int x = clampInt(anchor.left, work.left, work.right - width_);
+    const int y = (anchor.top > work.top + (work.bottom - work.top)/2)
+        ? std::max(static_cast<int>(work.top), static_cast<int>(anchor.top - height_))
+        : std::min(static_cast<int>(work.bottom - height_), static_cast<int>(anchor.bottom));
     releaseTarget();
     SetWindowPos(window_, HWND_TOPMOST, x, y, width_, height_,
                  SWP_NOACTIVATE | SWP_SHOWWINDOW);
-    HRGN corners = CreateRoundRectRgn(0, 0, width_ + 1, height_ + 1,
-                                    static_cast<int>(16 * scale_),
-                                    static_cast<int>(16 * scale_));
-    if (corners && !SetWindowRgn(window_, corners, TRUE)) DeleteObject(corners);
-    InvalidateRect(window_, nullptr, FALSE);
+    HRGN rounded = CreateRoundRectRgn(0, 0, width_ + 1, height_ + 1,
+                                     static_cast<int>(18*scale_),
+                                     static_cast<int>(18*scale_));
+    if (rounded && !SetWindowRgn(window_, rounded, TRUE)) DeleteObject(rounded);
+    repaint();
 }
-
 void Flyout::hide() {
+    dragControl_ = Control::None;
     dragIndex_ = -1;
     if (window_) ShowWindow(window_, SW_HIDE);
 }
-
 void Flyout::releaseTarget() {
     release(brush_);
     release(target_);
 }
-
-int Flyout::hitSlider(int y) const {
-    if (!monitors_) return -1;
-    const float logicalY = y / scale_;
+bool Flyout::hitSlider(float x, float y) {
+    if (!monitors_ || x < 15 || x > 378) return false;
+    float top = 79 - scroll_;
     for (unsigned i = 0; i < monitors_->size(); ++i) {
-        if (!(*monitors_)[i].brightnessAvailable) continue;
-        const float track = 124.0f + 88.0f * i;
-        if (std::abs(logicalY - track) <= 15.0f)
-            return static_cast<int>(i);
+        const auto& m = (*monitors_)[i];
+        float at = top + 37;
+        if (m.brightnessAvailable) {
+            if (std::abs(y - at) < 17) {
+                dragIndex_ = static_cast<int>(i);
+                dragControl_ = Control::Brightness;
+                return true;
+            }
+            at += 42;
+        }
+        if (m.contrastAvailable) {
+            if (std::abs(y - at) < 17) {
+                dragIndex_ = static_cast<int>(i);
+                dragControl_ = Control::Contrast;
+                return true;
+            }
+            at += 38;
+        }
+        top += rowHeight(m);
     }
-    return -1;
+    return false;
 }
-
-void Flyout::moveSlider(int x) {
-    if (dragIndex_ < 0 || !monitors_ ||
-        static_cast<unsigned>(dragIndex_) >= monitors_->size()) return;
-    const float logicalX = x / scale_;
-    const unsigned percent = static_cast<unsigned>(nearest(
-        static_cast<int>(std::lround((logicalX - 22.0f) * 100.0f / 326.0f)),
+void Flyout::moveSlider(int physicalX) {
+    if (!monitors_ || dragControl_ == Control::None || dragIndex_ < 0 ||
+        static_cast<size_t>(dragIndex_) >= monitors_->size()) return;
+    const unsigned value = static_cast<unsigned>(clampInt(
+        static_cast<int>(std::lround((physicalX / scale_ - 24.0f) * 100 / 344)),
         0, 100));
-    auto& monitor = (*monitors_)[static_cast<unsigned>(dragIndex_)];
-    if (percent != monitor.brightness) {
-        monitor.brightness = percent;
-        if (brightnessChanged)
-            brightnessChanged(static_cast<unsigned>(dragIndex_), percent);
-        InvalidateRect(window_, nullptr, FALSE);
+    auto& monitor = (*monitors_)[static_cast<size_t>(dragIndex_)];
+    if (dragControl_ == Control::Brightness && monitor.brightness != value) {
+        monitor.brightness = value;
+        if (brightnessChanged) brightnessChanged(static_cast<unsigned>(dragIndex_), value);
+    } else if (dragControl_ == Control::Contrast && monitor.contrast != value) {
+        monitor.contrast = value;
+        if (contrastChanged) contrastChanged(static_cast<unsigned>(dragIndex_), value);
     }
+    repaint();
 }
-
+void Flyout::click(int px, int py) {
+    const float x = px / scale_;
+    const float y = py / scale_;
+    if (hitSlider(x, y)) {
+        SetCapture(window_);
+        moveSlider(px);
+        return;
+    }
+    float top = 79 - scroll_;
+    if (monitors_) {
+        for (unsigned i = 0; i < monitors_->size(); ++i) {
+            const auto& m = (*monitors_)[i];
+            const float colorY = top + 47 +
+                (m.brightnessAvailable ? 42.0f : 0.0f) +
+                (m.contrastAvailable ? 38.0f : 0.0f);
+            if (m.colorAvailable && y >= colorY && y <= colorY + 31 &&
+                x >= 20 && x < 370 && !m.colorPresets.empty()) {
+                const auto next = std::find(m.colorPresets.begin(),
+                                            m.colorPresets.end(), m.colorPreset);
+                const auto index = next == m.colorPresets.end() ?
+                    0U : static_cast<unsigned>((next - m.colorPresets.begin() + 1) %
+                         m.colorPresets.size());
+                if (colorChanged) colorChanged(i, m.colorPresets[index]);
+                repaint();
+                return;
+            }
+            top += rowHeight(m);
+        }
+    } else top += 44;
+    top += 10;
+    if (themeSupported_) {
+        if (y >= top && y < top + 39) {
+            if (x >= 22 && x < 185 && themeChanged) themeChanged(false);
+            else if (x >= 195 && x <= 369 && themeChanged) themeChanged(true);
+            return;
+        }
+        if (y >= top + 40 && y < top + 74 && scheduleChanged) {
+            scheduleChanged(!scheduleEnabled_);
+            return;
+        }
+        top += 76;
+    }
+    if (y >= top && y < top + 45 && advancedRequested) advancedRequested();
+}
 void Flyout::paint() {
     PAINTSTRUCT ps{};
     BeginPaint(window_, &ps);
@@ -146,111 +214,143 @@ void Flyout::paint() {
     if (!target_) {
         RECT size{};
         GetClientRect(window_, &size);
-        const auto dimensions = D2D1::SizeU(static_cast<UINT>(size.right),
-                                           static_cast<UINT>(size.bottom));
         if (FAILED(factory_->CreateHwndRenderTarget(
             D2D1::RenderTargetProperties(),
-            D2D1::HwndRenderTargetProperties(window_, dimensions), &target_))) {
+            D2D1::HwndRenderTargetProperties(window_,
+                D2D1::SizeU(static_cast<UINT>(size.right),
+                            static_cast<UINT>(size.bottom))), &target_))) {
             EndPaint(window_, &ps);
             return;
         }
-        target_->SetDpi(96 * scale_, 96 * scale_);
-        if (FAILED(target_->CreateSolidColorBrush(
-                D2D1::ColorF(0xE7EDF5), &brush_))) {
+        target_->SetDpi(scale_ * 96, scale_ * 96);
+        if (FAILED(target_->CreateSolidColorBrush(D2D1::ColorF(0xFAFBFD), &brush_))) {
             releaseTarget();
             EndPaint(window_, &ps);
             return;
         }
     }
-
-    target_->BeginDraw();
-    target_->Clear(D2D1::ColorF(0x172331));
-    auto label = [this](const std::wstring& value, float x, float y,
-                        float w, float h, IDWriteTextFormat* format,
-                        unsigned color) {
-        brush_->SetColor(D2D1::ColorF(color));
-        target_->DrawText(value.c_str(), static_cast<UINT32>(value.size()),
-            format, D2D1::RectF(x, y, x + w, y + h), brush_);
+    auto color = [this](unsigned rgb) { brush_->SetColor(D2D1::ColorF(rgb)); };
+    auto textAt = [this, &color](const std::wstring& label,
+          float x, float y, float width, float height, unsigned rgb,
+          IDWriteTextFormat* format) {
+        color(rgb);
+        target_->DrawText(label.c_str(), static_cast<UINT32>(label.size()), format,
+            D2D1::RectF(x, y, x + width, y + height), brush_);
     };
-    label(L"DisplayPilot", 22, 13, 300, 32, heading_, 0xFFFFFF);
-    label(L"Monitor controls", 22, 45, 300, 26, text_, 0xACBCCE);
-
+    auto pill = [this, &color](float left,float top,float right,float bottom,
+                            unsigned fill) {
+        color(fill);
+        target_->FillRoundedRectangle(D2D1::RoundedRect(
+             D2D1::RectF(left,top,right,bottom),8,8),brush_);
+    };
+    auto slider = [this,&color,&textAt](const std::wstring& name,
+                                unsigned value,float y) {
+        textAt(name, 24, y-36, 270, 23, 0xA8BACB, text_);
+        textAt(std::to_wstring(value) + L"%", 320, y-36, 55, 23,
+               0xFFFFFF, text_);
+        color(0x46596C);
+        target_->FillRoundedRectangle(D2D1::RoundedRect(
+            D2D1::RectF(24,y-2,368,y+5),4,4),brush_);
+        color(0x67C5FF);
+        float right = 24 + value*3.44f;
+        if (right > 24)
+            target_->FillRoundedRectangle(D2D1::RoundedRect(
+                D2D1::RectF(24,y-2,right,y+5),4,4),brush_);
+        target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(right,y+1.5f),8,8),brush_);
+    };
+    target_->BeginDraw();
+    target_->Clear(D2D1::ColorF(0x182434));
+    textAt(L"DisplayPilot", 22, 12, 320, 31, 0xFFFFFF, heading_);
+    textAt(L"MONITORS", 22, 49, 240, 23, 0xAABDD0, text_);
+    color(0x3B4B60);
+    target_->DrawLine(D2D1::Point2F(20,74),D2D1::Point2F(374,74),brush_,1);
+    float top = 79 - scroll_;
     if (!monitors_ || monitors_->empty()) {
-        label(L"No compatible DDC/CI monitors detected", 22, 86,
-              328, 32, text_, 0xCED8E4);
+        textAt(L"No monitors detected", 24, top, 345, 30, 0xC6D3E1,text_);
+        top += 44;
     } else {
-        for (unsigned i = 0; i < monitors_->size(); ++i) {
-            const auto& monitor = (*monitors_)[i];
-            const float top = 83.0f + i * 88.0f;
-            if (top > static_cast<float>(height_) / scale_) break;
-            label(monitor.name, 22, top, 270, 28, text_, 0xEDF2F9);
+        for (const auto& monitor : *monitors_) {
+            const float rowBottom = top + rowHeight(monitor);
+            if (rowBottom < 75 || top > height_ / scale_) { top = rowBottom; continue; }
+            textAt(monitor.name, 24, top+4, 335, 28, 0xFFFFFF, text_);
+            float controlY = top + 37;
             if (monitor.brightnessAvailable) {
-                label(std::to_wstring(monitor.brightness) + L"%", 304,
-                      top, 44, 28, text_, 0xEDF2F9);
-                brush_->SetColor(D2D1::ColorF(0x536477));
-                target_->FillRoundedRectangle(D2D1::RoundedRect(
-                    D2D1::RectF(22, top + 38, 348, top + 45), 4, 4), brush_);
-                brush_->SetColor(D2D1::ColorF(0x65C6FF));
-                const float end = 22 + 326 * (monitor.brightness / 100.0f);
-                target_->FillRoundedRectangle(D2D1::RoundedRect(
-                    D2D1::RectF(22, top + 38, std::max(23.0f, end), top + 45),
-                    4, 4), brush_);
-                target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(
-                    end, top + 41.5f), 8, 8), brush_);
-            } else {
-                label(L"Brightness unsupported", 22, top + 31, 300,
-                      26, text_, 0xACBCCE);
+                slider(L"Brightness", monitor.brightness, controlY);
+                controlY += 42;
             }
+            if (monitor.contrastAvailable) {
+                slider(L"Contrast", monitor.contrast, controlY);
+                controlY += 38;
+            }
+            if (monitor.colorAvailable) {
+                pill(23, controlY-1, 368, controlY+27, 0x2D455C);
+                textAt(L"Color temperature: " + colorPresetLabel(monitor.colorPreset)
+                         + L"  >", 32, controlY+3, 330, 24, 0xE9F4FF, text_);
+            }
+            color(0x3A4C60);
+            target_->DrawLine(D2D1::Point2F(22,rowBottom-4),
+                              D2D1::Point2F(370,rowBottom-4),brush_,1);
+            top = rowBottom;
         }
     }
-    if (target_->EndDraw() == D2DERR_RECREATE_TARGET)
-        releaseTarget();
+    top += 10;
+    if (themeSupported_) {
+        pill(22,top,185,top+36,themeDark_?0x304355:0x3E91D0);
+        pill(195,top,370,top+36,themeDark_?0x3E91D0:0x304355);
+        textAt(L"Light theme",39,top+6,145,26,0xFFFFFF,text_);
+        textAt(L"Dark theme",218,top+6,145,26,0xFFFFFF,text_);
+        pill(22,top+40,370,top+74,scheduleEnabled_?0x355A62:0x304355);
+        textAt(scheduleEnabled_?L"Automatic schedule: ON":L"Automatic schedule: OFF",
+               38,top+46,320,25,0xFFFFFF,text_);
+        top += 76;
+    }
+    pill(22,top,370,top+42,0x294C69);
+    textAt(L"Advanced settings    >",42,top+9,305,28,0xFFFFFF,text_);
+    const HRESULT end = target_->EndDraw();
+    if (end == D2DERR_RECREATE_TARGET) releaseTarget();
     EndPaint(window_, &ps);
 }
-
 LRESULT CALLBACK Flyout::procedure(HWND hwnd, UINT msg, WPARAM w, LPARAM l) {
-    auto* self = reinterpret_cast<Flyout*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+    auto* self = reinterpret_cast<Flyout*>(GetWindowLongPtrW(hwnd,GWLP_USERDATA));
     if (msg == WM_NCCREATE) {
-        const auto* cs = reinterpret_cast<CREATESTRUCTW*>(l);
-        self = static_cast<Flyout*>(cs->lpCreateParams);
-        SetWindowLongPtrW(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(self));
+        self = static_cast<Flyout*>(reinterpret_cast<CREATESTRUCTW*>(l)->lpCreateParams);
+        SetWindowLongPtrW(hwnd,GWLP_USERDATA,reinterpret_cast<LONG_PTR>(self));
     }
-    if (!self) return DefWindowProcW(hwnd, msg, w, l);
+    if (!self) return DefWindowProcW(hwnd,msg,w,l);
     switch (msg) {
-    case WM_PAINT:
-        self->paint();
-        return 0;
-    case WM_ERASEBKGND:
-        return 1;
-    case WM_LBUTTONDOWN: {
-        const int x = static_cast<short>(LOWORD(l));
-        const int y = static_cast<short>(HIWORD(l));
-        self->dragIndex_ = self->hitSlider(y);
-        if (self->dragIndex_ >= 0) {
-            SetCapture(hwnd);
-            self->moveSlider(x);
-        }
+    case WM_PAINT: self->paint(); return 0;
+    case WM_ERASEBKGND: return 1;
+    case WM_MOUSEWHEEL: {
+        self->scroll_ = std::max(0.0f,std::min(
+            std::max(0.0f,self->contentHeight() - self->height_/self->scale_),
+            self->scroll_ - (static_cast<short>(HIWORD(w))/120.0f)*35.0f));
+        self->repaint();
         return 0;
     }
+    case WM_LBUTTONDOWN:
+        self->click(static_cast<short>(LOWORD(l)),static_cast<short>(HIWORD(l)));
+        return 0;
     case WM_MOUSEMOVE:
-        if (self->dragIndex_ >= 0)
+        if (self->dragControl_ != Control::None)
             self->moveSlider(static_cast<short>(LOWORD(l)));
         return 0;
     case WM_LBUTTONUP:
-        if (self->dragIndex_ >= 0) {
+        if (self->dragControl_ != Control::None) {
+            self->moveSlider(static_cast<short>(LOWORD(l)));
             ReleaseCapture();
+            self->dragControl_ = Control::None;
             self->dragIndex_ = -1;
         }
         return 0;
     case WM_CAPTURECHANGED:
+        self->dragControl_ = Control::None;
         self->dragIndex_ = -1;
         return 0;
     case WM_DESTROY:
         self->releaseTarget();
         self->window_ = nullptr;
         return 0;
-    default:
-        return DefWindowProcW(hwnd, msg, w, l);
+    default: return DefWindowProcW(hwnd,msg,w,l);
     }
 }
 }

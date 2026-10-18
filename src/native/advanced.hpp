@@ -1,0 +1,63 @@
+#pragma once
+#include "display.hpp"
+#include "settings.hpp"
+#include <windows.h>
+#include <functional>
+#include <vector>
+
+namespace displaypilot {
+class AdvancedWindow {
+public:
+    AdvancedWindow() = default;
+    AdvancedWindow(const AdvancedWindow&) = delete;
+    AdvancedWindow& operator=(const AdvancedWindow&) = delete;
+    ~AdvancedWindow();
+
+    bool create(HINSTANCE instance);
+    void show(std::vector<Monitor>* monitors, Settings* settings, bool appearance);
+    void refresh();
+    void hide();
+    bool visible() const;
+    HWND handle() const { return window_; }
+
+    std::function<void(unsigned, unsigned)> brightnessChanged;
+    std::function<void(unsigned, unsigned)> contrastChanged;
+    std::function<void(unsigned, unsigned)> colorChanged;
+    std::function<void(unsigned, unsigned)> rotationChanged;
+    std::function<void(bool)> themeChanged;
+    std::function<void(const Settings&)> settingsChanged;
+
+private:
+    struct RowControls {
+        HWND label = nullptr, brightness = nullptr, contrast = nullptr;
+        HWND color = nullptr, colorApply = nullptr;
+        HWND rotation = nullptr, rotationApply = nullptr;
+        std::vector<HWND> members;
+    };
+    HINSTANCE instance_ = nullptr;
+    HWND window_ = nullptr;
+    HFONT font_ = nullptr;
+    std::vector<Monitor>* monitors_ = nullptr;
+    Settings* settings_ = nullptr;
+    bool themesAvailable_ = false;
+    std::vector<RowControls> rows_;
+    std::vector<HWND> children_;
+    HWND scheduleCheckbox_ = nullptr, brightnessCheckbox_ = nullptr;
+    HWND mode_ = nullptr, lightTime_ = nullptr, darkTime_ = nullptr;
+    HWND latitude_ = nullptr, longitude_ = nullptr, label_ = nullptr;
+    HWND startup_ = nullptr, status_ = nullptr;
+    HWND save_ = nullptr, diagnostics_ = nullptr;
+    int contentHeight_ = 0;
+    int scroll_ = 0;
+
+    HWND add(const wchar_t* kind, const std::wstring& caption, DWORD style, int id);
+    void rebuild();
+    void layout();
+    void scrollBy(int delta);
+    void onCommand(WORD id, WORD notification);
+    void onScroll(HWND control);
+    bool saveInput();
+    void copyDiagnostics();
+    static LRESULT CALLBACK procedure(HWND hwnd, UINT message, WPARAM w, LPARAM l);
+};
+}

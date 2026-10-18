@@ -110,7 +110,7 @@
     </ResourceCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
-      <AdditionalDependencies>user32.lib;gdi32.lib;shell32.lib;ole32.lib;advapi32.lib;dxva2.lib;d2d1.lib;dwrite.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>user32.lib;gdi32.lib;shell32.lib;ole32.lib;advapi32.lib;dxva2.lib;d2d1.lib;dwrite.lib;comctl32.lib;wbemuuid.lib;oleaut32.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalOptions>/SUBSYSTEM:WINDOWS,6.01 %(AdditionalOptions)</AdditionalOptions>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <OptimizeReferences>false</OptimizeReferences>
@@ -140,7 +140,7 @@
     </ResourceCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
-      <AdditionalDependencies>user32.lib;gdi32.lib;shell32.lib;ole32.lib;advapi32.lib;dxva2.lib;d2d1.lib;dwrite.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>user32.lib;gdi32.lib;shell32.lib;ole32.lib;advapi32.lib;dxva2.lib;d2d1.lib;dwrite.lib;comctl32.lib;wbemuuid.lib;oleaut32.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalOptions>/SUBSYSTEM:WINDOWS,6.01 %(AdditionalOptions)</AdditionalOptions>
       <GenerateDebugInformation>false</GenerateDebugInformation>
       <OptimizeReferences>true</OptimizeReferences>
@@ -170,7 +170,7 @@
     </ResourceCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
-      <AdditionalDependencies>user32.lib;gdi32.lib;shell32.lib;ole32.lib;advapi32.lib;dxva2.lib;d2d1.lib;dwrite.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>user32.lib;gdi32.lib;shell32.lib;ole32.lib;advapi32.lib;dxva2.lib;d2d1.lib;dwrite.lib;comctl32.lib;wbemuuid.lib;oleaut32.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalOptions>/SUBSYSTEM:WINDOWS,6.01 %(AdditionalOptions)</AdditionalOptions>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <OptimizeReferences>false</OptimizeReferences>
@@ -200,7 +200,7 @@
     </ResourceCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
-      <AdditionalDependencies>user32.lib;gdi32.lib;shell32.lib;ole32.lib;advapi32.lib;dxva2.lib;d2d1.lib;dwrite.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>user32.lib;gdi32.lib;shell32.lib;ole32.lib;advapi32.lib;dxva2.lib;d2d1.lib;dwrite.lib;comctl32.lib;wbemuuid.lib;oleaut32.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalOptions>/SUBSYSTEM:WINDOWS,6.01 %(AdditionalOptions)</AdditionalOptions>
       <GenerateDebugInformation>false</GenerateDebugInformation>
       <OptimizeReferences>true</OptimizeReferences>
@@ -213,10 +213,14 @@
     <ClCompile Include="src\native\main.cpp" />
     <ClCompile Include="src\native\display.cpp" />
     <ClCompile Include="src\native\flyout.cpp" />
+    <ClCompile Include="src\native\settings.cpp" />
+    <ClCompile Include="src\native\advanced.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\native\display.hpp" />
     <ClInclude Include="src\native\flyout.hpp" />
+    <ClInclude Include="src\native\settings.hpp" />
+    <ClInclude Include="src\native\advanced.hpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="src\native\app.rc" />
