@@ -1,4 +1,5 @@
 #include "settings.hpp"
+#include "json_settings.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -109,7 +110,30 @@ DWORD secondsUntil(unsigned eventMinute, unsigned minuteNow, unsigned secondsNow
 }
 }
 
-Settings loadSettings() {
+namespace {
+using JsonValue = json_settings::Value;
+
+void setScheduleFields(JsonValue& doc, const Settings& s) {
+    doc.object["version"] = json_settings::number(4);
+    doc.object["lightMinutes"] = json_settings::number(static_cast<int>(s.lightMinute));
+    doc.object["darkMinutes"] = json_settings::number(static_cast<int>(s.darkMinute));
+    doc.object["automationEnabled"] = json_settings::boolean(s.scheduleEnabled);
+    doc.object["reduceBrightness"] = json_settings::boolean(s.reduceBrightness);
+    doc.object["scheduleMode"] = json_settings::number(
+        s.scheduleMode == ScheduleMode::Solar ? 1 : 0);
+    doc.object["latitude"] = s.locationConfigured ?
+        json_settings::number(s.latitude) : JsonValue{};
+    doc.object["longitude"] = s.locationConfigured ?
+        json_settings::number(s.longitude) : JsonValue{};
+    doc.object["locationLabel"] = s.locationConfigured ?
+        json_settings::string(json_settings::toUtf8(s.locationLabel)) : JsonValue{};
+    if (!json_settings::field(doc, "brightnessRestoreValues"))
+        doc.object["brightnessRestoreValues"] = json_settings::object();
+    if (!json_settings::field(doc, "brightnessReductionActive"))
+        doc.object["brightnessReductionActive"] = json_settings::boolean(false);
+}
+
+Settings loadRegistrySettings() {
     Settings s;
     Key key(settingsPath, KEY_READ, false);
     if (!key) return s;
@@ -129,20 +153,62 @@ Settings loadSettings() {
     return s;
 }
 
+bool validRestoreValues(const JsonValue& doc) {
+    const auto* values = json_settings::field(doc, "brightnessRestoreValues");
+    if (!values || values->type == JsonValue::Type::Null) return true;
+    if (values->type != JsonValue::Type::Object) return false;
+    for (const auto& pair : values->object) {
+        int percent = -1;
+        if (pair.first.empty() || !json_settings::asInteger(&pair.second, percent) ||
+            percent < 0 || percent > 100) return false;
+    }
+    return true;
+}
+}
+
+Settings loadSettings() {
+    Settings s;
+    JsonValue doc;
+    const auto result = json_settings::read(doc);
+    if (result == json_settings::ReadResult::Missing) return loadRegistrySettings();
+    if (result != json_settings::ReadResult::Valid ||
+        !json_settings::supported(doc) || !validRestoreValues(doc)) return s;
+
+    int version = 0, light = 420, dark = 1140, mode = 0;
+    json_settings::asInteger(json_settings::field(doc, "version"), version);
+    if (!json_settings::asInteger(json_settings::field(doc, "lightMinutes"), light) ||
+        !json_settings::asInteger(json_settings::field(doc, "darkMinutes"), dark) ||
+        light < 0 || light >= 1440 || dark < 0 || dark >= 1440 || light == dark)
+        return s;
+    s.lightMinute = static_cast<unsigned>(light);
+    s.darkMinute = static_cast<unsigned>(dark);
+    s.scheduleEnabled = version >= 2 &&
+        json_settings::asBoolean(json_settings::field(doc, "automationEnabled"), false);
+    s.reduceBrightness = version >= 3 &&
+        json_settings::asBoolean(json_settings::field(doc, "reduceBrightness"), false);
+    if (version >= 4) {
+        if (!json_settings::asInteger(json_settings::field(doc, "scheduleMode"), mode) ||
+            (mode != 0 && mode != 1)) return Settings{};
+    }
+    s.scheduleMode = mode == 1 ? ScheduleMode::Solar : ScheduleMode::Fixed;
+    if (s.scheduleMode == ScheduleMode::Solar) {
+        if (!json_settings::asNumber(json_settings::field(doc, "latitude"), s.latitude) ||
+            !json_settings::asNumber(json_settings::field(doc, "longitude"), s.longitude) ||
+            std::abs(s.latitude) > 90 || std::abs(s.longitude) > 180)
+            return Settings{};
+        s.locationConfigured = true;
+        const auto* label = json_settings::field(doc, "locationLabel");
+        if (label && label->type == JsonValue::Type::String)
+            s.locationLabel = json_settings::toWide(label->scalar);
+    }
+    return s;
+}
+
 void saveSettings(const Settings& s) {
-    Key key(settingsPath, KEY_WRITE, true);
-    if (!key) return;
-    key.putDword(L"Enabled", s.scheduleEnabled ? 1 : 0);
-    key.putDword(L"ReduceBrightness", s.reduceBrightness ? 1 : 0);
-    key.putDword(L"Mode", s.scheduleMode == ScheduleMode::Solar ? 1 : 0);
-    key.putDword(L"LightMinute", s.lightMinute);
-    key.putDword(L"DarkMinute", s.darkMinute);
-    key.putDword(L"LatitudeMicro", static_cast<DWORD>(
-             static_cast<std::int32_t>(std::lround(s.latitude * 1e6))));
-    key.putDword(L"LongitudeMicro", static_cast<DWORD>(
-             static_cast<std::int32_t>(std::lround(s.longitude * 1e6))));
-    key.putDword(L"LocationConfigured", s.locationConfigured ? 1 : 0);
-    key.putString(L"LocationLabel", s.locationLabel);
+    JsonValue doc;
+    if (!json_settings::editable(doc) || !validRestoreValues(doc)) return;
+    setScheduleFields(doc, s);
+    json_settings::write(doc);
 }
 
 bool supportsWindowsTheme() {
@@ -202,6 +268,21 @@ ScheduleState evaluateSchedule(const Settings& s, const SYSTEMTIME& now) {
 }
 
 bool restoreBrightness(const std::wstring& keyName, unsigned& percent) {
+    JsonValue doc;
+    const auto result = json_settings::read(doc);
+    if (result == json_settings::ReadResult::Valid) {
+        if (!json_settings::supported(doc) || !validRestoreValues(doc)) return false;
+        const auto* values = json_settings::field(doc, "brightnessRestoreValues");
+        if (!values || values->type != JsonValue::Type::Object) return false;
+        const auto it = values->object.find(json_settings::toUtf8(keyName));
+        if (it == values->object.end()) return false;
+        int value = -1;
+        if (!json_settings::asInteger(&it->second, value) || value < 0 || value > 100)
+            return false;
+        percent = static_cast<unsigned>(value);
+        return true;
+    }
+    if (result != json_settings::ReadResult::Missing) return false;
     Key key(restorationPath, KEY_READ, false);
     if (!key) return false;
     const DWORD value = key.getDword(keyName.c_str(), 0xFFFFFFFFu);
@@ -210,11 +291,36 @@ bool restoreBrightness(const std::wstring& keyName, unsigned& percent) {
     return true;
 }
 void saveBrightness(const std::wstring& keyName, unsigned percent) {
-    Key key(restorationPath, KEY_WRITE, true);
-    key.putDword(keyName.c_str(), std::min(percent, 100U));
+    JsonValue doc;
+    const auto result = json_settings::read(doc);
+    if (result == json_settings::ReadResult::Missing) {
+        doc = json_settings::newDocument();
+        setScheduleFields(doc, loadRegistrySettings());
+    } else if (result != json_settings::ReadResult::Valid ||
+               !json_settings::supported(doc) || !validRestoreValues(doc)) return;
+    auto& values = doc.object["brightnessRestoreValues"];
+    if (values.type == JsonValue::Type::Null) values = json_settings::object();
+    if (values.type != JsonValue::Type::Object) return;
+    values.object[json_settings::toUtf8(keyName)] =
+        json_settings::number(static_cast<int>(std::min(percent, 100U)));
+    doc.object["brightnessReductionActive"] = json_settings::boolean(true);
+    json_settings::write(doc);
 }
 void removeSavedBrightness(const std::wstring& keyName) {
-    Key key(restorationPath, KEY_WRITE, false);
-    if (key) RegDeleteValueW(key.get(), keyName.c_str());
+    JsonValue doc;
+    const auto result = json_settings::read(doc);
+    if (result == json_settings::ReadResult::Missing) {
+        Key key(restorationPath, KEY_WRITE, false);
+        if (key) RegDeleteValueW(key.get(), keyName.c_str());
+        return;
+    }
+    if (result != json_settings::ReadResult::Valid ||
+        !json_settings::supported(doc) || !validRestoreValues(doc)) return;
+    auto* values = &doc.object["brightnessRestoreValues"];
+    if (values->type != JsonValue::Type::Object) return;
+    if (!values->object.erase(json_settings::toUtf8(keyName))) return;
+    doc.object["brightnessReductionActive"] =
+        json_settings::boolean(!values->object.empty());
+    json_settings::write(doc);
 }
 }
