@@ -129,14 +129,17 @@ void restoreMonitorBrightness() {
         const std::wstring key = restoreKey(monitor);
         unsigned previous = 0;
         const std::wstring legacy = legacyRestoreKey(monitor);
-        const bool fromLegacy = !restoreBrightness(key, previous) &&
-            key != legacy && restoreBrightness(legacy, previous);
-        if (fromLegacy || restoreBrightness(key, previous)) {
-          if (setBrightness(monitor, previous)) {
+        bool found = restoreBrightness(key, previous);
+        bool fromLegacy = false;
+        if (!found && key != legacy) {
+            found = restoreBrightness(legacy, previous);
+            fromLegacy = found;
+        }
+        if (!found) continue;
+        if (setBrightness(monitor, previous)) {
             removeSavedBrightness(fromLegacy ? legacy : key);
             changed = true;
-          } else pending = true;
-        }
+        } else pending = true;
     }
     app.savedBrightness = pending;
     if (changed) queueRefresh();
@@ -146,11 +149,16 @@ void applyNightBrightness() {
     bool any = false;
     for (const auto& monitor : app.monitors) {
         if (!monitor.brightnessAvailable) continue;
-        const auto key = restoreKey(monitor);
+        std::wstring key = restoreKey(monitor);
         unsigned baseline = 0;
         if (!restoreBrightness(key, baseline)) {
-            baseline = monitor.brightness;
-            saveBrightness(key, baseline);
+            const auto legacy = legacyRestoreKey(monitor);
+            if (key != legacy && restoreBrightness(legacy, baseline)) {
+                key = legacy;
+            } else {
+                baseline = monitor.brightness;
+                saveBrightness(key, baseline);
+            }
         }
         const unsigned target = std::max(10U, baseline / 2);
         if (setBrightness(monitor, target)) any = true;
@@ -213,6 +221,8 @@ void changeBrightness(unsigned index, unsigned value) {
     const auto key = restoreKey(app.monitors[index]);
     if (app.savedBrightness) {
         removeSavedBrightness(key);
+        if (key != legacyRestoreKey(app.monitors[index]))
+            removeSavedBrightness(legacyRestoreKey(app.monitors[index]));
     }
     if (setBrightness(app.monitors[index], value)) {
         app.monitors[index].brightness = value;
