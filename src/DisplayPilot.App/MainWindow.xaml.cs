@@ -334,6 +334,7 @@ public sealed partial class MainWindow : Window, IDisposable
         }
 
         await InitializeAsync();
+        await WaitForDisplayIdleAsync();
         if (!_sessionIsActive)
         {
             return;
@@ -407,6 +408,7 @@ public sealed partial class MainWindow : Window, IDisposable
         _ = DispatcherQueue.TryEnqueue(async () =>
         {
             await InitializeAsync();
+            await WaitForDisplayIdleAsync();
             EnsureVisualsLoaded();
             ShowAdvancedView();
             if (_activeMonitors.Count > 0)
@@ -744,6 +746,7 @@ public sealed partial class MainWindow : Window, IDisposable
         }
 
         await InitializeAsync();
+        await WaitForDisplayIdleAsync();
         EnsureVisualsLoaded();
         ShowCompactView();
         if (_activeMonitors.Count > 0)
