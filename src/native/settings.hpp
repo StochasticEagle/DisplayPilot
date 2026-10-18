@@ -15,6 +15,7 @@ struct Settings {
     double latitude = 0.0;
     double longitude = 0.0;
     bool locationConfigured = false;
+    bool automaticLocation = false;
     std::wstring locationLabel;
 };
 
