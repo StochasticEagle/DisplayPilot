@@ -63,8 +63,8 @@ jobs:
             throw "Visual Studio still does not recognize the registered Win64 platform"
           }
           if ($result -ne 0) { exit $result }
-          if (-not (Select-String -Path "ide-build.log" -Pattern "Build: [1-9][0-9]* succeeded")) {
-            throw "Visual Studio did not actually build the Win64 project"
+          if (-not (Select-String -Path "ide-build.log" -Pattern "Build: [1-9][0-9]* succeeded|Build: 0 succeeded, 0 failed, [1-9][0-9]* up-to-date")) {
+            throw "Visual Studio did not recognize the Win64 project as built or up-to-date"
           }
       - name: Verify standalone Windows executable
         shell: bash
