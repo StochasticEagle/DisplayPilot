@@ -30,7 +30,7 @@ Release uses static C/C++ runtime linking and the Windows system libraries. It d
 
 ## Implementation status
 
-The first native implementation includes the notification-area icon, modeless hover flyout rendered with Direct2D, DDC/CI brightness controls, native context menu and separate Advanced window. It is not yet feature-parity complete. Internal-panel WMI, color-temperature controls, rotation, brightness-key routing, complete scheduling and advanced controls will be built on this foundation.
+The current native implementation includes the notification-area icon, modeless Direct2D flyout, native context menu, expanded Advanced window, DDC/CI brightness and contrast, hardware-advertised color presets, internal-panel WMI brightness, rotation, Windows light/dark controls, scheduling, startup registration, and Registry persistence. Feature parity and hardware testing remain incomplete: brightness-key/WMI event synchronization and automatic Windows location remain to be implemented. See [feature parity](docs/feature-parity.md) and [verification](docs/verification.md).
 
 ## Platforms
 
