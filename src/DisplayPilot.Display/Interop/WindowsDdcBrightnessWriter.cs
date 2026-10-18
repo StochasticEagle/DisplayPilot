@@ -163,7 +163,7 @@ public sealed class WindowsDdcBrightnessWriter : IBrightnessWriter
             return Failed(requestedPercent, readError, "Could not read the monitor brightness range before writing.");
         }
 
-        var rawValue = (uint)DisplayControlReading.FromPercentage(requestedPercent, checked((int)maximum));
+        var rawValue = (uint)DisplayLevelScale.FromPercent(requestedPercent, checked((int)maximum));
         if (!DisplayNative.SetVCPFeature(physicalMonitor.Handle, NativeConstants.VcpCodeBrightness, rawValue))
         {
             return Failed(requestedPercent, Marshal.GetLastPInvokeError(), "SetVCPFeature rejected brightness VCP 0x10.");
@@ -183,7 +183,7 @@ public sealed class WindowsDdcBrightnessWriter : IBrightnessWriter
                 "The write returned success, but brightness read-back failed.");
         }
 
-        var verifiedPercent = new DisplayControlReading(checked((int)current), checked((int)maximum)).ToPercentage();
+        var verifiedPercent = DisplayLevelScale.ToPercent(checked((int)current), checked((int)maximum));
         return Math.Abs(verifiedPercent - requestedPercent) <= 1
             ? new BrightnessWriteResult(
                 BrightnessWriteProvider.DdcCi,

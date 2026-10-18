@@ -42,7 +42,7 @@ public class MccsCapabilitiesParserTests
         // Assert
         Assert.IsNotNull(result);
         Assert.IsNotNull(result.Capabilities);
-        Assert.AreEqual(0, result.Capabilities.SupportedVcpCodes.Count);
+        Assert.AreEqual(0, result.Capabilities.Features.Count);
         Assert.IsFalse(result.HasErrors);
     }
 
@@ -54,7 +54,7 @@ public class MccsCapabilitiesParserTests
 
         // Assert
         Assert.IsNotNull(result);
-        Assert.AreEqual(0, result.Capabilities.SupportedVcpCodes.Count);
+        Assert.AreEqual(0, result.Capabilities.Features.Count);
     }
 
     [TestMethod]
@@ -65,7 +65,7 @@ public class MccsCapabilitiesParserTests
 
         // Assert
         Assert.IsNotNull(result);
-        Assert.AreEqual(0, result.Capabilities.SupportedVcpCodes.Count);
+        Assert.AreEqual(0, result.Capabilities.Features.Count);
     }
 
     [TestMethod]
@@ -134,8 +134,8 @@ public class MccsCapabilitiesParserTests
         var result = MccsCapabilitiesParser.Parse(DellU3011Capabilities);
 
         // Assert - VCP 0x10 is Brightness
-        Assert.IsTrue(result.Capabilities.SupportsVcpCode(0x10));
-        var brightnessInfo = result.Capabilities.GetVcpCodeInfo(0x10);
+        Assert.IsTrue(result.Capabilities.SupportsVcp(0x10));
+        var brightnessInfo = result.Capabilities.GetMccsVcpFeature(0x10);
         Assert.IsNotNull(brightnessInfo);
         Assert.AreEqual(0x10, brightnessInfo.Value.Code);
         Assert.IsTrue(brightnessInfo.Value.IsContinuous);
@@ -148,7 +148,7 @@ public class MccsCapabilitiesParserTests
         var result = MccsCapabilitiesParser.Parse(DellU3011Capabilities);
 
         // Assert - VCP 0x12 is Contrast
-        Assert.IsTrue(result.Capabilities.SupportsVcpCode(0x12));
+        Assert.IsTrue(result.Capabilities.SupportsVcp(0x12));
     }
 
     [TestMethod]
@@ -158,8 +158,8 @@ public class MccsCapabilitiesParserTests
         var result = MccsCapabilitiesParser.Parse(DellU3011Capabilities);
 
         // Assert - VCP 0x60 is Input Source with discrete values
-        Assert.IsTrue(result.Capabilities.SupportsVcpCode(0x60));
-        var inputSourceInfo = result.Capabilities.GetVcpCodeInfo(0x60);
+        Assert.IsTrue(result.Capabilities.SupportsVcp(0x60));
+        var inputSourceInfo = result.Capabilities.GetMccsVcpFeature(0x60);
         Assert.IsNotNull(inputSourceInfo);
         Assert.IsTrue(inputSourceInfo.Value.HasDiscreteValues);
 
@@ -182,8 +182,8 @@ public class MccsCapabilitiesParserTests
         var result = MccsCapabilitiesParser.Parse(DellU3011Capabilities);
 
         // Assert - VCP 0x14 is Color Preset
-        Assert.IsTrue(result.Capabilities.SupportsVcpCode(0x14));
-        var colorPresetInfo = result.Capabilities.GetVcpCodeInfo(0x14);
+        Assert.IsTrue(result.Capabilities.SupportsVcp(0x14));
+        var colorPresetInfo = result.Capabilities.GetMccsVcpFeature(0x14);
         Assert.IsNotNull(colorPresetInfo);
         Assert.IsTrue(colorPresetInfo.Value.HasDiscreteValues);
 
@@ -204,8 +204,8 @@ public class MccsCapabilitiesParserTests
         var result = MccsCapabilitiesParser.Parse(DellU3011Capabilities);
 
         // Assert - VCP 0xD6 is Power Mode
-        Assert.IsTrue(result.Capabilities.SupportsVcpCode(0xD6));
-        var powerModeInfo = result.Capabilities.GetVcpCodeInfo(0xD6);
+        Assert.IsTrue(result.Capabilities.SupportsVcp(0xD6));
+        var powerModeInfo = result.Capabilities.GetMccsVcpFeature(0xD6);
         Assert.IsNotNull(powerModeInfo);
         Assert.IsTrue(powerModeInfo.Value.HasDiscreteValues);
 
@@ -224,7 +224,7 @@ public class MccsCapabilitiesParserTests
         var result = MccsCapabilitiesParser.Parse(DellU3011Capabilities);
 
         // Assert - VCP codes: 02 04 05 06 08 10 12 14 16 18 1A 52 60 AC AE B2 B6 C6 C8 C9 D6 DC DF FD
-        Assert.AreEqual(24, result.Capabilities.SupportedVcpCodes.Count);
+        Assert.AreEqual(24, result.Capabilities.Features.Count);
     }
 
     [TestMethod]
@@ -264,8 +264,8 @@ public class MccsCapabilitiesParserTests
         var result = MccsCapabilitiesParser.Parse(DellP2416DCapabilities);
 
         // Assert - VCP 0x60 Input Source has values: 01 11 0F
-        Assert.IsTrue(result.Capabilities.SupportsVcpCode(0x60));
-        var inputSourceInfo = result.Capabilities.GetVcpCodeInfo(0x60);
+        Assert.IsTrue(result.Capabilities.SupportsVcp(0x60));
+        var inputSourceInfo = result.Capabilities.GetMccsVcpFeature(0x60);
         Assert.IsNotNull(inputSourceInfo);
 
         var values = inputSourceInfo.Value.SupportedValues;
@@ -282,8 +282,8 @@ public class MccsCapabilitiesParserTests
         var result = MccsCapabilitiesParser.Parse(DellP2416DCapabilities);
 
         // Assert - VCP 0xE2 has values: 00 01 02 04 0E 12 14 19
-        Assert.IsTrue(result.Capabilities.SupportsVcpCode(0xE2));
-        var e2Info = result.Capabilities.GetVcpCodeInfo(0xE2);
+        Assert.IsTrue(result.Capabilities.SupportsVcp(0xE2));
+        var e2Info = result.Capabilities.GetMccsVcpFeature(0xE2);
         Assert.IsNotNull(e2Info);
 
         var values = e2Info.Value.SupportedValues;
@@ -301,8 +301,8 @@ public class MccsCapabilitiesParserTests
         Assert.AreEqual("lcd", result.Capabilities.Type);
         Assert.AreEqual("TestMonitor", result.Capabilities.Model);
         Assert.AreEqual("2.0", result.Capabilities.MccsVersion);
-        Assert.IsTrue(result.Capabilities.SupportsVcpCode(0x10));
-        Assert.IsTrue(result.Capabilities.SupportsVcpCode(0x12));
+        Assert.IsTrue(result.Capabilities.SupportsVcp(0x10));
+        Assert.IsTrue(result.Capabilities.SupportsVcp(0x12));
     }
 
     [TestMethod]
@@ -320,9 +320,9 @@ public class MccsCapabilitiesParserTests
         CollectionAssert.Contains(cmds, (byte)0x07);
 
         // VCP codes without spaces
-        Assert.IsTrue(result.Capabilities.SupportsVcpCode(0x10));
-        Assert.IsTrue(result.Capabilities.SupportsVcpCode(0x12));
-        Assert.IsTrue(result.Capabilities.SupportsVcpCode(0x14));
+        Assert.IsTrue(result.Capabilities.SupportsVcp(0x10));
+        Assert.IsTrue(result.Capabilities.SupportsVcp(0x12));
+        Assert.IsTrue(result.Capabilities.SupportsVcp(0x14));
     }
 
     [TestMethod]
@@ -335,8 +335,8 @@ public class MccsCapabilitiesParserTests
         var result = MccsCapabilitiesParser.Parse(input);
 
         // Assert
-        Assert.IsTrue(result.Capabilities.SupportsVcpCode(0x14));
-        var vcpInfo = result.Capabilities.GetVcpCodeInfo(0x14);
+        Assert.IsTrue(result.Capabilities.SupportsVcp(0x14));
+        var vcpInfo = result.Capabilities.GetMccsVcpFeature(0x14);
         Assert.IsNotNull(vcpInfo);
         Assert.AreEqual(3, vcpInfo.Value.SupportedValues.Count);
     }
@@ -351,21 +351,21 @@ public class MccsCapabilitiesParserTests
         var result = MccsCapabilitiesParser.Parse(input);
 
         // Assert
-        Assert.AreEqual(5, result.Capabilities.SupportedVcpCodes.Count);
+        Assert.AreEqual(5, result.Capabilities.Features.Count);
 
         // Continuous codes (no discrete values)
-        var brightness = result.Capabilities.GetVcpCodeInfo(0x10);
+        var brightness = result.Capabilities.GetMccsVcpFeature(0x10);
         Assert.IsTrue(brightness?.IsContinuous ?? false);
 
-        var contrast = result.Capabilities.GetVcpCodeInfo(0x12);
+        var contrast = result.Capabilities.GetMccsVcpFeature(0x12);
         Assert.IsTrue(contrast?.IsContinuous ?? false);
 
         // Discrete codes (with values)
-        var colorPreset = result.Capabilities.GetVcpCodeInfo(0x14);
+        var colorPreset = result.Capabilities.GetMccsVcpFeature(0x14);
         Assert.IsTrue(colorPreset?.HasDiscreteValues ?? false);
         Assert.AreEqual(2, colorPreset?.SupportedValues.Count);
 
-        var inputSource = result.Capabilities.GetVcpCodeInfo(0x60);
+        var inputSource = result.Capabilities.GetMccsVcpFeature(0x60);
         Assert.IsTrue(inputSource?.HasDiscreteValues ?? false);
         Assert.AreEqual(2, inputSource?.SupportedValues.Count);
     }
@@ -382,7 +382,7 @@ public class MccsCapabilitiesParserTests
         // Assert
         Assert.IsFalse(result.HasErrors);
         Assert.AreEqual("monitor", result.Capabilities.Protocol);
-        Assert.IsTrue(result.Capabilities.SupportsVcpCode(0x10));
+        Assert.IsTrue(result.Capabilities.SupportsVcp(0x10));
     }
 
     [TestMethod]
@@ -397,7 +397,7 @@ public class MccsCapabilitiesParserTests
         // Assert
         Assert.AreEqual("monitor", result.Capabilities.Protocol);
         Assert.AreEqual("lcd", result.Capabilities.Type);
-        Assert.AreEqual(3, result.Capabilities.SupportedVcpCodes.Count);
+        Assert.AreEqual(3, result.Capabilities.Features.Count);
     }
 
     [TestMethod]
@@ -412,8 +412,8 @@ public class MccsCapabilitiesParserTests
         // Assert
         CollectionAssert.Contains(result.Capabilities.SupportedCommands, (byte)0xE3);
         CollectionAssert.Contains(result.Capabilities.SupportedCommands, (byte)0xF3);
-        Assert.IsTrue(result.Capabilities.SupportsVcpCode(0xAC));
-        Assert.IsTrue(result.Capabilities.SupportsVcpCode(0xAE));
+        Assert.IsTrue(result.Capabilities.SupportsVcp(0xAC));
+        Assert.IsTrue(result.Capabilities.SupportsVcp(0xAE));
     }
 
     [TestMethod]
@@ -426,10 +426,10 @@ public class MccsCapabilitiesParserTests
         var result = MccsCapabilitiesParser.Parse(input);
 
         // Assert
-        Assert.IsTrue(result.Capabilities.SupportsVcpCode(0xAA));
-        Assert.IsTrue(result.Capabilities.SupportsVcpCode(0xBB));
-        Assert.IsTrue(result.Capabilities.SupportsVcpCode(0xCC));
-        Assert.IsTrue(result.Capabilities.SupportsVcpCode(0xDD));
+        Assert.IsTrue(result.Capabilities.SupportsVcp(0xAA));
+        Assert.IsTrue(result.Capabilities.SupportsVcp(0xBB));
+        Assert.IsTrue(result.Capabilities.SupportsVcp(0xCC));
+        Assert.IsTrue(result.Capabilities.SupportsVcp(0xDD));
     }
 
     [TestMethod]
@@ -445,8 +445,8 @@ public class MccsCapabilitiesParserTests
         Assert.AreEqual("monitor", result.Capabilities.Protocol);
 
         // VCP codes should still be parsed
-        Assert.IsTrue(result.Capabilities.SupportsVcpCode(0x10));
-        Assert.IsTrue(result.Capabilities.SupportsVcpCode(0x12));
+        Assert.IsTrue(result.Capabilities.SupportsVcp(0x10));
+        Assert.IsTrue(result.Capabilities.SupportsVcp(0x12));
     }
 
     [TestMethod]
@@ -459,10 +459,10 @@ public class MccsCapabilitiesParserTests
         var result = MccsCapabilitiesParser.Parse(input);
 
         // Assert - Should skip invalid and parse valid codes
-        Assert.IsTrue(result.Capabilities.SupportsVcpCode(0x10));
-        Assert.IsTrue(result.Capabilities.SupportsVcpCode(0x12));
-        Assert.IsTrue(result.Capabilities.SupportsVcpCode(0x14));
-        Assert.AreEqual(3, result.Capabilities.SupportedVcpCodes.Count);
+        Assert.IsTrue(result.Capabilities.SupportsVcp(0x10));
+        Assert.IsTrue(result.Capabilities.SupportsVcp(0x12));
+        Assert.IsTrue(result.Capabilities.SupportsVcp(0x14));
+        Assert.AreEqual(3, result.Capabilities.Features.Count);
     }
 
     [TestMethod]
@@ -475,42 +475,22 @@ public class MccsCapabilitiesParserTests
         var result = MccsCapabilitiesParser.Parse(input);
 
         // Assert - Should only have 10 and 12
-        Assert.AreEqual(2, result.Capabilities.SupportedVcpCodes.Count);
-        Assert.IsTrue(result.Capabilities.SupportsVcpCode(0x10));
-        Assert.IsTrue(result.Capabilities.SupportsVcpCode(0x12));
+        Assert.AreEqual(2, result.Capabilities.Features.Count);
+        Assert.IsTrue(result.Capabilities.SupportsVcp(0x10));
+        Assert.IsTrue(result.Capabilities.SupportsVcp(0x12));
     }
 
     [TestMethod]
-    public void GetVcpCodesAsHexStrings_ReturnsSortedList()
+    public void FormatVcpCodes_ReturnsSortedCodes()
     {
         // Arrange
         var result = MccsCapabilitiesParser.Parse("(vcp(60 10 14 12))");
 
         // Act
-        var hexStrings = result.Capabilities.GetVcpCodesAsHexStrings();
+        var hexStrings = result.Capabilities.FormatVcpCodes();
 
         // Assert - Should be sorted
-        Assert.AreEqual(4, hexStrings.Count);
-        Assert.AreEqual("0x10", hexStrings[0]);
-        Assert.AreEqual("0x12", hexStrings[1]);
-        Assert.AreEqual("0x14", hexStrings[2]);
-        Assert.AreEqual("0x60", hexStrings[3]);
-    }
-
-    [TestMethod]
-    public void GetSortedVcpCodes_ReturnsSortedEnumerable()
-    {
-        // Arrange
-        var result = MccsCapabilitiesParser.Parse("(vcp(60 10 14 12))");
-
-        // Act
-        var sortedCodes = result.Capabilities.GetSortedVcpCodes().ToList();
-
-        // Assert
-        Assert.AreEqual(0x10, sortedCodes[0].Code);
-        Assert.AreEqual(0x12, sortedCodes[1].Code);
-        Assert.AreEqual(0x14, sortedCodes[2].Code);
-        Assert.AreEqual(0x60, sortedCodes[3].Code);
+        Assert.AreEqual("0x10, 0x12, 0x14, 0x60", hexStrings);
     }
 
     [TestMethod]
@@ -520,7 +500,7 @@ public class MccsCapabilitiesParserTests
         var result = MccsCapabilitiesParser.Parse("(vcp(10))");
 
         // Act & Assert
-        Assert.IsFalse(result.Capabilities.HasDiscreteValues(0x10));
+        Assert.IsFalse(result.Capabilities.FindFeature(0x10)?.HasDiscreteValues == true);
     }
 
     [TestMethod]
@@ -530,17 +510,17 @@ public class MccsCapabilitiesParserTests
         var result = MccsCapabilitiesParser.Parse("(vcp(60(01 11)))");
 
         // Act & Assert
-        Assert.IsTrue(result.Capabilities.HasDiscreteValues(0x60));
+        Assert.IsTrue(result.Capabilities.FindFeature(0x60)?.HasDiscreteValues == true);
     }
 
     [TestMethod]
-    public void GetSupportedValues_DiscreteCode_ReturnsValues()
+    public void FeatureValues_DiscreteCode_ReturnsValues()
     {
         // Arrange
         var result = MccsCapabilitiesParser.Parse("(vcp(60(01 11 0F)))");
 
         // Act
-        var values = result.Capabilities.GetSupportedValues(0x60);
+        var values = result.Capabilities.FeatureValues(0x60);
 
         // Assert
         Assert.IsNotNull(values);
@@ -689,7 +669,7 @@ public class MccsCapabilitiesParserTests
     }
 
     [TestMethod]
-    public void Parse_WindowAreaDimensions_CalculatesCorrectly()
+    public void Parse_PixelBoundsDimensions_CalculatesCorrectly()
     {
         // Arrange
         var input = "(window1(area(100 200 500 600)))";

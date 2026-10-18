@@ -34,7 +34,7 @@ public sealed record MonitorDdcCapabilitiesInfo(
     MonitorDisplayInfo Display,
     bool Succeeded,
     string RawCapabilities,
-    VcpCapabilities Capabilities,
+    MccsDisplayProfile Capabilities,
     int Win32Error = 0);
 
 public enum DdcVcpWriteStatus

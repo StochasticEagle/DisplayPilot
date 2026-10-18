@@ -8,7 +8,7 @@ public static class MccsCapabilitiesParser
 {
     public static MccsParseResult Parse(string? text)
     {
-        var caps = new VcpCapabilities { Raw = text ?? "" };
+        var caps = new MccsDisplayProfile { Raw = text ?? "" };
         if (string.IsNullOrWhiteSpace(text)) return new(caps, Array.Empty<ParseError>());
         foreach (var (name, value) in Sections(text))
         {
@@ -21,11 +21,11 @@ public static class MccsCapabilitiesParser
                 case "cmds": caps.SupportedCommands = Hex(value).ToList(); break;
                 case "vcp":
                     foreach (var (code, detail) in Entries(value))
-                        caps.SupportedVcpCodes[code] = new(code, VcpNames.GetCodeName(code), Hex(detail).Select(x => (int)x).ToArray());
+                        caps.Features[code] = new(code, VcpNames.GetCodeName(code), Hex(detail).Select(x => (int)x).ToArray());
                     break;
                 case "vcpname":
                     foreach (var (code, detail) in Entries(value))
-                        caps.SupportedVcpCodes[code] = new(code, detail.Trim(), caps.GetSupportedValues(code));
+                        caps.Features[code] = new(code, detail.Trim(), caps.FeatureValues(code));
                     break;
                 default:
                     if (name.StartsWith("window", StringComparison.OrdinalIgnoreCase)
@@ -100,12 +100,12 @@ public static class MccsCapabilitiesParser
         }
     }
 
-    private static WindowCapability Window(int index, string raw)
+    private static MccsWindow Window(int index, string raw)
     {
         string type = "";
         int id = 0;
-        WindowArea area = default;
-        WindowSize max = default, min = default;
+        PixelBounds area = default;
+        PixelSize max = default, min = default;
         foreach (var (name, value) in Sections(raw))
         {
             var n = value.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)
@@ -128,10 +128,10 @@ public readonly record struct ParseError(int Position, string Message)
     public override string ToString() => $"[{Position}] {Message}";
 }
 
-public sealed class MccsParseResult(VcpCapabilities capabilities, IReadOnlyList<ParseError> errors)
+public sealed class MccsParseResult(MccsDisplayProfile capabilities, IReadOnlyList<ParseError> errors)
 {
-    public VcpCapabilities Capabilities { get; } = capabilities;
+    public MccsDisplayProfile Capabilities { get; } = capabilities;
     public IReadOnlyList<ParseError> Errors { get; } = errors;
     public bool HasErrors => Errors.Count > 0;
-    public bool IsValid => !HasErrors && Capabilities.SupportedVcpCodes.Count > 0;
+    public bool IsValid => !HasErrors && Capabilities.Features.Count > 0;
 }

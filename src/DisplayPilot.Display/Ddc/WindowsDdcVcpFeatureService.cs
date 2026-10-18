@@ -95,7 +95,7 @@ public static class WindowsDdcVcpFeatureService
                 item.Win32Error, item.AttemptCount, item.HandleAcquisitionAttempts)).ToArray()));
             contrast.Add(new(display, dark));
             temperature.Add(new(display, colors));
-            capabilities.Add(capability ?? new(display, false, "", VcpCapabilities.Empty, lastError));
+            capabilities.Add(capability ?? new(display, false, "", new MccsDisplayProfile(), lastError));
         }
         return new(brightness, contrast, temperature, capabilities);
     }
@@ -114,10 +114,10 @@ public static class WindowsDdcVcpFeatureService
     }
 
     private static unsafe bool TrySnapshotCapabilities(
-        nint handle, out string raw, out VcpCapabilities parsed, out int error)
+        nint handle, out string raw, out MccsDisplayProfile parsed, out int error)
     {
         raw = "";
-        parsed = VcpCapabilities.Empty;
+        parsed = new MccsDisplayProfile();
         error = ErrorInvalidData;
         if (handle == 0) return false;
         if (!DisplayNative.GetCapabilitiesStringLength(handle, out var size))
@@ -207,7 +207,7 @@ public static class WindowsDdcVcpFeatureService
                         }
 
                         appliedRaw = continuous
-                            ? (uint)DisplayControlReading.FromPercentage(checked((int)requestedValue), checked((int)maximum))
+                            ? (uint)DisplayLevelScale.FromPercent(checked((int)requestedValue), checked((int)maximum))
                             : requestedValue;
                         if (!DisplayNative.SetVCPFeature(physicalMonitor.Handle, vcpCode, appliedRaw))
                         {
@@ -237,7 +237,7 @@ public static class WindowsDdcVcpFeatureService
                                 return WriteFailure(vcpCode, requestedValue, ErrorInvalidData, "The monitor reported a zero feature maximum.", appliedRaw);
                             }
 
-                            verifiedPercent = new DisplayControlReading(checked((int)current), checked((int)maximum)).ToPercentage();
+                            verifiedPercent = DisplayLevelScale.ToPercent(checked((int)current), checked((int)maximum));
                             if (Math.Abs(verifiedPercent.Value - checked((int)requestedValue)) > 1)
                             {
                                 return new DdcVcpWriteResult(

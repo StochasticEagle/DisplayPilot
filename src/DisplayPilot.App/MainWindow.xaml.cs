@@ -2700,7 +2700,7 @@ public sealed partial class MainWindow : Window, IDisposable
                 StringComparison.OrdinalIgnoreCase));
             var contrastRead = GetSuccessfulFeatureRead(_lastContrastProbes, display.DevicePath);
             var contrastAvailable =
-                capabilities?.Capabilities.SupportsVcpCode(NativeConstants.VcpCodeContrast) == true &&
+                capabilities?.Capabilities.SupportsVcp(NativeConstants.VcpCodeContrast) == true &&
                 contrastRead is { MaximumValue: > 0 };
             var contrastPercent = contrastRead is { MaximumValue: > 0 }
                 ? Math.Clamp(contrastRead.CurrentValue * 100d / contrastRead.MaximumValue, 0, 100)
@@ -2841,7 +2841,7 @@ public sealed partial class MainWindow : Window, IDisposable
             candidate.Display.DevicePath,
             devicePath,
             StringComparison.OrdinalIgnoreCase));
-        var values = capabilities?.Capabilities.GetSupportedValues(
+        var values = capabilities?.Capabilities.FeatureValues(
             NativeConstants.VcpCodeSelectColorPreset);
         return values is null
             ? []
@@ -3135,9 +3135,9 @@ public sealed partial class MainWindow : Window, IDisposable
                     : $"failed (0x{unchecked((uint)capabilities.Win32Error):X8})");
             if (capabilities?.Succeeded == true)
             {
-                report.Append("MCCS VCP codes: ").AppendLine(string.Join(", ", capabilities.Capabilities.GetVcpCodesAsHexStrings()));
+                report.Append("MCCS VCP codes: ").AppendLine(capabilities.Capabilities.FormatVcpCodes());
                 report.Append("MCCS color presets: ").AppendLine(string.Join(", ",
-                    capabilities.Capabilities.GetSupportedValues(NativeConstants.VcpCodeSelectColorPreset) ?? []));
+                    capabilities.Capabilities.FeatureValues(NativeConstants.VcpCodeSelectColorPreset) ?? []));
             }
 
             var wmiProbe = wmiProbes?.FirstOrDefault(candidate => string.Equals(
