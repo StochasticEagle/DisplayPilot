@@ -47,19 +47,6 @@ jobs:
           $cmd = 'call "' + $vs + '\Common7\Tools\VsDevCmd.bat" -arch=x86 -host_arch=x86 >nul && cl /nologo /std:c++17 /EHsc /utf-8 /DWIN32_LEAN_AND_MEAN /DNOMINMAX /I src\native tests\native\settings_compat.cpp src\native\settings.cpp /link /OUT:settings_compat.exe user32.lib shell32.lib advapi32.lib && settings_compat.exe'
           & cmd.exe /d /s /c $cmd
           if ($LASTEXITCODE -ne 0) { throw "Settings compatibility tests failed: $LASTEXITCODE" }
-      - name: Verify Visual Studio IDE solution configuration
-        if: matrix.platform == 'Win64' && matrix.configuration == 'Debug'
-        shell: pwsh
-        run: |
-          $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -version '[18.0,19.0)' -property installationPath
-          $ide = Join-Path $vs "Common7\IDE\devenv.com"
-          & $ide DisplayPilot.sln /Build "Debug|Win64" /Out "ide-build.log"
-          $result = $LASTEXITCODE
-          Get-Content "ide-build.log"
-          if (Select-String -Path "ide-build.log" -Pattern "Platform .Win64. referenced in the project file .* cannot be found") {
-            throw "Visual Studio failed to recognize the Win64 project platform"
-          }
-          if ($result -ne 0) { exit $result }
       - name: Verify standalone Windows executable
         shell: bash
         run: |

@@ -12,12 +12,12 @@ Global
 		Release|Win64 = Release|Win64
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{A641C932-321D-4891-8D43-D369D1F6700A}.Debug|Win32.ActiveCfg = Debug|Win64
-		{A641C932-321D-4891-8D43-D369D1F6700A}.Debug|Win32.Build.0 = Debug|Win64
+		{A641C932-321D-4891-8D43-D369D1F6700A}.Debug|Win32.ActiveCfg = Debug|Win32
+		{A641C932-321D-4891-8D43-D369D1F6700A}.Debug|Win32.Build.0 = Debug|Win32
 		{A641C932-321D-4891-8D43-D369D1F6700A}.Debug|Win64.ActiveCfg = Debug|Win64
 		{A641C932-321D-4891-8D43-D369D1F6700A}.Debug|Win64.Build.0 = Debug|Win64
-		{A641C932-321D-4891-8D43-D369D1F6700A}.Release|Win32.ActiveCfg = Release|Win64
-		{A641C932-321D-4891-8D43-D369D1F6700A}.Release|Win32.Build.0 = Release|Win64
+		{A641C932-321D-4891-8D43-D369D1F6700A}.Release|Win32.ActiveCfg = Release|Win32
+		{A641C932-321D-4891-8D43-D369D1F6700A}.Release|Win32.Build.0 = Release|Win32
 		{A641C932-321D-4891-8D43-D369D1F6700A}.Release|Win64.ActiveCfg = Release|Win64
 		{A641C932-321D-4891-8D43-D369D1F6700A}.Release|Win64.Build.0 = Release|Win64
 	EndGlobalSection
