@@ -48,6 +48,9 @@ jobs:
           & $ide DisplayPilot.sln /Build "Debug|Win64" /Out "ide-build.log"
           $result = $LASTEXITCODE
           Get-Content "ide-build.log"
+          if (Select-String -Path "ide-build.log" -Pattern "Platform .Win64. referenced in the project file .* cannot be found") {
+            throw "Visual Studio failed to recognize the Win64 project platform"
+          }
           if ($result -ne 0) { exit $result }
       - name: Verify standalone Windows executable
         shell: bash
