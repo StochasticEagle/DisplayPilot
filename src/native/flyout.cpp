@@ -85,8 +85,8 @@ void Flyout::show(const RECT& anchor, std::vector<Monitor>* monitors) {
     HMONITOR monitor = MonitorFromPoint(center, MONITOR_DEFAULTTONEAREST);
     if (!GetMonitorInfoW(monitor, &info)) return;
     RECT work = info.rcWork;
-    width_ = std::min(width_, work.right - work.left);
-    height_ = std::min(height_, work.bottom - work.top);
+    width_ = std::min(width_, static_cast<int>(work.right - work.left));
+    height_ = std::min(height_, static_cast<int>(work.bottom - work.top));
     const int x = nearest(anchor.left, work.left, work.right - width_);
     const int y = anchor.top > work.top + (work.bottom - work.top) / 2
         ? std::max(work.top, anchor.top - height_)
