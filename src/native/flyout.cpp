@@ -92,7 +92,7 @@ void Flyout::rebuild() {
     for (HWND child : children_) DestroyWindow(child);
     children_.clear();
     rows_.clear();
-    title_ = empty_ = themeLight_ = themeDark_ = schedule_ = advanced_ = nullptr;
+    title_ = empty_ = themeLight_ = themeDarkButton_ = schedule_ = advanced_ = nullptr;
     title_ = add(L"STATIC", L"DisplayPilot", SS_LEFT, 0);
     if (!monitors_ || monitors_->empty())
         empty_ = add(L"STATIC", L"No controllable monitors detected", SS_LEFT, 0);
