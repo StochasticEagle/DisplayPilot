@@ -559,7 +559,8 @@ public sealed partial class NotificationAreaIcon : IDisposable
             {
                 var copied = length;
                 if (GetRawInputData(rawInputHandle, RawInputDataCommand,
-                        (nint)pointer, ref copied, headerSize) != copied)
+                        (nint)pointer, ref copied, headerSize) != copied ||
+                    copied < headerSize + 8)
                     return;
                 if (Marshal.PtrToStructure<RawInputHeader>((nint)pointer).Type != RawInputTypeHid)
                     return;
