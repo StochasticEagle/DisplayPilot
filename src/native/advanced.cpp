@@ -15,6 +15,7 @@ constexpr int themeLightId=100, themeDarkId=101, scheduleId=110, reduceId=111;
 constexpr int modeId=112, lightId=113, darkId=114, latitudeId=115;
 constexpr int longitudeId=116, labelId=117, saveId=118, startupId=119;
 constexpr int diagnosticsId=120, brandIconId=121;
+constexpr int automaticLocationId=122, updateLocationId=123;
 constexpr int appIconId=1;
 constexpr int monitorStart=2000;
 int toInt(float n) { return static_cast<int>(std::lround(n)); }
@@ -211,6 +212,7 @@ void AdvancedWindow::rebuild() {
     rows_.clear();
     scheduleCheckbox_=brightnessCheckbox_=mode_=lightTime_=darkTime_=nullptr;
     latitude_=longitude_=label_=startup_=status_=save_=diagnostics_=nullptr;
+    automaticLocation_=updateLocation_=nullptr;
     displaysHeading_=scheduleHeading_=integrationHeading_=nullptr;
     brandIcon_=brandName_=brandVersion_=nullptr;
     lightCaption_=darkCaption_=latitudeCaption_=longitudeCaption_=locationCaption_=nullptr;
@@ -304,6 +306,12 @@ void AdvancedWindow::rebuild() {
                         WS_BORDER|ES_AUTOHSCROLL|WS_TABSTOP,longitudeId);
         label_=add(L"EDIT",settings_->locationLabel,
                    WS_BORDER|ES_AUTOHSCROLL|WS_TABSTOP,labelId);
+        automaticLocation_=add(L"BUTTON",L"Automatically update location when changed",
+            BS_AUTOCHECKBOX|WS_TABSTOP,automaticLocationId);
+        SendMessageW(automaticLocation_, BM_SETCHECK,
+            settings_->automaticLocation ? BST_CHECKED : BST_UNCHECKED, 0);
+        updateLocation_=add(L"BUTTON",L"Update location now",
+            BS_PUSHBUTTON|WS_TABSTOP,updateLocationId);
         save_=add(L"BUTTON",L"Save schedule",BS_PUSHBUTTON|WS_TABSTOP,saveId);
         SendMessageW(scheduleCheckbox_,BM_SETCHECK,
                      settings_->scheduleEnabled?BST_CHECKED:BST_UNCHECKED,0);
@@ -399,6 +407,10 @@ void AdvancedWindow::layout() {
     place(label_, margin + px(76), y, std::max(px(180), full - px(76)), px(27));
     y += px(44);
 
+    place(automaticLocation_, margin, y, std::min(full, px(370)), px(28));
+    y += px(34);
+    place(updateLocation_, margin, y, px(170), px(32));
+    y += px(42);
     place(save_, margin, y, px(170), px(32));
     y += px(57);
     heading(integrationHeading_);
@@ -439,6 +451,7 @@ bool AdvancedWindow::saveInput() {
     Settings next=*settings_;
     next.scheduleEnabled=SendMessageW(scheduleCheckbox_,BM_GETCHECK,0,0)==BST_CHECKED;
     next.reduceBrightness=SendMessageW(brightnessCheckbox_,BM_GETCHECK,0,0)==BST_CHECKED;
+    next.automaticLocation=SendMessageW(automaticLocation_,BM_GETCHECK,0,0)==BST_CHECKED;
     next.scheduleMode=SendMessageW(mode_,CB_GETCURSEL,0,0)==1?
         ScheduleMode::Solar:ScheduleMode::Fixed;
     if(!parseMinute(read(lightTime_),next.lightMinute)||
@@ -456,11 +469,6 @@ bool AdvancedWindow::saveInput() {
         }
         next.locationConfigured=true;
     } else next.locationConfigured=false;
-    if(next.scheduleEnabled && next.scheduleMode==ScheduleMode::Solar &&
-       !next.locationConfigured) {
-        SetWindowTextW(status_,L"Sunrise/sunset scheduling requires a valid location.");
-        return false;
-    }
     next.locationLabel=read(label_);
     if(settingsChanged)settingsChanged(next);
     SetWindowTextW(status_,L"Schedule and location settings saved.");
@@ -505,6 +513,11 @@ void AdvancedWindow::onCommand(WORD id,WORD notification) {
         SetWindowTextW(status_,L"Windows sign-in preference updated.");
     } else if(id==saveId && notification==BN_CLICKED) {
         saveInput();
+    } else if(id==updateLocationId && notification==BN_CLICKED) {
+        if (locationUpdateRequested) {
+            locationUpdateRequested();
+            SetWindowTextW(status_,L"Location update requested. Current coordinates retained until a valid result.");
+        }
     } else if(id==diagnosticsId && notification==BN_CLICKED) {
         copyDiagnostics();
     } else if(id==themeLightId && notification==BN_CLICKED && themeChanged) {
