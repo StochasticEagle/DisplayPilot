@@ -227,6 +227,7 @@
   <ItemGroup>
     <ClInclude Include="src\native\display.hpp" />
     <ClInclude Include="src\native\flyout.hpp" />
+    <ClInclude Include="src\native\ui_platform.hpp" />
     <ClInclude Include="src\native\settings.hpp" />
     <ClInclude Include="src\native\advanced.hpp" />
     <ClInclude Include="src\native\wmi_events.hpp" />

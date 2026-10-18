@@ -1,4 +1,5 @@
 #include "advanced.hpp"
+#include "ui_platform.hpp"
 #include <commctrl.h>
 #include <algorithm>
 #include <cmath>
@@ -101,6 +102,7 @@ bool AdvancedWindow::create(HINSTANCE instance) {
              WS_OVERLAPPEDWINDOW|WS_VSCROLL, CW_USEDEFAULT,CW_USEDEFAULT,
              860,690,nullptr,nullptr,instance,this);
     if (!window_) return false;
+    applyNativeWindowChrome(window_);
     HDC dc=GetDC(window_);
     const int size=dc ? -MulDiv(10,GetDeviceCaps(dc,LOGPIXELSY),72):-13;
     if (dc) ReleaseDC(window_,dc);

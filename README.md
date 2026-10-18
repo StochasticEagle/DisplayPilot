@@ -22,7 +22,7 @@ Release executables use the static MSVC runtime and embed application resources.
 
 ## Features
 
-The notification-area icon opens a modeless Direct2D monitor-control flyout. A native context menu provides quick commands and access to the separate Advanced window. Monitor controls use DDC/CI, WMI, and Windows display APIs. Fixed-time and solar scheduling are available with user-configured coordinates.
+The notification-area icon opens a modeless native Win32 monitor-control flyout. A native context menu provides quick commands and access to the separate Advanced window. Monitor controls use DDC/CI, WMI, and Windows display APIs. Fixed-time and solar scheduling are available with user-configured coordinates.
 
 ## Supported Windows versions
 

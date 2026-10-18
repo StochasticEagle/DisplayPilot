@@ -14,6 +14,7 @@
     <ClCompile Include="src\native\wmi_events.cpp"><Filter>Source Files</Filter></ClCompile>
     <ClInclude Include="src\native\display.hpp"><Filter>Header Files</Filter></ClInclude>
     <ClInclude Include="src\native\flyout.hpp"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="src\native\ui_platform.hpp"><Filter>Header Files</Filter></ClInclude>
     <ClInclude Include="src\native\settings.hpp"><Filter>Header Files</Filter></ClInclude>
     <ClInclude Include="src\native\advanced.hpp"><Filter>Header Files</Filter></ClInclude>
     <ClInclude Include="src\native\wmi_events.hpp"><Filter>Header Files</Filter></ClInclude>

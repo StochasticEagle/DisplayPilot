@@ -1,8 +1,6 @@
 #pragma once
 #include "display.hpp"
 #include <windows.h>
-#include <d2d1.h>
-#include <dwrite.h>
 #include <functional>
 #include <vector>
 
@@ -30,33 +28,43 @@ public:
     std::function<void(bool)> scheduleChanged;
 
 private:
-    enum class Control { None, Brightness, Contrast };
+    struct MonitorControls {
+        HWND name = nullptr;
+        HWND brightnessLabel = nullptr;
+        HWND brightness = nullptr;
+        HWND contrastLabel = nullptr;
+        HWND contrast = nullptr;
+        HWND colorLabel = nullptr;
+        HWND color = nullptr;
+    };
+    HINSTANCE instance_ = nullptr;
     HWND window_ = nullptr;
+    HFONT font_ = nullptr;
     std::vector<Monitor>* monitors_ = nullptr;
-    ID2D1Factory* factory_ = nullptr;
-    ID2D1HwndRenderTarget* target_ = nullptr;
-    ID2D1SolidColorBrush* brush_ = nullptr;
-    IDWriteFactory* writeFactory_ = nullptr;
-    IDWriteTextFormat* text_ = nullptr;
-    IDWriteTextFormat* heading_ = nullptr;
-    float scale_ = 1.0f;
-    int width_ = 394;
-    int height_ = 170;
-    int dragIndex_ = -1;
-    Control dragControl_ = Control::None;
-    float scroll_ = 0.0f;
-    float footer_ = 80.0f;
+    std::vector<HWND> children_;
+    std::vector<MonitorControls> rows_;
+    HWND title_ = nullptr;
+    HWND empty_ = nullptr;
+    HWND themeLight_ = nullptr;
+    HWND themeDark_ = nullptr;
+    HWND schedule_ = nullptr;
+    HWND advanced_ = nullptr;
+    int scroll_ = 0;
+    int contentHeight_ = 0;
+    int dpi_ = 96;
     bool themeSupported_ = false;
     bool themeDark_ = false;
     bool scheduleEnabled_ = false;
+    bool updating_ = false;
 
-    float rowHeight(const Monitor& monitor) const;
-    float contentHeight() const;
-    void paint();
-    void releaseTarget();
-    void moveSlider(int physicalX);
-    void click(int physicalX, int physicalY);
-    bool hitSlider(float x, float y);
+    int px(int logical) const;
+    HWND add(const wchar_t* kind, const wchar_t* caption, DWORD style, int id);
+    void rebuild();
+    void layout();
+    void scrollBy(int delta);
+    void synchronize();
+    void onCommand(WORD id, WORD notification);
+    void onTrackbar(HWND control);
     static LRESULT CALLBACK procedure(HWND window, UINT message, WPARAM w, LPARAM l);
 };
 }
