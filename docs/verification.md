@@ -20,6 +20,10 @@ Test tray hover and dismissal, native right-click menu, flyout focus behavior, s
 
 Test fixed hours, solar calculations at several latitudes, midnight crossings, daylight-saving transitions, manual overrides, restart recovery, and brightness restoration.
 
+## Settings compatibility
+
+The native application uses the same `%LOCALAPPDATA%\DisplayPilot\settings.json` schema (versions 1–4) as the WinUI application. The CI compatibility test loads saved fixed and solar schedules, UTF-8 location labels, automation and brightness flags, and monitor restoration values; verifies case-insensitive monitor keys; and checks that saving preserves restoration state and unknown JSON properties. Malformed files must remain untouched.
+
 ## Installer
 
 Verify separate architecture installers, application launch, registration at sign-in, upgrades, and uninstall.
