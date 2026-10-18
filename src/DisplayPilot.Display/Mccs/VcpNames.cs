@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: Unlicense
 // DisplayPilot's display-control labels; numeric codes are defined by VESA MCCS.
 namespace DisplayPilot.Display.Mccs;
 

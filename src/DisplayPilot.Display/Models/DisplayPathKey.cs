@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Unlicense
 namespace DisplayPilot.Display.Models;
 
 public static class DisplayPathKey

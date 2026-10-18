@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: Unlicense
 // Independent section scanner for VESA MCCS capability strings.
 using System.Globalization;
 using DisplayPilot.Display.Models;

@@ -1,6 +1,4 @@
-// Copyright (c) 2026 Aaron
-// Licensed under the MIT license. See the LICENSE file in the project root.
-
+// SPDX-License-Identifier: Unlicense
 using System.Management;
 using System.Runtime.InteropServices;
 using DisplayPilot.Display.Brightness;

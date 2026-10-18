@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Unlicense
 namespace DisplayPilot.Display.Models;
 
 // MCCS is the VESA protocol; this is DisplayPilot's compact decoded representation.

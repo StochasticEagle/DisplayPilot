@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Unlicense
 namespace DisplayPilot.Display.Models;
 
 // Stateless conversion between monitor-native values and UI percentages.
