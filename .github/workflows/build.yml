@@ -24,6 +24,10 @@ jobs:
             platform: x64
     steps:
       - uses: actions/checkout@v4
+      - name: Discover MSBuild
+        uses: microsoft/setup-msbuild@v3
+        with:
+          msbuild-architecture: x64
       - name: Build native Visual Studio project
         shell: cmd
         run: msbuild DisplayPilot.sln /m /p:Configuration=Release /p:Platform=${{ matrix.platform }} /p:PlatformToolset=v143 /verbosity:minimal
