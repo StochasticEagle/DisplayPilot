@@ -24,8 +24,8 @@ CloseApplications=yes
 RestartApplications=no
 UninstallFilesDir={commonappdata}\DisplayPilot\Uninstall
 #if AppArch == "64"
-ArchitecturesAllowed=x64compatible
-ArchitecturesInstallIn64BitMode=x64compatible
+ArchitecturesAllowed=win64
+ArchitecturesInstallIn64BitMode=win64
 #endif
 
 [Files]

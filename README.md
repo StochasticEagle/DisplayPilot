@@ -1,43 +1,37 @@
-# DisplayPilot — Native Windows C++ Application 
+# DisplayPilot
 
-DisplayPilot is a native, single-process Windows notification-area monitor utility.
+DisplayPilot is a native C++ Windows notification-area application for monitor controls and appearance scheduling.
 
-This branch is a clean C++ application.
+## Build
 
-## Build in Visual Studio 2026
+Open `DisplayPilot.sln` in Visual Studio 2026 with MSVC v143 and the Windows SDK installed. Select Debug or Release and Win32 or Win64, then select **Build Solution**.
 
-Open **DisplayPilot.sln** in Visual Studio 2026 with the **Desktop development with C++** workload and a Windows SDK installed.
-
-Choose **Release** or **Debug** and the desired solution platform:
-
-| Visual Studio platform | Application output |
+| Platform | Release output |
 | --- | --- |
 | Win32 | `dist/32/DisplayPilot.exe` |
 | Win64 | `dist/64/DisplayPilot.exe` |
 
-Select **Build > Build Solution** or press **Ctrl+Shift+B**.
-
-Visual Studio 2026 builds this project with the installed **MSVC v143** toolset for all Debug and Release configurations; v145 is not required. Windows CI uses the same v143 toolset.
-
-From the Visual Studio Developer Command Prompt:
+Command-line builds from a Visual Studio Developer Command Prompt:
 
 ```cmd
 msbuild DisplayPilot.sln /m /p:Configuration=Release /p:Platform=Win32
 msbuild DisplayPilot.sln /m /p:Configuration=Release /p:Platform=Win64
 ```
 
-Release uses static C/C++ runtime linking and the Windows system libraries. It does not ship those libraries, debug information, helper executables or separate resources. Both outputs consist only of `DisplayPilot.exe`.
+Release executables use the static MSVC runtime and embed application resources. Separate installers are built with `installer/DisplayPilot.iss`.
 
-## Implementation status
+## Features
 
-The current native implementation includes the notification-area icon, modeless Direct2D flyout, native context menu, expanded Advanced window, DDC/CI brightness and contrast, hardware-advertised color presets, internal-panel WMI brightness, rotation, Windows light/dark controls, scheduling, startup registration, and Registry persistence. Feature parity and hardware testing remain incomplete: WMI brightness-key events are handled without an additional process; automatic Windows location integration remains outstanding. See [feature parity](docs/feature-parity.md) and [verification](docs/verification.md).
+The notification-area icon opens a modeless Direct2D monitor-control flyout. A native context menu provides quick commands and access to the separate Advanced window. Monitor controls use DDC/CI, WMI, and Windows display APIs. Fixed-time and solar scheduling are available with user-configured coordinates.
 
-## Platforms
+## Supported Windows versions
 
-Windows 7 SP1 is the minimum runtime target, with 32-bit and 64-bit outputs. Windows 10 is targeted on both architectures. Windows 11 supports 64-bit; running the 32-bit application under WOW64 is untested and unblocked. Windows 8/8.1 is likewise untested and unblocked.
+Windows 7 SP1, Windows 10, and Windows 11 are covered by the supported platform matrix. See [platforms](docs/platforms.md).
 
-See [platform requirements](docs/rebuild-platforms.md) and [architecture](docs/architecture.md).
+## Documentation
+
+[Architecture](docs/architecture.md) · [Features](docs/features.md) · [Verification](docs/verification.md)
 
 ## License
 
-The [Unlicense](LICENSE).
+[The Unlicense](LICENSE).
