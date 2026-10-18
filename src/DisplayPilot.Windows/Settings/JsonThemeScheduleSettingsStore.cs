@@ -1,21 +1,16 @@
 // SPDX-License-Identifier: Unlicense
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using DisplayPilot.Core.Theme;
 
 namespace DisplayPilot.Windows.Settings;
 
-public sealed class JsonThemeScheduleSettingsStore : IThemeScheduleSettingsStore
+public sealed partial class JsonThemeScheduleSettingsStore : IThemeScheduleSettingsStore
 {
     private const int CurrentVersion = 4;
     private const int FirstSupportedVersion = 1;
     private const int MinutesPerDay = 24 * 60;
-    private static readonly JsonSerializerOptions SerializerOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        WriteIndented = true,
-    };
-
     private readonly string _filePath;
 
     public JsonThemeScheduleSettingsStore()
@@ -51,7 +46,7 @@ public sealed class JsonThemeScheduleSettingsStore : IThemeScheduleSettingsStore
         StoredSettings? stored;
         try
         {
-            stored = JsonSerializer.Deserialize<StoredSettings>(json, SerializerOptions);
+            stored = JsonSerializer.Deserialize(json, SettingsJsonContext.Default.StoredSettings);
         }
         catch (JsonException exception)
         {
@@ -132,7 +127,7 @@ public sealed class JsonThemeScheduleSettingsStore : IThemeScheduleSettingsStore
             Longitude = solarLocation?.Longitude,
             LocationLabel = solarLocation?.Label,
         };
-        var json = JsonSerializer.Serialize(stored, SerializerOptions);
+        var json = JsonSerializer.Serialize(stored, SettingsJsonContext.Default.StoredSettings);
         var temporaryPath = _filePath + ".tmp";
         File.WriteAllText(temporaryPath, json, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
         File.Move(temporaryPath, _filePath, overwrite: true);
@@ -203,6 +198,14 @@ public sealed class JsonThemeScheduleSettingsStore : IThemeScheduleSettingsStore
         {
             throw new InvalidDataException("The saved solar location is outside the valid coordinate range.", exception);
         }
+    }
+
+    [JsonSourceGenerationOptions(
+        PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
+        WriteIndented = true)]
+    [JsonSerializable(typeof(StoredSettings))]
+    private sealed partial class SettingsJsonContext : JsonSerializerContext
+    {
     }
 
     private sealed class StoredSettings

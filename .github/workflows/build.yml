@@ -51,14 +51,6 @@ jobs:
       - name: Test
         run: dotnet test DisplayPilot.slnx --configuration Release --no-build --logger trx
 
-      - name: Publish Debug Native AOT
-        run: >-
-          dotnet publish src/DisplayPilot.App/DisplayPilot.App.csproj
-          --configuration Debug
-          --runtime win-x64
-          --no-restore
-          --output artifacts/DisplayPilot-debug-win-x64
-
       - name: Publish Release Native AOT
         run: >-
           dotnet publish src/DisplayPilot.App/DisplayPilot.App.csproj
@@ -66,6 +58,14 @@ jobs:
           --runtime win-x64
           --no-restore
           --output artifacts/DisplayPilot-win-x64
+
+      - name: Publish Debug Native AOT
+        run: >-
+          dotnet publish src/DisplayPilot.App/DisplayPilot.App.csproj
+          --configuration Debug
+          --runtime win-x64
+          --no-restore
+          --output artifacts/DisplayPilot-debug-win-x64
 
       - name: Verify compiled XAML resource indexes
         run: |
@@ -94,8 +94,8 @@ jobs:
             exe="$output/DisplayPilot.exe"
             test -f "$exe"
             bytes=$(wc -c < "$exe")
-            if (( bytes >= 38797312 )); then
-              echo "DisplayPilot.exe exceeds the 37 MB limit: $bytes bytes" >&2
+            if [[ "$output" == 'artifacts/DisplayPilot-win-x64' ]] && (( bytes >= 38797312 )); then
+              echo "Release DisplayPilot.exe exceeds the 37 MB limit: $bytes bytes" >&2
               exit 1
             fi
             "./$exe" --verify-native-build
@@ -127,6 +127,17 @@ jobs:
             echo "Unexpected loose Assets directory in release" >&2
             exit 1
           fi
+          tools=$(find "$release" -type f \( -iname '*dump*.exe' -o -iname '*.pdb' -o -iname '*.ilk' -o -iname '*.dbg' -o -iname '*.mui' -o -iname '*.resources.dll' \) -print)
+          if [[ -n "$tools" ]]; then
+            echo "Release includes debug tools, symbols, or localization: $tools" >&2
+            exit 1
+          fi
+          for dir in "$release"/*/; do
+            if [[ -d "$dir" ]] && [[ -z "$(find "$dir" -type f -print -quit)" ]]; then
+              echo "Unexpected empty localization directory: $dir" >&2
+              exit 1
+            fi
+          done
 
       - name: Download and validate runtime installers
         run: |

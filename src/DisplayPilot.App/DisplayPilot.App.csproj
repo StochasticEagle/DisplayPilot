@@ -31,11 +31,23 @@
     <PackageReference Include="Microsoft.WindowsAppSDK.WinUI" />
     <PackageReference Include="Microsoft.WindowsAppSDK.Runtime" />
     <PackageReference Include="Microsoft.WindowsAppSDK.Foundation" />
-    <PackageReference Include="Microsoft.WindowsAppSDK.InteractiveExperiences" />
     <ProjectReference Include="..\DisplayPilot.Core\DisplayPilot.Core.csproj" />
     <ProjectReference Include="..\DisplayPilot.Display\DisplayPilot.Display.csproj" />
     <ProjectReference Include="..\DisplayPilot.Windows\DisplayPilot.Windows.csproj" />
   </ItemGroup>
+
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <DebugSymbols>false</DebugSymbols>
+    <DebugType>none</DebugType>
+    <NativeDebugSymbols>false</NativeDebugSymbols>
+    <StripSymbols>true</StripSymbols>
+    <CopyOutputSymbolsToPublishDirectory>false</CopyOutputSymbolsToPublishDirectory>
+    <PublishReferencesSymbols>false</PublishReferencesSymbols>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <PredefinedCulturesOnly>true</PredefinedCulturesOnly>
+    <DebuggerSupport>false</DebuggerSupport>
+    <EventSourceSupport>false</EventSourceSupport>
+  </PropertyGroup>
 
   <!-- XAML is compiled into the WinUI resource index; remove only loose
        copies after packaging. These tasks use MSBuild, not a shell. -->
@@ -51,6 +63,26 @@
       <PublishedCompiledXaml Include="$(PublishDir)**\App.xbf;$(PublishDir)**\MainWindow.xbf" />
     </ItemGroup>
     <Delete Files="@(PublishedCompiledXaml)" />
+  </Target>
+
+  <!-- Remove diagnostic tools, symbols, and localization from Release outputs.
+       Debug retains its symbols and ordinary diagnostic artifacts. -->
+  <Target Name="CleanReleaseBuildOutput" AfterTargets="Build"
+          Condition="'$(Configuration)' == 'Release' and '$(DesignTimeBuild)' != 'true'">
+    <ItemGroup>
+      <ReleaseBuildArtifacts Include="$(TargetDir)crashdump.exe;$(TargetDir)createdump.exe;$(TargetDir)**\*.pdb;$(TargetDir)**\*.ilk" />
+    </ItemGroup>
+    <Delete Files="@(ReleaseBuildArtifacts)" />
+  </Target>
+  <Target Name="CleanReleasePublishOutput" AfterTargets="Publish"
+          Condition="'$(Configuration)' == 'Release'">
+    <ItemGroup>
+      <ReleaseArtifacts Include="$(PublishDir)**\*.pdb;$(PublishDir)**\*.ilk;$(PublishDir)**\*.dbg;$(PublishDir)**\*.map;$(PublishDir)**\*.xml;$(PublishDir)**\*.resources.dll;$(PublishDir)**\*.mui;$(PublishDir)**\crashdump.exe;$(PublishDir)**\createdump.exe" />
+    </ItemGroup>
+    <Delete Files="@(ReleaseArtifacts)" />
+    <RemoveDir Directories="$(PublishDir)ar;$(PublishDir)bg;$(PublishDir)ca;$(PublishDir)cs;$(PublishDir)da;$(PublishDir)de;$(PublishDir)el;$(PublishDir)en;$(PublishDir)es;$(PublishDir)et;$(PublishDir)fi;$(PublishDir)fr;$(PublishDir)he;$(PublishDir)hi;$(PublishDir)hr;$(PublishDir)hu;$(PublishDir)id;$(PublishDir)it;$(PublishDir)ja;$(PublishDir)ko;$(PublishDir)lt;$(PublishDir)lv;$(PublishDir)ms;$(PublishDir)nl;$(PublishDir)no;$(PublishDir)pl;$(PublishDir)pt;$(PublishDir)pt-BR;$(PublishDir)pt-PT;$(PublishDir)ro;$(PublishDir)ru;$(PublishDir)sk;$(PublishDir)sl;$(PublishDir)sr;$(PublishDir)sv;$(PublishDir)th;$(PublishDir)tr;$(PublishDir)uk;$(PublishDir)vi;$(PublishDir)zh-Hans;$(PublishDir)zh-Hant;$(PublishDir)zh-CN;$(PublishDir)zh-TW" />
+    <Error Condition="Exists('$(PublishDir)DisplayPilot.runtimeconfig.json') or Exists('$(PublishDir)DisplayPilot.deps.json')"
+           Text="Runtime metadata JSON files are prohibited." />
   </Target>
 
   <Target Name="RemoveUnusedWebViewRuntime" AfterTargets="Publish">
