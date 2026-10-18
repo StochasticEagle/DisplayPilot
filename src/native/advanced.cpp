@@ -198,9 +198,11 @@ void AdvancedWindow::rebuild() {
         }
         rows_.push_back(std::move(row));
     }
-    if (themesAvailable_) {
-        add(L"BUTTON",L"Light mode",BS_PUSHBUTTON|WS_TABSTOP,themeLightId);
-        add(L"BUTTON",L"Dark mode",BS_PUSHBUTTON|WS_TABSTOP,themeDarkId);
+    {
+        if (themesAvailable_) {
+            add(L"BUTTON",L"Light mode",BS_PUSHBUTTON|WS_TABSTOP,themeLightId);
+            add(L"BUTTON",L"Dark mode",BS_PUSHBUTTON|WS_TABSTOP,themeDarkId);
+        }
         scheduleCheckbox_=add(L"BUTTON",L"Enable automatic schedule",
                                BS_AUTOCHECKBOX|WS_TABSTOP,scheduleId);
         brightnessCheckbox_=add(L"BUTTON",L"Reduce brightness during dark hours",
@@ -267,13 +269,12 @@ void AdvancedWindow::layout() {
         control(row.rotation,row.rotationApply);
         y+=12;
     }
-    if (themesAvailable_) {
-        auto find=[this](int id) {
-            return GetDlgItem(window_,id);
-        };
-        place(find(themeLightId),left,y,140,30);
-        place(find(themeDarkId),left+155,y,140,30);
-        y+=40;
+    {
+        if (themesAvailable_) {
+            place(GetDlgItem(window_,themeLightId),left,y,140,30);
+            place(GetDlgItem(window_,themeDarkId),left+155,y,140,30);
+            y+=40;
+        }
         place(scheduleCheckbox_,left,y,290,26);
         place(brightnessCheckbox_,left+300,y,std::max(270,width-345),26);
         y+=34;
@@ -319,7 +320,7 @@ void AdvancedWindow::onScroll(HWND control) {
     else if(field==1 && contrastChanged)contrastChanged(index,value);
 }
 bool AdvancedWindow::saveInput() {
-    if(!themesAvailable_||!settings_)return false;
+    if(!settings_)return false;
     Settings next=*settings_;
     next.scheduleEnabled=SendMessageW(scheduleCheckbox_,BM_GETCHECK,0,0)==BST_CHECKED;
     next.reduceBrightness=SendMessageW(brightnessCheckbox_,BM_GETCHECK,0,0)==BST_CHECKED;

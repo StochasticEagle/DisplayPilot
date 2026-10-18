@@ -82,7 +82,7 @@ float Flyout::contentHeight() const {
     if (!monitors_ || monitors_->empty()) y += 44.0f;
     else for (const auto& monitor : *monitors_) y += rowHeight(monitor);
     y += 10.0f;
-    if (themeSupported_) y += 76.0f;
+    y += themeSupported_ ? 76.0f : 36.0f;
     return y + 48.0f;
 }
 void Flyout::show(const RECT& anchor, std::vector<Monitor>* monitors) {
@@ -199,12 +199,13 @@ void Flyout::click(int px, int py) {
             else if (x >= 195 && x <= 369 && themeChanged) themeChanged(true);
             return;
         }
-        if (y >= top + 40 && y < top + 74 && scheduleChanged) {
-            scheduleChanged(!scheduleEnabled_);
-            return;
-        }
-        top += 76;
+        top += 40;
     }
+    if (y >= top && y < top + 34 && scheduleChanged) {
+        scheduleChanged(!scheduleEnabled_);
+        return;
+    }
+    top += 36;
     if (y >= top && y < top + 45 && advancedRequested) advancedRequested();
 }
 void Flyout::paint() {
@@ -299,11 +300,12 @@ void Flyout::paint() {
         pill(195,top,370,top+36,themeDark_?0x3E91D0:0x304355);
         textAt(L"Light theme",39,top+6,145,26,0xFFFFFF,text_);
         textAt(L"Dark theme",218,top+6,145,26,0xFFFFFF,text_);
-        pill(22,top+40,370,top+74,scheduleEnabled_?0x355A62:0x304355);
-        textAt(scheduleEnabled_?L"Automatic schedule: ON":L"Automatic schedule: OFF",
-               38,top+46,320,25,0xFFFFFF,text_);
-        top += 76;
+        top += 40;
     }
+    pill(22,top,370,top+34,scheduleEnabled_?0x355A62:0x304355);
+    textAt(scheduleEnabled_?L"Automatic schedule: ON":L"Automatic schedule: OFF",
+           38,top+5,320,25,0xFFFFFF,text_);
+    top += 36;
     pill(22,top,370,top+42,0x294C69);
     textAt(L"Advanced settings    >",42,top+9,305,28,0xFFFFFF,text_);
     const HRESULT end = target_->EndDraw();

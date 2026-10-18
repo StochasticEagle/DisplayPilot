@@ -12,6 +12,7 @@ struct Monitor {
     unsigned physicalIndex = 0;
     std::wstring name;
     std::wstring deviceName;
+    std::wstring hardwareId;
     std::wstring wmiInstance;
     RECT bounds{};
     bool brightnessAvailable = false;

@@ -5,6 +5,10 @@
 #include <wbemidl.h>
 #include <oleauto.h>
 #include <algorithm>
+#include <cctype>
+#include <cwctype>
+#include <cstdlib>
+#include <string>
 #include <cwchar>
 #include <utility>
 
@@ -64,6 +68,61 @@ DWORD rawValue(unsigned percent, DWORD min, DWORD max) {
 bool equalPath(const std::wstring& a, const std::wstring& b) {
     return _wcsicmp(a.c_str(), b.c_str()) == 0;
 }
+std::wstring hardwareId(const std::wstring& instancePath) {
+    // WMI uses DISPLAY\MODEL\INSTANCE; EnumDisplayDevices uses MONITOR\MODEL\INSTANCE.
+    const size_t start = instancePath.find(L'\\');
+    if (start == std::wstring::npos) return {};
+    const size_t end = instancePath.find(L'\\', start + 1);
+    if (end == std::wstring::npos || end == start + 1) return {};
+    std::wstring id = instancePath.substr(start + 1, end - start - 1);
+    for (auto& ch : id) ch = static_cast<wchar_t>(towupper(ch));
+    return id;
+}
+std::vector<unsigned> supportedColorPresets(HANDLE monitor) {
+    DWORD length = 0;
+    if (!GetCapabilitiesStringLength(monitor, &length) || length < 4 || length > 16384)
+        return {};
+    std::string buffer(length, '\0');
+    if (!CapabilitiesRequestAndCapabilitiesReply(monitor, &buffer[0], length))
+        return {};
+    const size_t terminator = buffer.find('\0');
+    if (terminator != std::string::npos) buffer.resize(terminator);
+    for (char& ch : buffer) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+    const size_t vcp = buffer.find("vcp(");
+    if (vcp == std::string::npos) return {};
+    size_t i = vcp + 4;
+    int depth = 1;
+    while (i < buffer.size() && depth > 0) {
+        if (buffer[i] == ')') { --depth; ++i; continue; }
+        if (buffer[i] == '(') { ++depth; ++i; continue; }
+        if (std::isspace(static_cast<unsigned char>(buffer[i]))) { ++i; continue; }
+        if (!std::isxdigit(static_cast<unsigned char>(buffer[i]))) { ++i; continue; }
+        const size_t first = i;
+        while (i < buffer.size() && std::isxdigit(static_cast<unsigned char>(buffer[i])))
+            ++i;
+        const unsigned code = static_cast<unsigned>(
+            std::strtoul(buffer.substr(first, i - first).c_str(), nullptr, 16));
+        if (depth != 1 || code != 0x14) continue;
+        while (i < buffer.size() && std::isspace(static_cast<unsigned char>(buffer[i]))) ++i;
+        if (i == buffer.size() || buffer[i] != '(') return {};
+        ++i;
+        std::vector<unsigned> presets;
+        while (i < buffer.size() && buffer[i] != ')') {
+            if (std::isspace(static_cast<unsigned char>(buffer[i]))) { ++i; continue; }
+            if (!std::isxdigit(static_cast<unsigned char>(buffer[i]))) return {};
+            const size_t firstValue = i;
+            while (i < buffer.size() && std::isxdigit(static_cast<unsigned char>(buffer[i])))
+                ++i;
+            const auto value = static_cast<unsigned>(
+                std::strtoul(buffer.substr(firstValue, i-firstValue).c_str(), nullptr, 16));
+            if (value > 0xff) return {};
+            if (std::find(presets.begin(), presets.end(), value) == presets.end())
+                presets.push_back(value);
+        }
+        return presets;
+    }
+    return {};
+}
 void readRotation(Monitor& row) {
     if (row.deviceName.empty()) return;
     DEVMODEW mode{};
@@ -79,6 +138,10 @@ BOOL CALLBACK enumerateCallback(HMONITOR handle, HDC, LPRECT, LPARAM data) {
     info.cbSize = sizeof(info);
     if (!GetMonitorInfoW(handle, &info)) return TRUE;
 
+    DISPLAY_DEVICEW device{};
+    device.cb = sizeof(device);
+    const std::wstring model = EnumDisplayDevicesW(info.szDevice, 0, &device, 0)
+        ? hardwareId(device.DeviceID) : std::wstring{};
     auto physical = openPhysical(handle);
     if (physical.empty()) {
         Monitor row;
@@ -86,6 +149,7 @@ BOOL CALLBACK enumerateCallback(HMONITOR handle, HDC, LPRECT, LPARAM data) {
         row.bounds = info.rcMonitor;
         row.name = info.szDevice;
         row.deviceName = info.szDevice;
+        row.hardwareId = model;
         readRotation(row);
         output.push_back(std::move(row));
     }
@@ -110,11 +174,9 @@ BOOL CALLBACK enumerateCallback(HMONITOR handle, HDC, LPRECT, LPARAM data) {
         DWORD color = 0;
         MC_VCP_CODE_TYPE type = MC_MOMENTARY;
         if (GetVCPFeatureAndVCPFeatureReply(physicalHandle, 0x14, &type, &color, nullptr)) {
-            row.colorAvailable = true;
+            row.colorPresets = supportedColorPresets(physicalHandle);
+            row.colorAvailable = !row.colorPresets.empty();
             row.colorPreset = color;
-            row.colorPresets = {0x01, 0x02, 0x04, 0x05, 0x08};
-            if (std::find(row.colorPresets.begin(), row.colorPresets.end(), color) ==
-                row.colorPresets.end()) row.colorPresets.push_back(color);
         }
         readRotation(row);
         output.push_back(std::move(row));
@@ -255,21 +317,32 @@ std::vector<Monitor> enumerateMonitors() {
         std::vector<std::pair<std::wstring, unsigned>> internal;
         wmi.query(L"SELECT Active, InstanceName, CurrentBrightness FROM WmiMonitorBrightness", internal);
         for (const auto& entry : internal) {
-            auto unused = std::find_if(result.begin(), result.end(),
-                [](const Monitor& m) { return !m.brightnessAvailable; });
-            if (unused == result.end()) {
+            // Never assign laptop WMI brightness to an arbitrary external monitor.
+            const std::wstring model = hardwareId(entry.first);
+            auto target = result.end();
+            if (!model.empty()) {
+                for (auto iter = result.begin(); iter != result.end(); ++iter) {
+                    if (iter->hardwareId == model && !iter->brightnessAvailable &&
+                        iter->provider != ControlProvider::Wmi) {
+                        if (target != result.end()) { target = result.end(); break; }
+                        target = iter;
+                    }
+                }
+            }
+            if (target == result.end()) {
                 Monitor row;
-                row.name = L"Internal display";
+                row.name = L"Internal display (WMI)";
+                row.hardwareId = model;
                 row.provider = ControlProvider::Wmi;
                 row.brightnessAvailable = true;
                 row.brightness = entry.second;
                 row.wmiInstance = entry.first;
                 result.push_back(std::move(row));
             } else {
-                unused->provider = ControlProvider::Wmi;
-                unused->brightnessAvailable = true;
-                unused->brightness = entry.second;
-                unused->wmiInstance = entry.first;
+                target->provider = ControlProvider::Wmi;
+                target->brightnessAvailable = true;
+                target->brightness = entry.second;
+                target->wmiInstance = entry.first;
             }
         }
     }
