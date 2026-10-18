@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Unlicense
 using DisplayPilot.Display.Discovery;
 
 namespace DisplayPilot.Display.Ddc;
