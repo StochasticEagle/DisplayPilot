@@ -6,7 +6,7 @@ This branch is a clean C++ application.
 
 ## Build in Visual Studio 2026
 
-Open **DisplayPilot.sln** in Visual Studio 2026 with the **Desktop development with C++** workload and a Windows SDK installed. No CMake configuration or scripts are required.
+Open **DisplayPilot.sln** in Visual Studio 2026 with the **Desktop development with C++** workload and a Windows SDK installed.
 
 Choose **Release** or **Debug** and the desired solution platform:
 
