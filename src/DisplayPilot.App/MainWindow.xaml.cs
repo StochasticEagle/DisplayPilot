@@ -742,13 +742,13 @@ public sealed partial class MainWindow : Window, IDisposable
             await Task.Delay(BrightnessChangeDelayMilliseconds, cancellation.Token);
             await WaitForDisplayIdleAsync(cancellation.Token);
 
-            await SetBrightnessAsync(monitor.DevicePath, requestedPercent);
+            var succeeded = await SetBrightnessAsync(monitor.DevicePath, requestedPercent);
             if (ReferenceEquals(_brightnessChangeCancellation, cancellation))
             {
                 _pendingBrightnessDevicePath = null;
                 _brightnessChangeCancellation = null;
                 cancellation.Dispose();
-                UpdateCompactMonitorCards();
+                if (!succeeded) UpdateCompactMonitorCards();
             }
         }
         catch (OperationCanceledException)
@@ -791,13 +791,13 @@ public sealed partial class MainWindow : Window, IDisposable
             await Task.Delay(BrightnessChangeDelayMilliseconds, cancellation.Token);
             await WaitForDisplayIdleAsync(cancellation.Token);
 
-            await SetContrastAsync(monitor.DevicePath, requestedPercent);
+            var succeeded = await SetContrastAsync(monitor.DevicePath, requestedPercent);
             if (ReferenceEquals(_contrastChangeCancellation, cancellation))
             {
                 _pendingContrastDevicePath = null;
                 _contrastChangeCancellation = null;
                 cancellation.Dispose();
-                UpdateCompactMonitorCards();
+                if (!succeeded) UpdateCompactMonitorCards();
             }
         }
         catch (OperationCanceledException)
@@ -1494,11 +1494,11 @@ public sealed partial class MainWindow : Window, IDisposable
         }
     }
 
-    private async Task SetContrastAsync(string devicePath, int requestedPercent)
+    private async Task<bool> SetContrastAsync(string devicePath, int requestedPercent)
     {
         if (_displayOperationRunning || !_sessionIsActive)
         {
-            return;
+            return false;
         }
 
         var display = FindActiveDisplay(devicePath);
@@ -1507,6 +1507,7 @@ public sealed partial class MainWindow : Window, IDisposable
         CompactStatusText.Text = $"Setting {display.FriendlyName} contrast to {requestedPercent}%...";
         StatusText.Text = CompactStatusText.Text;
 
+        bool succeeded = false;
         try
         {
             var result = await Task.Run(() => WindowsDdcVcpFeatureService.WriteContinuousPercent(
@@ -1514,6 +1515,7 @@ public sealed partial class MainWindow : Window, IDisposable
                 NativeConstants.VcpCodeContrast,
                 requestedPercent));
             _lastDdcVcpWriteResult = result;
+            succeeded = result.Succeeded;
             UpdateVerifiedFeature(display.DevicePath, result);
             
             CompactStatusText.Text = result.Succeeded
@@ -1527,6 +1529,7 @@ public sealed partial class MainWindow : Window, IDisposable
             _displayOperationRunning = false;
             SetDisplayControlsEnabled(true);
         }
+        return succeeded;
     }
 
     private async Task SetColorTemperatureAsync(string devicePath, uint requestedValue)
@@ -1588,10 +1591,22 @@ public sealed partial class MainWindow : Window, IDisposable
                 display.GdiDeviceName,
                 requestedRotation));
             _lastRotationWriteResult = result;
-            _lastRotationReads = await Task.Run(() => _activeMonitors
-                .Select(monitor => WindowsDisplayRotationService.Read(monitor.GdiDeviceName))
-                .ToArray());
-            UpdateCompactMonitorCards();
+            var verified = await Task.Run(() => WindowsDisplayRotationService.Read(display.GdiDeviceName));
+            _lastRotationReads = _lastRotationReads.Select(item =>
+                string.Equals(item.GdiDeviceName, display.GdiDeviceName, StringComparison.OrdinalIgnoreCase)
+                    ? verified : item).ToArray();
+            var card = (CompactMonitorList.ItemsSource as IEnumerable<CompactMonitorViewModel>)?
+                .FirstOrDefault(item => string.Equals(item.DevicePath, devicePath, StringComparison.OrdinalIgnoreCase));
+            if (card is not null && verified.Rotation is not null && verified.Succeeded)
+            {
+                _updatingCompactControls = true;
+                try
+                {
+                    card.SelectedRotation = card.RotationOptions.FirstOrDefault(option =>
+                        option.Rotation == verified.Rotation);
+                }
+                finally { _updatingCompactControls = false; }
+            }
             CompactStatusText.Text = result.Status switch
             {
                 DisplayRotationStatus.Applied =>
