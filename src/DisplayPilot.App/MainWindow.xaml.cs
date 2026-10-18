@@ -1281,55 +1281,54 @@ public sealed partial class MainWindow : Window, IDisposable
 
     private async Task ProbeDdcBrightnessAsync(bool includeExtended = true)
     {
-        if (_displayOperationRunning || !_sessionIsActive)
-        {
-            return;
-        }
+        if (_displayOperationRunning || !_sessionIsActive) return;
 
         _displayOperationRunning = true;
-        RescanButton.IsEnabled = false;
-        ProbeDdcButton.IsEnabled = false;
-        CompactReadBrightnessButton.IsEnabled = false;
-        CompactMonitorList.IsEnabled = false;
-        MonitorList.IsEnabled = false;
-        CopyReportButton.IsEnabled = false;
-        CopyReportButton.Content = "Copy diagnostic report";
-        StatusText.Text = "Reading external DDC/CI and internal WMI brightness...";
-        CompactStatusText.Text = "Reading monitor brightness...";
-
+        if (_visualsReady)
+        {
+            SetDisplayControlsEnabled(false);
+            StatusText.Text = "Reading monitor controls...";
+            CompactStatusText.Text = "Reading monitor brightness...";
+        }
         try
         {
+            // Capture immutable inputs before leaving the UI thread.
+            var monitors = _activeMonitors;
+            var knownCapabilities = _lastDdcCapabilities;
             var probes = await Task.Run(() =>
             {
-                var all = includeExtended
-                    ? WindowsDdcVcpFeatureService.ReadSnapshot(_activeMonitors, _lastDdcCapabilities)
+                var extended = includeExtended
+                    ? WindowsDdcVcpFeatureService.ReadSnapshot(monitors, knownCapabilities)
                     : null;
                 return (
-                    Brightness: all?.Brightness ?? _ddcProbeService.ProbeBrightness(_activeMonitors),
-                    Wmi: _wmiProbeService.ProbeBrightness(_activeMonitors),
-                    Contrast: all?.Contrast ?? _lastContrastProbes,
-                    ColorTemperature: all?.ColorTemperature ?? _lastColorTemperatureProbes,
-                    Capabilities: all?.Capabilities ?? _lastDdcCapabilities);
+                    Brightness: extended?.Brightness ?? _ddcProbeService.ProbeBrightness(monitors),
+                    Wmi: _wmiProbeService.ProbeBrightness(monitors),
+                    Contrast: extended?.Contrast,
+                    Temperature: extended?.ColorTemperature,
+                    Capabilities: extended?.Capabilities);
             });
+
             _lastDdcProbes = probes.Brightness;
             _lastWmiProbes = probes.Wmi;
-            _lastContrastProbes = probes.Contrast;
-            _lastColorTemperatureProbes = probes.ColorTemperature;
-            _lastDdcCapabilities = probes.Capabilities;
-            _extendedControlsReady = includeExtended || _extendedControlsReady;
+            if (includeExtended)
+            {
+                _lastContrastProbes = probes.Contrast ?? [];
+                _lastColorTemperatureProbes = probes.Temperature ?? [];
+                _lastDdcCapabilities = probes.Capabilities ?? [];
+                _extendedControlsReady = true;
+            }
             if (probes.Wmi.Any(item => item.Status == WmiBrightnessProbeStatus.ReadSucceeded))
                 _brightnessEventWatcher.TryStart();
             else
                 _brightnessEventWatcher.Stop();
+
             if (!_windowsBrightnessStateSynchronized)
             {
                 _windowsBrightnessStateSynchronized = true;
                 if (NotificationAreaIcon.TryGetCursorMonitorDeviceName(out var cursorDisplay))
                 {
-                    var startupMonitor = _activeMonitors.FirstOrDefault(monitor => string.Equals(
-                        monitor.GdiDeviceName,
-                        cursorDisplay,
-                        StringComparison.OrdinalIgnoreCase));
+                    var startupMonitor = monitors.FirstOrDefault(monitor =>
+                        string.Equals(monitor.GdiDeviceName, cursorDisplay, StringComparison.OrdinalIgnoreCase));
                     if (startupMonitor is not null &&
                         TryGetCurrentBrightnessPercent(startupMonitor.DevicePath, out var startupPercent))
                     {
@@ -1340,42 +1339,36 @@ public sealed partial class MainWindow : Window, IDisposable
                     }
                 }
             }
-            UpdateCompactMonitorCards();
 
-            var readableCount = _activeMonitors.Count(monitor =>
-                probes.Brightness.Any(probe =>
-                    string.Equals(probe.Display.DevicePath, monitor.DevicePath, StringComparison.OrdinalIgnoreCase)
-                    && probe.PhysicalMonitors.Any(result =>
-                        result.Status == DdcBrightnessProbeStatus.ReadSucceeded))
-                || probes.Wmi.Any(probe =>
-                    string.Equals(probe.Display.DevicePath, monitor.DevicePath, StringComparison.OrdinalIgnoreCase)
-                    && probe.Status == WmiBrightnessProbeStatus.ReadSucceeded));
-            StatusText.Text = string.Format(
-                CultureInfo.CurrentCulture,
-                "Read brightness from {0} display {1} at {2:T}; no settings were changed.",
-                readableCount,
-                readableCount == 1 ? "path" : "paths",
-                DateTimeOffset.Now);
-            CompactStatusText.Text = readableCount == 0
-                ? "Brightness control is unavailable. Open Advanced for details."
-                : string.Empty;
+            if (_visualsReady)
+            {
+                UpdateCompactMonitorCards();
+                var readableCount = monitors.Count(monitor =>
+                    _lastDdcProbes.Any(probe =>
+                        string.Equals(probe.Display.DevicePath, monitor.DevicePath, StringComparison.OrdinalIgnoreCase) &&
+                        probe.PhysicalMonitors.Any(read => read.Status == DdcBrightnessProbeStatus.ReadSucceeded)) ||
+                    _lastWmiProbes.Any(probe =>
+                        string.Equals(probe.Display.DevicePath, monitor.DevicePath, StringComparison.OrdinalIgnoreCase) &&
+                        probe.Status == WmiBrightnessProbeStatus.ReadSucceeded));
+                StatusText.Text = $"Read brightness from {readableCount} displays.";
+                CompactStatusText.Text = readableCount == 0
+                    ? "Brightness control is unavailable. Open Advanced for details." : string.Empty;
+            }
             _lastDiagnosticError = null;
         }
         catch (Win32Exception exception)
         {
-            StatusText.Text = $"Brightness probe failed: {exception.Message}";
-            CompactStatusText.Text = "Brightness refresh failed. Open Advanced for details.";
             _lastDiagnosticError = exception;
+            if (_visualsReady)
+            {
+                StatusText.Text = $"Brightness probe failed: {exception.Message}";
+                CompactStatusText.Text = "Brightness refresh failed. Open Advanced for details.";
+            }
         }
         finally
         {
             _displayOperationRunning = false;
-            RescanButton.IsEnabled = true;
-            ProbeDdcButton.IsEnabled = _activeMonitors.Count > 0;
-            CompactReadBrightnessButton.IsEnabled = _activeMonitors.Count > 0;
-            CompactMonitorList.IsEnabled = true;
-            MonitorList.IsEnabled = true;
-            CopyReportButton.IsEnabled = true;
+            if (_visualsReady) SetDisplayControlsEnabled(true);
         }
     }
 
