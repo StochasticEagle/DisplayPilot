@@ -409,16 +409,21 @@ int run(HINSTANCE instance) {
     cls.hInstance = instance;
     cls.lpfnWndProc = ownerProcedure;
     cls.lpszClassName = L"DisplayPilotMessageOwner";
-    if (!RegisterClassExW(&cls)) { CloseHandle(singleton); return 1; }
+    if (!RegisterClassExW(&cls)) { CloseHandle(singleton); return 31; }
     app.owner = CreateWindowExW(0, cls.lpszClassName,
         L"DisplayPilot", WS_OVERLAPPED, 0, 0, 0, 0,
         nullptr, nullptr, instance, nullptr);
-    if (!app.owner) { CloseHandle(singleton); return 1; }
+    if (!app.owner) { CloseHandle(singleton); return 32; }
     app.icon = LoadIconW(instance, MAKEINTRESOURCEW(1));
-    if (!app.flyout.create(instance, app.owner) || !app.advanced.create(instance)) {
+    if (!app.flyout.create(instance, app.owner)) {
         DestroyWindow(app.owner);
         CloseHandle(singleton);
-        return 1;
+        return 33;
+    }
+    if (!app.advanced.create(instance)) {
+        DestroyWindow(app.owner);
+        CloseHandle(singleton);
+        return 34;
     }
     app.flyout.brightnessChanged = changeBrightness;
     app.flyout.contrastChanged = changeContrast;
@@ -457,13 +462,13 @@ int run(HINSTANCE instance) {
 }
 int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     const HRESULT com = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
-    if (FAILED(com)) return 1;
+    if (FAILED(com)) return 21;
     // Security must be initialized before the first WMI proxy is created.
     const HRESULT security = CoInitializeSecurity(nullptr, -1, nullptr, nullptr,
         RPC_C_AUTHN_LEVEL_DEFAULT, RPC_C_IMP_LEVEL_IMPERSONATE, nullptr, EOAC_NONE, nullptr);
     if (FAILED(security) && security != RPC_E_TOO_LATE) {
         CoUninitialize();
-        return 1;
+        return 22;
     }
     const int result = displaypilot::run(instance);
     CoUninitialize();
