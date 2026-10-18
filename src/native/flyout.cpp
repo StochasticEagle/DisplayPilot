@@ -60,7 +60,10 @@ bool Flyout::create(HINSTANCE instance, HWND owner) {
     metrics.cbSize = sizeof(metrics);
     if (SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, sizeof(metrics), &metrics, 0))
         font_ = CreateFontIndirectW(&metrics.lfMessageFont);
-    if (!font_) font_ = static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
+    if (!font_) font_ = CreateFontW(-MulDiv(9, dpi_, 72), 0, 0, 0, FW_NORMAL,
+        FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
+        CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS,
+        L"Segoe UI");
     applyNativeWindowChrome(window_);
     return true;
 }
