@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Unlicense
 using DisplayPilot.Display.Rotation;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
