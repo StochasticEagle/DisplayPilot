@@ -415,10 +415,11 @@ int run(HINSTANCE instance) {
         nullptr, nullptr, instance, nullptr);
     if (!app.owner) { CloseHandle(singleton); return 32; }
     app.icon = LoadIconW(instance, MAKEINTRESOURCEW(1));
-    if (!app.flyout.create(instance, app.owner)) {
+    const int flyoutStage = app.flyout.create(instance, app.owner);
+    if (flyoutStage != 0) {
         DestroyWindow(app.owner);
         CloseHandle(singleton);
-        return 33;
+        return 40 + flyoutStage;
     }
     if (!app.advanced.create(instance)) {
         DestroyWindow(app.owner);

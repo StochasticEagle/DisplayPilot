@@ -35,12 +35,12 @@ int Flyout::px(int logical) const {
     return MulDiv(logical, dpi_, 96);
 }
 
-bool Flyout::create(HINSTANCE instance, HWND owner) {
+int Flyout::create(HINSTANCE instance, HWND owner) {
     instance_ = instance;
     INITCOMMONCONTROLSEX controls{};
     controls.dwSize = sizeof(controls);
     controls.dwICC = ICC_BAR_CLASSES | ICC_STANDARD_CLASSES;
-    if (!InitCommonControlsEx(&controls)) return false;
+    if (!InitCommonControlsEx(&controls)) return 1;
     WNDCLASSEXW cls{};
     cls.cbSize = sizeof(cls);
     cls.hInstance = instance;
@@ -50,11 +50,11 @@ bool Flyout::create(HINSTANCE instance, HWND owner) {
     cls.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
     cls.style = CS_DROPSHADOW;
     if (!RegisterClassExW(&cls) && GetLastError() != ERROR_CLASS_ALREADY_EXISTS)
-        return false;
+        return 2;
     window_ = CreateWindowExW(WS_EX_TOOLWINDOW,
         cls.lpszClassName, L"DisplayPilot", WS_POPUP | WS_BORDER | WS_VSCROLL |
         WS_CLIPCHILDREN, 0, 0, 400, 200, owner, nullptr, instance, this);
-    if (!window_) return false;
+    if (!window_) return 3;
     dpi_ = windowDpi(window_);
     NONCLIENTMETRICSW metrics{};
     metrics.cbSize = sizeof(metrics);
@@ -65,7 +65,7 @@ bool Flyout::create(HINSTANCE instance, HWND owner) {
         CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS,
         L"Segoe UI");
     applyNativeWindowChrome(window_);
-    return true;
+    return 0;
 }
 
 bool Flyout::visible() const {

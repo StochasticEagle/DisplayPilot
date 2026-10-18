@@ -12,7 +12,7 @@ public:
     Flyout& operator=(const Flyout&) = delete;
     ~Flyout();
 
-    bool create(HINSTANCE instance, HWND owner);
+    int create(HINSTANCE instance, HWND owner);
     void show(const RECT& anchor, std::vector<Monitor>* monitors);
     void hide();
     bool visible() const;
