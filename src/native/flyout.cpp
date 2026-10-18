@@ -39,7 +39,7 @@ int Flyout::create(HINSTANCE instance, HWND owner) {
     instance_ = instance;
     INITCOMMONCONTROLSEX controls{};
     controls.dwSize = sizeof(controls);
-    controls.dwICC = ICC_BAR_CLASSES | ICC_STANDARD_CLASSES;
+    controls.dwICC = ICC_BAR_CLASSES;
     if (!InitCommonControlsEx(&controls)) return 1;
     WNDCLASSEXW cls{};
     cls.cbSize = sizeof(cls);
