@@ -69,7 +69,7 @@ public sealed class WindowsThemeServiceTests
 
         Assert.IsTrue(result.Succeeded);
         Assert.AreEqual(0, store[WindowsThemeService.ColorPrevalence]);
-        Assert.AreEqual(1, notifier.ThemeChangeCount);
+        Assert.AreEqual(0, notifier.ThemeChangeCount);
         Assert.AreEqual(1, notifier.ColorChangeCount);
     }
 
