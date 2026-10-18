@@ -39,6 +39,16 @@ jobs:
       - name: Build native Visual Studio project
         shell: cmd
         run: msbuild DisplayPilot.sln /m /p:Configuration=${{ matrix.configuration }} /p:Platform=${{ matrix.platform }} /verbosity:minimal
+      - name: Verify Visual Studio IDE solution configuration
+        if: matrix.platform == 'Win64' && matrix.configuration == 'Debug'
+        shell: pwsh
+        run: |
+          $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -version '[18.0,19.0)' -property installationPath
+          $ide = Join-Path $vs "Common7\IDE\devenv.com"
+          & $ide DisplayPilot.sln /Build "Debug|Win64" /Out "ide-build.log"
+          $result = $LASTEXITCODE
+          Get-Content "ide-build.log"
+          if ($result -ne 0) { exit $result }
       - name: Verify standalone Windows executable
         shell: bash
         run: |
