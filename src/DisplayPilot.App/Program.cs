@@ -17,7 +17,13 @@ public static partial class Program
     [STAThread]
     public static int Main(string[] args)
     {
-        _ = args;
+        if (args.Contains("--verify-native-build", StringComparer.OrdinalIgnoreCase))
+        {
+            // AOT executable startup check without launching a WinUI message loop.
+            _ = typeof(Microsoft.UI.Xaml.Application).Assembly;
+            return 0;
+        }
+
         WinRT.ComWrappersSupport.InitializeComWrappers();
         if (RedirectToExistingInstance())
         {

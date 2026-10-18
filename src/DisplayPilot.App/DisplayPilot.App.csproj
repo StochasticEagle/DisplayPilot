@@ -7,12 +7,19 @@
     <UseWinUI>true</UseWinUI>
     <WindowsPackageType>None</WindowsPackageType>
     <WindowsAppSDKSelfContained>false</WindowsAppSDKSelfContained>
-    <SelfContained>false</SelfContained>
+    <SelfContained>true</SelfContained>
+    <PublishAot>true</PublishAot>
+    <PublishSingleFile>false</PublishSingleFile>
+    <OptimizationPreference>Size</OptimizationPreference>
+    <GenerateDependencyFile>false</GenerateDependencyFile>
+    <GenerateRuntimeConfigurationFiles>false</GenerateRuntimeConfigurationFiles>
+    <DisableEmbeddedXbf>false</DisableEmbeddedXbf>
+    <_SupportEmbedFileResources>true</_SupportEmbedFileResources>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\displaypilot-primary.ico</ApplicationIcon>
     <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <SatelliteResourceLanguages Condition="'$(Configuration)' == 'Release'">en</SatelliteResourceLanguages>
   </PropertyGroup>
 
   <ItemGroup>
@@ -29,6 +36,16 @@
     <ProjectReference Include="..\DisplayPilot.Display\DisplayPilot.Display.csproj" />
     <ProjectReference Include="..\DisplayPilot.Windows\DisplayPilot.Windows.csproj" />
   </ItemGroup>
+
+  <!-- Verify the WinUI compiled markup is inside the resource index before
+       removing loose files. This runs in both Debug and Release. -->
+  <Target Name="ConsolidateWinUIResources" AfterTargets="Build"
+          Condition="'$(DesignTimeBuild)' != 'true' and '$(IsCrossTargetingBuild)' != 'true'">
+    <Exec Command='powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\..\..\scripts\consolidate-winui-xbf.ps1&quot; -Directory &quot;$(TargetDir)&quot;' />
+  </Target>
+  <Target Name="ConsolidatePublishedWinUIResources" AfterTargets="Publish">
+    <Exec Command='powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\..\..\scripts\consolidate-winui-xbf.ps1&quot; -Directory &quot;$(PublishDir)&quot; -BuildDirectory &quot;$(TargetDir)&quot;' />
+  </Target>
 
   <Target Name="RemoveUnusedWebViewRuntime" AfterTargets="Publish">
     <ItemGroup>

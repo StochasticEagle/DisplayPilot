@@ -27,7 +27,6 @@ RestartApplications=no
 
 [Files]
 Source: "..\artifacts\DisplayPilot-win-x64\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "..\artifacts\prerequisites\windowsdesktop-runtime-win-x64.exe"; Flags: dontcopy
 Source: "..\artifacts\prerequisites\WindowsAppRuntimeInstall-x64.exe"; Flags: dontcopy
 Source: "..\artifacts\prerequisites\vc_redist.x64.exe"; Flags: dontcopy
 
@@ -176,14 +175,6 @@ end;
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
   Result := RemoveExistingInstallation();
-  if Result <> '' then
-    Exit;
-
-  Result := RunRuntimeInstaller(
-    '.NET 10 Desktop Runtime',
-    'windowsdesktop-runtime-win-x64.exe',
-    '/install /quiet /norestart',
-    NeedsRestart);
   if Result <> '' then
     Exit;
 

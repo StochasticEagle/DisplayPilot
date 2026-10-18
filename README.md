@@ -79,8 +79,9 @@ ARM64 is not currently supported.
 3. Optionally verify the installer with the accompanying `.sha256` checksum.
 4. Run the installer and choose whether DisplayPilot should start when users sign in.
 
-The installer places DisplayPilot under Program Files and installs the required
-.NET Desktop, Windows App SDK, and Microsoft Visual C++ runtimes system-wide.
+The installer places DisplayPilot under Program Files and installs the Windows App SDK
+and Microsoft Visual C++ runtimes system-wide. DisplayPilot itself is compiled
+from C# into a native executable using .NET Native AOT.
 Per-user settings remain under the user's local application-data directory.
 
 The installer and executable are not digitally signed. Windows may therefore
@@ -140,13 +141,12 @@ dotnet build DisplayPilot.slnx --configuration Release --no-restore
 dotnet test DisplayPilot.slnx --configuration Release --no-build
 ```
 
-To create the framework-dependent application directory:
+To create the Native AOT application directory (no .NET Desktop Runtime installation required):
 
 ```powershell
 dotnet publish src/DisplayPilot.App/DisplayPilot.App.csproj `
   --configuration Release `
   --runtime win-x64 `
-  --self-contained false `
   --output artifacts/DisplayPilot-win-x64
 ```
 

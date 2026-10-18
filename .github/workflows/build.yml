@@ -48,12 +48,19 @@ jobs:
       - name: Test
         run: dotnet test DisplayPilot.slnx --configuration Release --no-build --logger trx
 
-      - name: Publish verification app
+      - name: Publish Debug Native AOT
+        run: >-
+          dotnet publish src/DisplayPilot.App/DisplayPilot.App.csproj
+          --configuration Debug
+          --runtime win-x64
+          --no-restore
+          --output artifacts/DisplayPilot-debug-win-x64
+
+      - name: Publish Release Native AOT
         run: >-
           dotnet publish src/DisplayPilot.App/DisplayPilot.App.csproj
           --configuration Release
           --runtime win-x64
-          --self-contained false
           --no-restore
           --output artifacts/DisplayPilot-win-x64
 
@@ -85,7 +92,24 @@ jobs:
             throw "The published app is missing resources.pri and will fail during WinUI initialization."
           }
 
-      - name: Verify framework-dependent app
+      - name: Verify managed-language Native AOT application
+        shell: pwsh
+        run: |
+          foreach ($directory in @('artifacts/DisplayPilot-debug-win-x64','artifacts/DisplayPilot-win-x64')) {
+            $exe = Join-Path $directory 'DisplayPilot.exe'
+            if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) { throw "Missing $exe" }
+            $size = (Get-Item -LiteralPath $exe).Length
+            if ($size -ge 38797312) { throw "DisplayPilot executable must be under 37 MB; actual $size bytes" }
+            & $exe --verify-native-build
+            if ($LASTEXITCODE -ne 0) { throw "Native AOT executable startup failed: $exe" }
+            $forbidden = @(Get-ChildItem $directory -Recurse -File | Where-Object {
+              $_.Name -in @('DisplayPilot.runtimeconfig.json','DisplayPilot.deps.json','App.xbf','MainWindow.xbf',
+                'coreclr.dll','hostfxr.dll')
+            })
+            if ($forbidden.Count) { $forbidden.FullName; throw "Forbidden output files in $directory" }
+          }
+
+      - name: Verify externally installed Windows App SDK runtime
         shell: pwsh
         run: |
           $bundledRuntimes = @(
@@ -135,8 +159,6 @@ jobs:
           New-Item -ItemType Directory $prerequisites -Force | Out-Null
 
           $downloads = @{
-            "windowsdesktop-runtime-win-x64.exe" =
-              "https://aka.ms/dotnet/10.0/windowsdesktop-runtime-win-x64.exe"
             "WindowsAppRuntimeInstall-x64.exe" =
               "https://aka.ms/windowsappsdk/2.3/latest/windowsappruntimeinstall-x64.exe"
             "vc_redist.x64.exe" =
