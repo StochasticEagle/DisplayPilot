@@ -181,7 +181,7 @@ public sealed partial class MainWindow : Window, IDisposable
         RefreshStartupRegistration();
         RefreshThemeStatus();
         SystemText.Text = GetSystemSummary();
-        if (_activeMonitors.Count > 0 && _lastRotationReads.Count == 0)
+        if (_activeMonitors.Count > 0 && _lastRotationReads.Length == 0)
             _lastRotationReads = _activeMonitors
                 .Select(monitor => WindowsDisplayRotationService.Read(monitor.GdiDeviceName))
                 .ToArray();
