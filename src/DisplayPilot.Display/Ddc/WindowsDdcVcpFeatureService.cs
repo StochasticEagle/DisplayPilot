@@ -17,12 +17,7 @@ namespace DisplayPilot.Display.Ddc;
 /// </summary>
 public static class WindowsDdcVcpFeatureService
 {
-    private const uint MaximumPhysicalMonitorsPerDisplay = 64;
     private const int ErrorInvalidData = 13;
-    private const int MaximumHandleAttempts = 3;
-    private const int MaximumReadAttempts = 3;
-    private const int HandleRetryDelayMilliseconds = 200;
-    private const int ReadRetryDelayMilliseconds = 75;
 
     /// <summary>Read the display's supported controls through one physical-handle acquisition.</summary>
     public static DdcControlSnapshot ReadSnapshot(
@@ -30,7 +25,7 @@ public static class WindowsDdcVcpFeatureService
         IReadOnlyList<MonitorDdcCapabilitiesInfo>? previousCapabilities = null)
     {
         ArgumentNullException.ThrowIfNull(displays);
-        var monitors = displays.Count == 0 ? [] : EnumerateLogicalMonitors();
+        var monitors = displays.Count == 0 ? [] : DisplayNative.EnumerateLogicalMonitors();
         var brightness = new List<MonitorDdcProbeInfo>(displays.Count);
         var contrast = new List<MonitorDdcVcpFeatureInfo>(displays.Count);
         var temperature = new List<MonitorDdcVcpFeatureInfo>(displays.Count);
@@ -49,10 +44,10 @@ public static class WindowsDdcVcpFeatureService
             var lastError = ErrorInvalidData;
             if (logical is not null)
             {
-                for (int attempt = 1; attempt <= MaximumHandleAttempts; attempt++)
+                for (int attempt = 1; attempt <= DisplayNative.HandleAttempts; attempt++)
                 {
-                    if (attempt > 1) Thread.Sleep(HandleRetryDelayMilliseconds);
-                    var physical = AcquirePhysicalMonitors(logical.Handle, out lastError);
+                    if (attempt > 1) Thread.Sleep(DisplayNative.HandleRetryMilliseconds);
+                    var physical = DisplayNative.AcquirePhysicalMonitors(logical.Handle, out _, out lastError);
                     if (physical is null) continue;
                     try
                     {
@@ -75,7 +70,7 @@ public static class WindowsDdcVcpFeatureService
                     }
                     finally
                     {
-                        DestroyPhysicalMonitors(physical);
+                        DisplayNative.ReleasePhysicalMonitors(physical);
                     }
                     break;
                 }
@@ -107,7 +102,7 @@ public static class WindowsDdcVcpFeatureService
         if (item.Handle == 0)
             return Failure(device, description, code, DdcVcpFeatureStatus.PhysicalMonitorHandleUnavailable, ErrorInvalidData, attempt);
 
-        var worked = TryReadFeature(item.Handle, code, out var current, out var maximum, out var error, out var reads);
+        var worked = DisplayNative.TryReadVcp(item.Handle, code, out var current, out var maximum, out var error, out var reads);
         return new(device, description, code,
             worked ? DdcVcpFeatureStatus.ReadSucceeded : DdcVcpFeatureStatus.ReadFailed,
             current, maximum, error, reads, attempt);
@@ -168,7 +163,7 @@ public static class WindowsDdcVcpFeatureService
     {
         try
         {
-            var logicalMonitor = EnumerateLogicalMonitors().FirstOrDefault(monitor =>
+            var logicalMonitor = DisplayNative.EnumerateLogicalMonitors().FirstOrDefault(monitor =>
                 string.Equals(monitor.DeviceName, display.GdiDeviceName, StringComparison.OrdinalIgnoreCase));
             if (logicalMonitor is null)
             {
@@ -176,14 +171,14 @@ public static class WindowsDdcVcpFeatureService
             }
 
             var lastError = ErrorInvalidData;
-            for (var attempt = 1; attempt <= MaximumHandleAttempts; attempt++)
+            for (var attempt = 1; attempt <= DisplayNative.HandleAttempts; attempt++)
             {
                 if (attempt > 1)
                 {
-                    Thread.Sleep(HandleRetryDelayMilliseconds);
+                    Thread.Sleep(DisplayNative.HandleRetryMilliseconds);
                 }
 
-                var physicalMonitors = AcquirePhysicalMonitors(logicalMonitor.Handle, out lastError);
+                var physicalMonitors = DisplayNative.AcquirePhysicalMonitors(logicalMonitor.Handle, out _, out lastError);
                 if (physicalMonitors is null)
                 {
                     continue;
@@ -201,7 +196,7 @@ public static class WindowsDdcVcpFeatureService
                             return WriteFailure(vcpCode, requestedValue, ErrorInvalidData, "A physical monitor handle was unavailable.");
                         }
 
-                        if (!TryReadFeature(physicalMonitor.Handle, vcpCode, out _, out var maximum, out lastError))
+                        if (!DisplayNative.TryReadVcp(physicalMonitor.Handle, vcpCode, out _, out var maximum, out lastError))
                         {
                             return WriteFailure(vcpCode, requestedValue, lastError, $"Could not read VCP 0x{vcpCode:X2} before writing.");
                         }
@@ -214,8 +209,8 @@ public static class WindowsDdcVcpFeatureService
                             return WriteFailure(vcpCode, requestedValue, Marshal.GetLastPInvokeError(), $"SetVCPFeature rejected VCP 0x{vcpCode:X2}.", appliedRaw);
                         }
 
-                        Thread.Sleep(ReadRetryDelayMilliseconds);
-                        if (!TryReadFeature(physicalMonitor.Handle, vcpCode, out var current, out maximum, out lastError))
+                        Thread.Sleep(DisplayNative.ReadRetryMilliseconds);
+                        if (!DisplayNative.TryReadVcp(physicalMonitor.Handle, vcpCode, out var current, out maximum, out lastError))
                         {
                             return new DdcVcpWriteResult(
                                 vcpCode,
@@ -275,7 +270,7 @@ public static class WindowsDdcVcpFeatureService
                 }
                 finally
                 {
-                    DestroyPhysicalMonitors(physicalMonitors);
+                    DisplayNative.ReleasePhysicalMonitors(physicalMonitors);
                 }
             }
 
@@ -288,107 +283,6 @@ public static class WindowsDdcVcpFeatureService
         catch (OverflowException exception)
         {
             return WriteFailure(vcpCode, requestedValue, ErrorInvalidData, exception.Message);
-        }
-    }
-
-    private static List<LogicalMonitor> EnumerateLogicalMonitors()
-    {
-        var monitors = new List<LogicalMonitor>();
-        DisplayNative.MonitorCallback callback = (monitor, _, _, _) =>
-        {
-            unsafe
-            {
-                var info = new DisplayMonitorInfo { Size = (uint)sizeof(DisplayMonitorInfo) };
-                if (DisplayNative.GetMonitorInfo(monitor, &info))
-                {
-                    monitors.Add(new LogicalMonitor(monitor, info.GetDeviceName()));
-                }
-            }
-
-            return true;
-        };
-
-        if (!DisplayNative.EnumDisplayMonitors(0, 0, callback, 0))
-        {
-            throw new Win32Exception(Marshal.GetLastPInvokeError());
-        }
-
-        return monitors;
-    }
-
-    private static unsafe DdcMonitorHandle[]? AcquirePhysicalMonitors(nint logicalMonitor, out int error)
-    {
-        error = 0;
-        if (!DisplayNative.GetNumberOfPhysicalMonitorsFromHMONITOR(logicalMonitor, out var count))
-        {
-            error = Marshal.GetLastPInvokeError();
-            return null;
-        }
-
-        if (count is 0 or > MaximumPhysicalMonitorsPerDisplay)
-        {
-            error = ErrorInvalidData;
-            return null;
-        }
-
-        var physicalMonitors = new DdcMonitorHandle[count];
-        fixed (DdcMonitorHandle* pointer = physicalMonitors)
-        {
-            if (!DisplayNative.GetPhysicalMonitorsFromHMONITOR(logicalMonitor, count, pointer))
-            {
-                error = Marshal.GetLastPInvokeError();
-                return null;
-            }
-        }
-
-        return physicalMonitors;
-    }
-
-    private static bool TryReadFeature(
-        nint handle,
-        byte vcpCode,
-        out uint current,
-        out uint maximum,
-        out int error) =>
-        TryReadFeature(handle, vcpCode, out current, out maximum, out error, out _);
-
-    private static bool TryReadFeature(
-        nint handle,
-        byte vcpCode,
-        out uint current,
-        out uint maximum,
-        out int error,
-        out int attempts)
-    {
-        error = 0;
-        for (attempts = 1; attempts <= MaximumReadAttempts; attempts++)
-        {
-            if (DisplayNative.GetVCPFeatureAndVCPFeatureReply(handle, vcpCode, 0, out current, out maximum))
-            {
-                return true;
-            }
-
-            error = Marshal.GetLastPInvokeError();
-            if (attempts < MaximumReadAttempts)
-            {
-                Thread.Sleep(ReadRetryDelayMilliseconds);
-            }
-        }
-
-        attempts = MaximumReadAttempts;
-        current = 0;
-        maximum = 0;
-        return false;
-    }
-
-    private static void DestroyPhysicalMonitors(IEnumerable<DdcMonitorHandle> monitors)
-    {
-        foreach (var monitor in monitors)
-        {
-            if (monitor.Handle != 0)
-            {
-                _ = DisplayNative.DestroyPhysicalMonitor(monitor.Handle);
-            }
         }
     }
 
@@ -416,5 +310,4 @@ public static class WindowsDdcVcpFeatureService
             ErrorCode: error,
             Message: message);
 
-    private sealed record LogicalMonitor(nint Handle, string DeviceName);
 }
