@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   native:
-    runs-on: windows-2022
+    runs-on: windows-2025-vs2026
     strategy:
       fail-fast: false
       matrix:
@@ -26,6 +26,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Discover MSBuild
         uses: microsoft/setup-msbuild@v3
+        with:
+          vs-version: '[18.0,19.0)'
       - name: Build native Visual Studio project
         shell: cmd
         run: msbuild DisplayPilot.sln /m /p:Configuration=Release /p:Platform=${{ matrix.platform }} /verbosity:minimal

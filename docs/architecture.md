@@ -22,4 +22,4 @@ Persistent preferences reside under `HKCU\Software\DisplayPilot\Settings`; brigh
 
 ## Compilation
 
-Visual Studio 2026 builds Win32 and Win64 configurations using MSVC v143 and the Windows SDK. The minimum application subsystem baseline is Windows 7 SP1. Release builds use static CRT linking and write executables to `dist/32` and `dist/64`.
+Visual Studio 2026 builds Win32 and Win64 configurations using MSVC v145 and the Windows SDK. The minimum application subsystem baseline is Windows 7 SP1. Release builds use static CRT linking and write executables to `dist/32` and `dist/64`.

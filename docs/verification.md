@@ -2,7 +2,7 @@
 
 ## Build matrix
 
-Build Debug and Release from `DisplayPilot.sln` using Visual Studio 2026 and MSVC v143 for Win32 and Win64. Release executables appear in `dist/32` and `dist/64`. The CI workflow also compiles the two Inno Setup installers.
+Build Debug and Release from `DisplayPilot.sln` using Visual Studio 2026 and MSVC v145 for Win32 and Win64. Release executables appear in `dist/32` and `dist/64`. The CI workflow also compiles the two Inno Setup installers.
 
 ## Windows platforms
 

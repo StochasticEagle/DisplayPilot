@@ -4,7 +4,7 @@ DisplayPilot is a native C++ Windows notification-area application for monitor c
 
 ## Build
 
-Open `DisplayPilot.sln` in Visual Studio 2026 with MSVC v143 and the Windows SDK installed. Select Debug or Release and Win32 or Win64, then select **Build Solution**.
+Open `DisplayPilot.sln` in Visual Studio 2026 with MSVC v145 and the Windows SDK installed. Select Debug or Release and Win32 or Win64, then select **Build Solution**.
 
 | Platform | Release output |
 | --- | --- |
