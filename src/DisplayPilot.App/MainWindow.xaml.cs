@@ -61,7 +61,7 @@ public sealed partial class MainWindow : Window, IDisposable
     private IReadOnlyList<MonitorDdcVcpFeatureInfo> _lastContrastProbes = [];
     private IReadOnlyList<MonitorDdcVcpFeatureInfo> _lastColorTemperatureProbes = [];
     private IReadOnlyList<MonitorDdcCapabilitiesInfo> _lastDdcCapabilities = [];
-    private IReadOnlyList<DisplayRotationResult> _lastRotationReads = [];
+    private DisplayRotationResult[] _lastRotationReads = [];
     private ThemeState? _themeState;
     private ThemeApplyResult? _lastThemeResult;
     private CustomThemeSchedule? _customThemeSchedule;
