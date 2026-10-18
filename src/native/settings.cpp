@@ -119,6 +119,7 @@ void setScheduleFields(JsonValue& doc, const Settings& s) {
     doc.object["darkMinutes"] = json_settings::number(static_cast<int>(s.darkMinute));
     doc.object["automationEnabled"] = json_settings::boolean(s.scheduleEnabled);
     doc.object["reduceBrightness"] = json_settings::boolean(s.reduceBrightness);
+    doc.object["automaticLocation"] = json_settings::boolean(s.automaticLocation);
     doc.object["scheduleMode"] = json_settings::number(
         s.scheduleMode == ScheduleMode::Solar ? 1 : 0);
     doc.object["latitude"] = s.locationConfigured ?
@@ -150,6 +151,7 @@ Settings loadRegistrySettings() {
     s.locationConfigured = key.getDword(L"LocationConfigured", 0) != 0 &&
         std::abs(s.latitude) <= 90 && std::abs(s.longitude) <= 180;
     s.locationLabel = key.getString(L"LocationLabel");
+    s.automaticLocation = false;
     return s;
 }
 
@@ -200,6 +202,7 @@ Settings loadSettings() {
             (mode != 0 && mode != 1)) return Settings{};
     }
     s.scheduleMode = mode == 1 ? ScheduleMode::Solar : ScheduleMode::Fixed;
+    s.automaticLocation = json_settings::asBoolean(json_settings::field(doc, "automaticLocation"), false);
     if (s.scheduleMode == ScheduleMode::Solar) {
         if (!json_settings::asNumber(json_settings::field(doc, "latitude"), s.latitude) ||
             !json_settings::asNumber(json_settings::field(doc, "longitude"), s.longitude) ||
