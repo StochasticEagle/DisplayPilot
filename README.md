@@ -2,7 +2,7 @@
 
 DisplayPilot is a native, single-process Windows notification-area monitor utility.
 
-This branch is a clean C++ application, with no .NET, WinUI, CMake, JavaScript, web content or third-party runtime libraries. Only the existing icons and license were retained from the former application.
+This branch is a clean C++ application.
 
 ## Build in Visual Studio 2026
 
@@ -17,7 +17,7 @@ Choose **Release** or **Debug** and the desired solution platform:
 
 Select **Build > Build Solution** or press **Ctrl+Shift+B**.
 
-The native project defaults to Visual Studio 2026's MSVC **v145** toolset. The GitHub Windows build uses the compatible v143 toolset available on its Visual Studio 2022 runner; no CMake is involved in either build.
+The native project defaults to Visual Studio 2026's MSVC **v145** toolset. The GitHub Windows build uses the compatible v143 toolset available on its Visual Studio 2022 runner.
 
 From the Visual Studio Developer Command Prompt:
 
