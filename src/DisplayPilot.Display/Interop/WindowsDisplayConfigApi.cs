@@ -13,7 +13,7 @@ public sealed class WindowsDisplayConfigApi : IDisplayConfigApi
         for (int attempt = 0; attempt < 3; attempt++)
         {
             int status = DisplayNative.GetDisplayConfigBufferSizes(
-                NativeConstants.QdcOnlyActivePaths, out uint pathCount, out uint modeCount);
+                DisplayInteropConstants.QdcOnlyActivePaths, out uint pathCount, out uint modeCount);
             if (status != 0) throw new Win32Exception(status);
 
             var paths = new ActivePathRecord[pathCount];
@@ -21,7 +21,7 @@ public sealed class WindowsDisplayConfigApi : IDisplayConfigApi
             fixed (ActivePathRecord* pathData = paths)
             fixed (ModeRecord* modeData = modes)
                 status = DisplayNative.QueryDisplayConfig(
-                    NativeConstants.QdcOnlyActivePaths, ref pathCount, pathData,
+                    DisplayInteropConstants.QdcOnlyActivePaths, ref pathCount, pathData,
                     ref modeCount, modeData, 0);
 
             if (status == InsufficientBuffer) continue;
@@ -35,7 +35,7 @@ public sealed class WindowsDisplayConfigApi : IDisplayConfigApi
                 {
                     Header = new DisplayNameHeader
                     {
-                        Query = NativeConstants.DisplayconfigDeviceInfoGetSourceName,
+                        Query = DisplayInteropConstants.DisplayconfigDeviceInfoGetSourceName,
                         Size = (uint)sizeof(SourceDisplayName),
                         Adapter = path.SourceAdapter,
                         Id = path.SourceId
@@ -47,7 +47,7 @@ public sealed class WindowsDisplayConfigApi : IDisplayConfigApi
                 {
                     Header = new DisplayNameHeader
                     {
-                        Query = NativeConstants.DisplayconfigDeviceInfoGetTargetName,
+                        Query = DisplayInteropConstants.DisplayconfigDeviceInfoGetTargetName,
                         Size = (uint)sizeof(TargetDisplayName),
                         Adapter = path.TargetAdapter,
                         Id = path.TargetId

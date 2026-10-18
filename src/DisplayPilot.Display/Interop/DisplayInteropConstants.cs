@@ -2,7 +2,7 @@
 // Windows and VESA-defined constants used by DisplayPilot.
 namespace DisplayPilot.Display.Interop;
 
-public static class NativeConstants
+public static class DisplayInteropConstants
 {
     public const byte VcpCodeBrightness = 0x10;
     public const byte VcpCodeContrast = 0x12;

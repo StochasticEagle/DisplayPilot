@@ -1470,9 +1470,9 @@ public sealed partial class MainWindow : Window, IDisposable
                     }
                     : item).ToArray();
 
-        if (result.VcpCode == NativeConstants.VcpCodeContrast)
+        if (result.VcpCode == DisplayInteropConstants.VcpCodeContrast)
             _lastContrastProbes = Update(_lastContrastProbes);
-        else if (result.VcpCode == NativeConstants.VcpCodeSelectColorPreset)
+        else if (result.VcpCode == DisplayInteropConstants.VcpCodeSelectColorPreset)
             _lastColorTemperatureProbes = Update(_lastColorTemperatureProbes);
         var card = (CompactMonitorList.ItemsSource as IEnumerable<CompactMonitorViewModel>)?
             .FirstOrDefault(item => string.Equals(item.DevicePath, devicePath, StringComparison.OrdinalIgnoreCase));
@@ -1481,12 +1481,12 @@ public sealed partial class MainWindow : Window, IDisposable
             _updatingCompactControls = true;
             try
             {
-                if (result.VcpCode == NativeConstants.VcpCodeContrast && result.VerifiedPercent is int percent)
+                if (result.VcpCode == DisplayInteropConstants.VcpCodeContrast && result.VerifiedPercent is int percent)
                 {
                     _compactContrastValues[devicePath] = percent;
                     card.ContrastPercent = percent;
                 }
-                else if (result.VcpCode == NativeConstants.VcpCodeSelectColorPreset)
+                else if (result.VcpCode == DisplayInteropConstants.VcpCodeSelectColorPreset)
                     card.SelectedColorTemperaturePreset = card.ColorTemperaturePresets
                         .FirstOrDefault(option => option.RawValue == value);
             }
@@ -1512,7 +1512,7 @@ public sealed partial class MainWindow : Window, IDisposable
         {
             var result = await Task.Run(() => WindowsDdcVcpFeatureService.WriteContinuousPercent(
                 display,
-                NativeConstants.VcpCodeContrast,
+                DisplayInteropConstants.VcpCodeContrast,
                 requestedPercent));
             _lastDdcVcpWriteResult = result;
             succeeded = result.Succeeded;
@@ -1543,7 +1543,7 @@ public sealed partial class MainWindow : Window, IDisposable
         _displayOperationRunning = true;
         SetDisplayControlsEnabled(false);
         var presetName = VcpNames.GetFormattedValueName(
-            NativeConstants.VcpCodeSelectColorPreset,
+            DisplayInteropConstants.VcpCodeSelectColorPreset,
             checked((int)requestedValue));
         CompactStatusText.Text = $"Setting {display.FriendlyName} color temperature to {presetName}...";
         StatusText.Text = CompactStatusText.Text;
@@ -1552,7 +1552,7 @@ public sealed partial class MainWindow : Window, IDisposable
         {
             var result = await Task.Run(() => WindowsDdcVcpFeatureService.WriteDiscreteValue(
                 display,
-                NativeConstants.VcpCodeSelectColorPreset,
+                DisplayInteropConstants.VcpCodeSelectColorPreset,
                 requestedValue));
             _lastDdcVcpWriteResult = result;
             UpdateVerifiedFeature(display.DevicePath, result);
@@ -2700,7 +2700,7 @@ public sealed partial class MainWindow : Window, IDisposable
                 StringComparison.OrdinalIgnoreCase));
             var contrastRead = GetSuccessfulFeatureRead(_lastContrastProbes, display.DevicePath);
             var contrastAvailable =
-                capabilities?.Capabilities.SupportsVcp(NativeConstants.VcpCodeContrast) == true &&
+                capabilities?.Capabilities.SupportsVcp(DisplayInteropConstants.VcpCodeContrast) == true &&
                 contrastRead is { MaximumValue: > 0 };
             var contrastPercent = contrastRead is { MaximumValue: > 0 }
                 ? Math.Clamp(contrastRead.CurrentValue * 100d / contrastRead.MaximumValue, 0, 100)
@@ -2842,7 +2842,7 @@ public sealed partial class MainWindow : Window, IDisposable
             devicePath,
             StringComparison.OrdinalIgnoreCase));
         var values = capabilities?.Capabilities.FeatureValues(
-            NativeConstants.VcpCodeSelectColorPreset);
+            DisplayInteropConstants.VcpCodeSelectColorPreset);
         return values is null
             ? []
             : values
@@ -2851,7 +2851,7 @@ public sealed partial class MainWindow : Window, IDisposable
                 .Select(value => new ColorTemperaturePresetViewModel(
                     value,
                     VcpNames.GetFormattedValueName(
-                        NativeConstants.VcpCodeSelectColorPreset,
+                        DisplayInteropConstants.VcpCodeSelectColorPreset,
                         value)))
                 .ToArray();
     }
@@ -3137,7 +3137,7 @@ public sealed partial class MainWindow : Window, IDisposable
             {
                 report.Append("MCCS VCP codes: ").AppendLine(capabilities.Capabilities.FormatVcpCodes());
                 report.Append("MCCS color presets: ").AppendLine(string.Join(", ",
-                    capabilities.Capabilities.FeatureValues(NativeConstants.VcpCodeSelectColorPreset) ?? []));
+                    capabilities.Capabilities.FeatureValues(DisplayInteropConstants.VcpCodeSelectColorPreset) ?? []));
             }
 
             var wmiProbe = wmiProbes?.FirstOrDefault(candidate => string.Equals(

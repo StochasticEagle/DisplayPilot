@@ -177,7 +177,7 @@ public sealed class WindowsDdcProbeApi : IDdcProbeApi
         {
             if (DisplayNative.GetVCPFeatureAndVCPFeatureReply(
                 physicalMonitor.Handle,
-                NativeConstants.VcpCodeBrightness,
+                DisplayInteropConstants.VcpCodeBrightness,
                 0,
                 out var currentValue,
                 out var maximumValue))

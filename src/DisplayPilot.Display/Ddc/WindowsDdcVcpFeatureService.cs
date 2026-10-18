@@ -59,11 +59,11 @@ public static class WindowsDdcVcpFeatureService
                         foreach (var item in physical)
                         {
                             bright.Add(ReadSnapshotFeature(display.GdiDeviceName, item,
-                                NativeConstants.VcpCodeBrightness, attempt));
+                                DisplayInteropConstants.VcpCodeBrightness, attempt));
                             dark.Add(ReadSnapshotFeature(display.GdiDeviceName, item,
-                                NativeConstants.VcpCodeContrast, attempt));
+                                DisplayInteropConstants.VcpCodeContrast, attempt));
                             colors.Add(ReadSnapshotFeature(display.GdiDeviceName, item,
-                                NativeConstants.VcpCodeSelectColorPreset, attempt));
+                                DisplayInteropConstants.VcpCodeSelectColorPreset, attempt));
                             if (capability is null || !capability.Succeeded)
                             {
                                 if (TrySnapshotCapabilities(item.Handle, out var raw, out var parsed, out var error))
@@ -85,9 +85,9 @@ public static class WindowsDdcVcpFeatureService
             {
                 var status = logical is null ? DdcVcpFeatureStatus.NoPhysicalMonitor :
                     DdcVcpFeatureStatus.PhysicalMonitorEnumerationFailed;
-                bright.Add(Failure(display.GdiDeviceName, "", NativeConstants.VcpCodeBrightness, status, lastError, 0));
-                dark.Add(Failure(display.GdiDeviceName, "", NativeConstants.VcpCodeContrast, status, lastError, 0));
-                colors.Add(Failure(display.GdiDeviceName, "", NativeConstants.VcpCodeSelectColorPreset, status, lastError, 0));
+                bright.Add(Failure(display.GdiDeviceName, "", DisplayInteropConstants.VcpCodeBrightness, status, lastError, 0));
+                dark.Add(Failure(display.GdiDeviceName, "", DisplayInteropConstants.VcpCodeContrast, status, lastError, 0));
+                colors.Add(Failure(display.GdiDeviceName, "", DisplayInteropConstants.VcpCodeSelectColorPreset, status, lastError, 0));
             }
             brightness.Add(new(display, bright.Select(item => new DdcBrightnessProbeResult(
                 item.GdiDeviceName, item.PhysicalMonitorDescription,

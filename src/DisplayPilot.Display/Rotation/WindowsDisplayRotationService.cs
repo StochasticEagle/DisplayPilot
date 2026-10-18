@@ -14,7 +14,7 @@ public static class WindowsDisplayRotationService
         var mode = CreateMode();
         if (!DisplaySettingsPInvoke.EnumDisplaySettings(
                 gdiDeviceName,
-                NativeConstants.EnumCurrentSettings,
+                DisplayInteropConstants.EnumCurrentSettings,
                 ref mode))
         {
             return new DisplayRotationResult(
@@ -50,7 +50,7 @@ public static class WindowsDisplayRotationService
         var mode = CreateMode();
         if (!DisplaySettingsPInvoke.EnumDisplaySettings(
                 gdiDeviceName,
-                NativeConstants.EnumCurrentSettings,
+                DisplayInteropConstants.EnumCurrentSettings,
                 ref mode))
         {
             return new DisplayRotationResult(
@@ -69,17 +69,17 @@ public static class WindowsDisplayRotationService
 
         mode.DisplayOrientation = (uint)requestedRotation;
         mode.Fields = unchecked((uint)(
-            NativeConstants.DmDisplayOrientation |
-            NativeConstants.DmPelsWidth |
-            NativeConstants.DmPelsHeight));
+            DisplayInteropConstants.DmDisplayOrientation |
+            DisplayInteropConstants.DmPelsWidth |
+            DisplayInteropConstants.DmPelsHeight));
 
         var testResult = DisplaySettingsPInvoke.ChangeDisplaySettingsEx(
             gdiDeviceName,
             ref mode,
             0,
-            NativeConstants.CdsTest,
+            DisplayInteropConstants.CdsTest,
             0);
-        if (testResult != NativeConstants.DispChangeSuccessful)
+        if (testResult != DisplayInteropConstants.DispChangeSuccessful)
         {
             return new DisplayRotationResult(
                 gdiDeviceName,
@@ -93,15 +93,15 @@ public static class WindowsDisplayRotationService
             gdiDeviceName,
             ref mode,
             0,
-            NativeConstants.CdsUpdateRegistry,
+            DisplayInteropConstants.CdsUpdateRegistry,
             0);
         return applyResult switch
         {
-            NativeConstants.DispChangeSuccessful => new DisplayRotationResult(
+            DisplayInteropConstants.DispChangeSuccessful => new DisplayRotationResult(
                 gdiDeviceName,
                 DisplayRotationStatus.Applied,
                 requestedRotation),
-            NativeConstants.DispChangeRestart => new DisplayRotationResult(
+            DisplayInteropConstants.DispChangeRestart => new DisplayRotationResult(
                 gdiDeviceName,
                 DisplayRotationStatus.RestartRequired,
                 requestedRotation,

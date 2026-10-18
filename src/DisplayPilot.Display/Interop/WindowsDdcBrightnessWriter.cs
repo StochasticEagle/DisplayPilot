@@ -164,7 +164,7 @@ public sealed class WindowsDdcBrightnessWriter : IBrightnessWriter
         }
 
         var rawValue = (uint)DisplayLevelScale.FromPercent(requestedPercent, checked((int)maximum));
-        if (!DisplayNative.SetVCPFeature(physicalMonitor.Handle, NativeConstants.VcpCodeBrightness, rawValue))
+        if (!DisplayNative.SetVCPFeature(physicalMonitor.Handle, DisplayInteropConstants.VcpCodeBrightness, rawValue))
         {
             return Failed(requestedPercent, Marshal.GetLastPInvokeError(), "SetVCPFeature rejected brightness VCP 0x10.");
         }
@@ -211,7 +211,7 @@ public sealed class WindowsDdcBrightnessWriter : IBrightnessWriter
         {
             if (DisplayNative.GetVCPFeatureAndVCPFeatureReply(
                 handle,
-                NativeConstants.VcpCodeBrightness,
+                DisplayInteropConstants.VcpCodeBrightness,
                 0,
                 out current,
                 out maximum))
