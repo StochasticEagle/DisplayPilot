@@ -515,7 +515,7 @@ public sealed partial class MainWindow : Window, IDisposable
                     }
                 }
 
-                UpdateCompactMonitorCards();
+                
 
             }
             finally
@@ -599,7 +599,7 @@ public sealed partial class MainWindow : Window, IDisposable
                         string.Equals(item.GdiDeviceName, targetGdiDeviceName, StringComparison.OrdinalIgnoreCase));
                     if (monitor is not null)
                         foreach (var result in results) UpdateVerifiedBrightness(monitor.DevicePath, result);
-                    UpdateCompactMonitorCards();
+                    
 
                 }
                 finally
@@ -1332,6 +1332,15 @@ public sealed partial class MainWindow : Window, IDisposable
                     }
                     : item).ToArray();
         }
+        _compactBrightnessValues[devicePath] = result.VerifiedPercent;
+        var card = (CompactMonitorList.ItemsSource as IEnumerable<CompactMonitorViewModel>)?
+            .FirstOrDefault(item => string.Equals(item.DevicePath, devicePath, StringComparison.OrdinalIgnoreCase));
+        if (card is not null)
+        {
+            _updatingCompactControls = true;
+            try { card.BrightnessPercent = result.VerifiedPercent; }
+            finally { _updatingCompactControls = false; }
+        }
     }
 
     private async Task<bool> SetBrightnessAsync(string devicePath, int requestedPercent)
@@ -1380,7 +1389,7 @@ public sealed partial class MainWindow : Window, IDisposable
                 requestedPercent));
             _lastBrightnessWriteResult = writeResult;
             UpdateVerifiedBrightness(display.DevicePath, writeResult);
-            UpdateCompactMonitorCards();
+            
 
             StatusText.Text = writeResult.Succeeded
                 ? string.Format(
@@ -1445,6 +1454,24 @@ public sealed partial class MainWindow : Window, IDisposable
             _lastContrastProbes = Update(_lastContrastProbes);
         else if (result.VcpCode == NativeConstants.VcpCodeSelectColorPreset)
             _lastColorTemperatureProbes = Update(_lastColorTemperatureProbes);
+        var card = (CompactMonitorList.ItemsSource as IEnumerable<CompactMonitorViewModel>)?
+            .FirstOrDefault(item => string.Equals(item.DevicePath, devicePath, StringComparison.OrdinalIgnoreCase));
+        if (card is not null)
+        {
+            _updatingCompactControls = true;
+            try
+            {
+                if (result.VcpCode == NativeConstants.VcpCodeContrast && result.VerifiedPercent is int percent)
+                {
+                    _compactContrastValues[devicePath] = percent;
+                    card.ContrastPercent = percent;
+                }
+                else if (result.VcpCode == NativeConstants.VcpCodeSelectColorPreset)
+                    card.SelectedColorTemperaturePreset = card.ColorTemperaturePresets
+                        .FirstOrDefault(option => option.RawValue == value);
+            }
+            finally { _updatingCompactControls = false; }
+        }
     }
 
     private async Task SetContrastAsync(string devicePath, int requestedPercent)
@@ -1468,7 +1495,7 @@ public sealed partial class MainWindow : Window, IDisposable
                 requestedPercent));
             _lastDdcVcpWriteResult = result;
             UpdateVerifiedFeature(display.DevicePath, result);
-            UpdateCompactMonitorCards();
+            
             CompactStatusText.Text = result.Succeeded
                 ? $"{display.FriendlyName}: contrast verified at {result.VerifiedPercent}%."
                 : $"Contrast did not verify (error 0x{unchecked((uint)result.ErrorCode):X8}).";
@@ -1506,7 +1533,7 @@ public sealed partial class MainWindow : Window, IDisposable
                 requestedValue));
             _lastDdcVcpWriteResult = result;
             UpdateVerifiedFeature(display.DevicePath, result);
-            UpdateCompactMonitorCards();
+            
             CompactStatusText.Text = result.Succeeded
                 ? $"{display.FriendlyName}: color temperature verified as {presetName}."
                 : $"Color temperature did not verify (error 0x{unchecked((uint)result.ErrorCode):X8}).";
