@@ -85,6 +85,30 @@ jobs:
             throw "The published app is missing resources.pri and will fail during WinUI initialization."
           }
 
+      - name: Verify native Release launcher and resource layout
+        shell: pwsh
+        run: |
+          $appDir = 'artifacts/DisplayPilot-win-x64'
+          $exe = Join-Path $appDir 'DisplayPilot.exe'
+          if (-not (Test-Path $exe -PathType Leaf)) {
+            throw 'Release launcher is missing.'
+          }
+          & $exe --verify-managed-host
+          if ($LASTEXITCODE -ne 0) {
+            throw "Release launcher cannot load the system .NET runtime and local WinUI assemblies (exit $LASTEXITCODE)."
+          }
+          foreach ($directory in @($appDir, 'src/DisplayPilot.App/bin/Release')) {
+            $unexpected = @(Get-ChildItem $directory -Recurse -File |
+              Where-Object { $_.Name -in @('DisplayPilot.runtimeconfig.json', 'DisplayPilot.deps.json', 'App.xbf', 'MainWindow.xbf') })
+            if ($unexpected.Count -gt 0) {
+              $unexpected.FullName
+              throw "Release contains files that must be absent: $directory"
+            }
+          }
+          if ((Get-Item $exe).Length -ge 200MB) {
+            throw 'Native launcher exceeds the 200 MB size budget.'
+          }
+
       - name: Verify framework-dependent app
         shell: pwsh
         run: |

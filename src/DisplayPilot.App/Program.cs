@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Unlicense
 using System.Runtime.InteropServices;
+using System.Runtime.CompilerServices;
 using System.Security.Principal;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
@@ -13,6 +14,25 @@ public static partial class Program
     private static readonly string InstanceKey = CreateInstanceKey();
 
     internal static event EventHandler<AppActivationArguments>? ActivationRedirected;
+
+    // Called directly by the small native Release launcher; no application JSON files.
+    [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
+    public static int NativeMain(nint ignored, int reserved)
+    {
+        _ = ignored;
+        _ = reserved;
+        var arguments = Environment.GetCommandLineArgs();
+        if (arguments.Contains("--verify-managed-host", StringComparer.OrdinalIgnoreCase))
+        {
+            // The CI smoke test must resolve framework and local WinUI dependencies
+            // without creating a window or touching per-user startup registration.
+            _ = typeof(Microsoft.UI.Xaml.Application).Assembly.GetName();
+            _ = typeof(MainWindow).Assembly.GetName();
+            return 0;
+        }
+
+        return Main(arguments);
+    }
 
     [STAThread]
     public static int Main(string[] args)

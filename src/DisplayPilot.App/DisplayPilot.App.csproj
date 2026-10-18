@@ -12,6 +12,11 @@
     <ApplicationIcon>Assets\displaypilot-primary.ico</ApplicationIcon>
     <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <UseAppHost Condition="'$(Configuration)' == 'Release'">false</UseAppHost>
+    <GenerateDependencyFile Condition="'$(Configuration)' == 'Release'">false</GenerateDependencyFile>
+    <GenerateRuntimeConfigurationFiles Condition="'$(Configuration)' == 'Release'">false</GenerateRuntimeConfigurationFiles>
+    <PublishSingleFile>false</PublishSingleFile>
+    <DisableEmbeddedXbf>false</DisableEmbeddedXbf>
     <SatelliteResourceLanguages Condition="'$(Configuration)' == 'Release'">en</SatelliteResourceLanguages>
   </PropertyGroup>
 
@@ -29,6 +34,19 @@
     <ProjectReference Include="..\DisplayPilot.Display\DisplayPilot.Display.csproj" />
     <ProjectReference Include="..\DisplayPilot.Windows\DisplayPilot.Windows.csproj" />
   </ItemGroup>
+
+  <Target Name="CreateNativeReleaseHost" AfterTargets="Build"
+          Condition="'$(Configuration)' == 'Release' and '$(DesignTimeBuild)' != 'true'">
+    <Exec Command='powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\..\..\scripts\build-native-host.ps1&quot; -ProjectDirectory &quot;$(MSBuildProjectDirectory)&quot; -OutputDirectory &quot;$(TargetDir)&quot; -IntermediateDirectory &quot;$(IntermediateOutputPath)&quot;' />
+    <Exec Command='powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\..\..\scripts\verify-release-resources.ps1&quot; -Directory &quot;$(TargetDir)&quot;' />
+  </Target>
+
+  <Target Name="FinalizeNativeReleasePublish" AfterTargets="Publish"
+          Condition="'$(Configuration)' == 'Release'">
+    <Copy SourceFiles="$(TargetDir)DisplayPilot.exe"
+          DestinationFiles="$(PublishDir)DisplayPilot.exe" />
+    <Exec Command='powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\..\..\scripts\verify-release-resources.ps1&quot; -Directory &quot;$(PublishDir)&quot;' />
+  </Target>
 
   <Target Name="RemoveUnusedWebViewRuntime" AfterTargets="Publish">
     <ItemGroup>
