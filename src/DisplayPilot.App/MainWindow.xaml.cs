@@ -148,7 +148,7 @@ public sealed partial class MainWindow : Window, IDisposable
     private StartupRegistrationStatus _startupRegistrationStatus =
         StartupRegistrationStatus.Unavailable;
     private string? _startupRegistrationError;
-    private string _diagnosticReport = string.Empty;
+    private Win32Exception? _lastDiagnosticError;
 
     public MainWindow()
     {
@@ -291,7 +291,7 @@ public sealed partial class MainWindow : Window, IDisposable
         }
 
         ShowCompactView();
-        RefreshDiagnosticReport();
+
         if (_activeMonitors.Count > 0 && _lastDdcProbes.Count == 0)
         {
             await ProbeDdcBrightnessAsync();
@@ -362,7 +362,7 @@ public sealed partial class MainWindow : Window, IDisposable
                 await ProbeDdcBrightnessAsync();
                 await EvaluateAndApplyScheduleAsync();
             }
-            RefreshDiagnosticReport();
+
         });
     }
 
@@ -516,7 +516,7 @@ public sealed partial class MainWindow : Window, IDisposable
                 }
 
                 UpdateCompactMonitorCards();
-                RefreshDiagnosticReport();
+
             }
             finally
             {
@@ -600,7 +600,7 @@ public sealed partial class MainWindow : Window, IDisposable
                     if (monitor is not null)
                         foreach (var result in results) UpdateVerifiedBrightness(monitor.DevicePath, result);
                     UpdateCompactMonitorCards();
-                    RefreshDiagnosticReport();
+
                 }
                 finally
                 {
@@ -611,12 +611,7 @@ public sealed partial class MainWindow : Window, IDisposable
         catch (Win32Exception exception)
         {
             CompactStatusText.Text = "Keyboard brightness synchronization failed. Open Advanced for details.";
-            _diagnosticReport = BuildDiagnosticReport(
-                _activeMonitors,
-                _lastDdcProbes,
-                _lastWmiProbes,
-                _lastBrightnessWriteResult,
-                exception);
+            _lastDiagnosticError = exception;
         }
         finally
         {
@@ -704,7 +699,6 @@ public sealed partial class MainWindow : Window, IDisposable
             ReportStartupRegistrationFailure(exception);
         }
 
-        RefreshDiagnosticReport();
     }
 
     private async void CompactBrightnessSlider_ValueChanged(
@@ -1119,13 +1113,18 @@ public sealed partial class MainWindow : Window, IDisposable
 
     private void CopyReportButton_Click(object sender, RoutedEventArgs e)
     {
-        RefreshDiagnosticReport();
+
         var data = new DataPackage
         {
             RequestedOperation = DataPackageOperation.Copy,
         };
 
-        data.SetText(_diagnosticReport);
+        data.SetText(BuildDiagnosticReport(
+            _activeMonitors,
+            _lastDdcProbes.Count == 0 ? null : _lastDdcProbes,
+            _lastWmiProbes.Count == 0 ? null : _lastWmiProbes,
+            _lastBrightnessWriteResult,
+            _lastDiagnosticError));
         try
         {
             Clipboard.SetContent(data);
@@ -1185,12 +1184,7 @@ public sealed partial class MainWindow : Window, IDisposable
             CompactStatusText.Text = monitors.Count == 0
                 ? "No active displays were found."
                 : "Open the controls to read current brightness.";
-            _diagnosticReport = BuildDiagnosticReport(
-                monitors,
-                ddcProbes: null,
-                wmiProbes: null,
-                writeResult: null,
-                error: null);
+            _lastDiagnosticError = null;
         }
         catch (Win32Exception exception)
         {
@@ -1206,12 +1200,7 @@ public sealed partial class MainWindow : Window, IDisposable
             EmptyState.Visibility = Visibility.Visible;
             StatusText.Text = $"Display discovery failed: {exception.Message}";
             CompactStatusText.Text = "Display discovery failed. Open Advanced for details.";
-            _diagnosticReport = BuildDiagnosticReport(
-                [],
-                ddcProbes: null,
-                wmiProbes: null,
-                writeResult: null,
-                error: exception);
+            _lastDiagnosticError = exception;
         }
         finally
         {
@@ -1296,23 +1285,13 @@ public sealed partial class MainWindow : Window, IDisposable
             CompactStatusText.Text = readableCount == 0
                 ? "Brightness control is unavailable. Open Advanced for details."
                 : string.Empty;
-            _diagnosticReport = BuildDiagnosticReport(
-                _activeMonitors,
-                probes.Ddc.Brightness,
-                probes.Wmi,
-                writeResult: null,
-                error: null);
+            _lastDiagnosticError = null;
         }
         catch (Win32Exception exception)
         {
             StatusText.Text = $"Brightness probe failed: {exception.Message}";
             CompactStatusText.Text = "Brightness refresh failed. Open Advanced for details.";
-            _diagnosticReport = BuildDiagnosticReport(
-                _activeMonitors,
-                ddcProbes: null,
-                wmiProbes: null,
-                writeResult: null,
-                error: exception);
+            _lastDiagnosticError = exception;
         }
         finally
         {
@@ -1424,23 +1403,13 @@ public sealed partial class MainWindow : Window, IDisposable
                     display.FriendlyName,
                     writeResult.VerifiedPercent)
                 : "Brightness did not verify. Open Advanced for details.";
-            _diagnosticReport = BuildDiagnosticReport(
-                _activeMonitors,
-                _lastDdcProbes,
-                _lastWmiProbes,
-                writeResult,
-                error: null);
+            _lastDiagnosticError = null;
         }
         catch (Win32Exception exception)
         {
             StatusText.Text = $"Brightness verification refresh failed: {exception.Message}";
             CompactStatusText.Text = "Brightness verification failed. Open Advanced for details.";
-            _diagnosticReport = BuildDiagnosticReport(
-                _activeMonitors,
-                _lastDdcProbes,
-                _lastWmiProbes,
-                writeResult,
-                exception);
+            _lastDiagnosticError = exception;
         }
         finally
         {
@@ -1504,7 +1473,7 @@ public sealed partial class MainWindow : Window, IDisposable
                 ? $"{display.FriendlyName}: contrast verified at {result.VerifiedPercent}%."
                 : $"Contrast did not verify (error 0x{unchecked((uint)result.ErrorCode):X8}).";
             StatusText.Text = CompactStatusText.Text;
-            RefreshDiagnosticReport();
+
         }
         finally
         {
@@ -1542,7 +1511,7 @@ public sealed partial class MainWindow : Window, IDisposable
                 ? $"{display.FriendlyName}: color temperature verified as {presetName}."
                 : $"Color temperature did not verify (error 0x{unchecked((uint)result.ErrorCode):X8}).";
             StatusText.Text = CompactStatusText.Text;
-            RefreshDiagnosticReport();
+
         }
         finally
         {
@@ -1586,7 +1555,7 @@ public sealed partial class MainWindow : Window, IDisposable
                     $"Rotation failed ({result.Status}, native result {result.NativeResult}).",
             };
             StatusText.Text = CompactStatusText.Text;
-            RefreshDiagnosticReport();
+
         }
         finally
         {
@@ -1644,12 +1613,7 @@ public sealed partial class MainWindow : Window, IDisposable
                     ? $"Schedule applied and verified {mode.ToString().ToLowerInvariant()} theme."
                     : $"Applied and verified {mode.ToString().ToLowerInvariant()} theme."
                 : $"Windows did not verify the requested {mode.ToString().ToLowerInvariant()} theme.");
-            _diagnosticReport = BuildDiagnosticReport(
-                _activeMonitors,
-                _lastDdcProbes.Count == 0 ? null : _lastDdcProbes,
-                _lastWmiProbes.Count == 0 ? null : _lastWmiProbes,
-                _lastBrightnessWriteResult,
-                error: null);
+            _lastDiagnosticError = null;
         }
         catch (UnauthorizedAccessException exception)
         {
@@ -1715,7 +1679,7 @@ public sealed partial class MainWindow : Window, IDisposable
                         ? "The sun does not set today at this location; Light mode remains active and tomorrow is recalculated at midnight."
                         : "The sun does not rise today at this location; Dark mode remains active and tomorrow is recalculated at midnight.";
                     CompactScheduleStatusText.Text = ScheduleStatusText.Text;
-                    RefreshDiagnosticReport();
+
                     return;
                 }
 
@@ -1751,7 +1715,7 @@ public sealed partial class MainWindow : Window, IDisposable
                 remainingMinutes,
                 automationStatus);
             CompactScheduleStatusText.Text = ScheduleStatusText.Text;
-            RefreshDiagnosticReport();
+
         }
         catch (ArgumentException exception)
         {
@@ -1759,7 +1723,7 @@ public sealed partial class MainWindow : Window, IDisposable
             _customThemeSchedule = null;
             _lastScheduleEvaluation = null;
             ScheduleStatusText.Text = exception.Message;
-            RefreshDiagnosticReport();
+
         }
     }
 
@@ -2125,7 +2089,7 @@ public sealed partial class MainWindow : Window, IDisposable
     {
         _scheduleSettingsError = exception.GetType().Name;
         SchedulePersistenceStatusText.Text = "Schedule settings could not be saved.";
-        RefreshDiagnosticReport();
+
     }
 
     private void ThemeScheduleTimer_Elapsed(object? sender, EventArgs e)
@@ -2544,7 +2508,7 @@ public sealed partial class MainWindow : Window, IDisposable
             _manualScheduleOverrideUntil);
         UpdateThemeScheduleTimer();
         UpdateCompactScheduleStatus();
-        RefreshDiagnosticReport();
+
     }
 
     private void UpdateThemeScheduleTimer()
@@ -2572,16 +2536,6 @@ public sealed partial class MainWindow : Window, IDisposable
         }
 
         _themeScheduleTimer.Arm(now.Add(evaluation.TimeUntilNextTransition));
-    }
-
-    private void RefreshDiagnosticReport()
-    {
-        _diagnosticReport = BuildDiagnosticReport(
-            _activeMonitors,
-            _lastDdcProbes.Count == 0 ? null : _lastDdcProbes,
-            _lastWmiProbes.Count == 0 ? null : _lastWmiProbes,
-            _lastBrightnessWriteResult,
-            error: null);
     }
 
     private static string FormatTime(TimeOnly time) =>
