@@ -1,4 +1,4 @@
-# DisplayPilot — native C++ rebuild
+# DisplayPilot — Native Windows C++ Application 
 
 DisplayPilot is a native, single-process Windows notification-area monitor utility.
 
