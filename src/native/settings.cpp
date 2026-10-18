@@ -153,6 +153,15 @@ Settings loadRegistrySettings() {
     return s;
 }
 
+std::string storedRestoreKey(const JsonValue& values, const std::wstring& name) {
+    if (values.type != JsonValue::Type::Object) return {};
+    for (const auto& pair : values.object) {
+        if (_wcsicmp(json_settings::toWide(pair.first).c_str(), name.c_str()) == 0)
+            return pair.first;
+    }
+    return {};
+}
+
 bool validRestoreValues(const JsonValue& doc) {
     const auto* values = json_settings::field(doc, "brightnessRestoreValues");
     if (!values || values->type == JsonValue::Type::Null) return true;
@@ -274,7 +283,7 @@ bool restoreBrightness(const std::wstring& keyName, unsigned& percent) {
         if (!json_settings::supported(doc) || !validRestoreValues(doc)) return false;
         const auto* values = json_settings::field(doc, "brightnessRestoreValues");
         if (!values || values->type != JsonValue::Type::Object) return false;
-        const auto it = values->object.find(json_settings::toUtf8(keyName));
+        const auto it = values->object.find(storedRestoreKey(*values, keyName));
         if (it == values->object.end()) return false;
         int value = -1;
         if (!json_settings::asInteger(&it->second, value) || value < 0 || value > 100)
@@ -301,7 +310,8 @@ void saveBrightness(const std::wstring& keyName, unsigned percent) {
     auto& values = doc.object["brightnessRestoreValues"];
     if (values.type == JsonValue::Type::Null) values = json_settings::object();
     if (values.type != JsonValue::Type::Object) return;
-    values.object[json_settings::toUtf8(keyName)] =
+    const auto existing = storedRestoreKey(values, keyName);
+    values.object[existing.empty() ? json_settings::toUtf8(keyName) : existing] =
         json_settings::number(static_cast<int>(std::min(percent, 100U)));
     doc.object["brightnessReductionActive"] = json_settings::boolean(true);
     json_settings::write(doc);
@@ -318,7 +328,7 @@ void removeSavedBrightness(const std::wstring& keyName) {
         !json_settings::supported(doc) || !validRestoreValues(doc)) return;
     auto* values = &doc.object["brightnessRestoreValues"];
     if (values->type != JsonValue::Type::Object) return;
-    if (!values->object.erase(json_settings::toUtf8(keyName))) return;
+    if (!values->object.erase(storedRestoreKey(*values, keyName))) return;
     doc.object["brightnessReductionActive"] =
         json_settings::boolean(!values->object.empty());
     json_settings::write(doc);
