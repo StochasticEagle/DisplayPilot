@@ -11,10 +11,12 @@
     <ClCompile Include="src\native\flyout.cpp"><Filter>Source Files</Filter></ClCompile>
     <ClCompile Include="src\native\settings.cpp"><Filter>Source Files</Filter></ClCompile>
     <ClCompile Include="src\native\advanced.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="src\native\wmi_events.cpp"><Filter>Source Files</Filter></ClCompile>
     <ClInclude Include="src\native\display.hpp"><Filter>Header Files</Filter></ClInclude>
     <ClInclude Include="src\native\flyout.hpp"><Filter>Header Files</Filter></ClInclude>
     <ClInclude Include="src\native\settings.hpp"><Filter>Header Files</Filter></ClInclude>
     <ClInclude Include="src\native\advanced.hpp"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="src\native\wmi_events.hpp"><Filter>Header Files</Filter></ClInclude>
     <ResourceCompile Include="src\native\app.rc"><Filter>Resources</Filter></ResourceCompile>
     <None Include="src\native\app.manifest"><Filter>Resources</Filter></None>
     <None Include="assets\displaypilot-primary.ico"><Filter>Resources</Filter></None>

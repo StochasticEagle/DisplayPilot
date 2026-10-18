@@ -2,6 +2,7 @@
 #include "flyout.hpp"
 #include "advanced.hpp"
 #include "settings.hpp"
+#include "wmi_events.hpp"
 #include <windows.h>
 #include <shellapi.h>
 #include <algorithm>
@@ -17,6 +18,7 @@ constexpr UINT hoverTimer = 1;
 constexpr UINT leaveTimer = 2;
 constexpr UINT scheduleTimer = 3;
 constexpr UINT refreshTimer = 4;
+constexpr UINT brightnessEventTimer = 5;
 constexpr UINT commandOpen = 101;
 constexpr UINT commandAdvanced = 102;
 constexpr UINT commandExit = 103;
@@ -30,6 +32,7 @@ struct Application {
     HICON icon = nullptr;
     Flyout flyout;
     AdvancedWindow advanced;
+    BrightnessEvents brightnessKeys;
     Settings settings;
     std::vector<Monitor> monitors;
     UINT taskbarRestart = 0;
@@ -80,6 +83,17 @@ void hideFlyout() {
 
 void refreshMonitors() {
     app.monitors = enumerateMonitors();
+    const bool hasWmi = std::any_of(app.monitors.begin(), app.monitors.end(),
+        [](const Monitor& monitor) {
+            return monitor.provider == ControlProvider::Wmi;
+        });
+    if (hasWmi && !app.brightnessKeys.active()) {
+        if (app.brightnessKeys.start())
+            SetTimer(app.owner, brightnessEventTimer, 350, nullptr);
+    } else if (!hasWmi && app.brightnessKeys.active()) {
+        KillTimer(app.owner, brightnessEventTimer);
+        app.brightnessKeys.stop();
+    }
     app.flyout.repaint();
     app.advanced.refresh();
 }
@@ -312,6 +326,28 @@ LRESULT CALLBACK ownerProcedure(HWND hwnd, UINT msg, WPARAM w, LPARAM l) {
                 hideFlyout();
         } else if (w == scheduleTimer) {
             applySchedule(false);
+        } else if (w == brightnessEventTimer) {
+            std::vector<BrightnessKeyEvent> updates;
+            if (!app.brightnessKeys.poll(updates)) {
+                KillTimer(hwnd, brightnessEventTimer);
+            } else {
+                bool changed = false;
+                for (const auto& update : updates) {
+                    for (auto& monitor : app.monitors) {
+                        if (monitor.provider == ControlProvider::Wmi &&
+                            _wcsicmp(monitor.wmiInstance.c_str(),
+                                     update.instance.c_str()) == 0 &&
+                            monitor.brightness != update.percent) {
+                            monitor.brightness = update.percent;
+                            changed = true;
+                        }
+                    }
+                }
+                if (changed) {
+                    app.flyout.repaint();
+                    app.advanced.refresh();
+                }
+            }
         } else if (w == refreshTimer) {
             KillTimer(hwnd, refreshTimer);
             refreshMonitors();
@@ -342,6 +378,8 @@ LRESULT CALLBACK ownerProcedure(HWND hwnd, UINT msg, WPARAM w, LPARAM l) {
         Shell_NotifyIconW(NIM_DELETE, &data);
         KillTimer(hwnd, scheduleTimer);
         KillTimer(hwnd, refreshTimer);
+        KillTimer(hwnd, brightnessEventTimer);
+        app.brightnessKeys.stop();
         hideFlyout();
         restoreMonitorBrightness();
         if (app.advanced.handle()) DestroyWindow(app.advanced.handle());

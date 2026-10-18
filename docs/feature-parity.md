@@ -12,7 +12,7 @@ This is the working checklist for replacing the former managed application, not 
 | Color-temperature presets (MCCS VCP 0x14) | Capability-gated implemented | More extensive capability parsing, unsupported monitor testing |
 | Internal-screen brightness via WMI COM | Implemented | Accurate mapping and test against laptop panel models |
 | Multi-monitor discovery and rotation | Implemented | Hotplug, mirrored topology, rotation test/read-back |
-| Brightness keys and WMI change notifications | Not implemented | Subscribe to brightness events, prevent feedback loops |
+| Brightness keys and WMI change notifications | Nonblocking WMI event stream implemented | Validate laptop hardware key events and prevent feedback loops |
 | Windows 10/11 theme switch | Implemented | Verify setting changes and external synchronization |
 | Windows 7 theme-control hiding | Implemented | Validate Win7 32-bit and 64-bit |
 | Fixed-time scheduling | Implemented | DST/time-zone transition testing |

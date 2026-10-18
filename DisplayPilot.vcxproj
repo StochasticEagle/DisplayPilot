@@ -215,12 +215,14 @@
     <ClCompile Include="src\native\flyout.cpp" />
     <ClCompile Include="src\native\settings.cpp" />
     <ClCompile Include="src\native\advanced.cpp" />
+    <ClCompile Include="src\native\wmi_events.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\native\display.hpp" />
     <ClInclude Include="src\native\flyout.hpp" />
     <ClInclude Include="src\native\settings.hpp" />
     <ClInclude Include="src\native\advanced.hpp" />
+    <ClInclude Include="src\native\wmi_events.hpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="src\native\app.rc" />

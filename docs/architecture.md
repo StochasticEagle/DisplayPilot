@@ -12,7 +12,7 @@ Flyout controls change device values only through the shared monitor backend and
 
 `display.cpp` uses EnumDisplayMonitors, physical monitor handles, and DXVA2 DDC/CI. It determines brightness, contrast, and color-control availability from the connected hardware. Color preset choices are constrained to those reported in the monitor's VCP capabilities string. Monitor handles are destroyed after each operation. Rotation uses EnumDisplaySettingsEx and ChangeDisplaySettingsEx with CDS_TEST before updates, with immediate mode read-back.
 
-Laptop/internal brightness uses Windows-provided WMI COM interfaces in ROOT\\WMI; no System.Management dependency or third-party library. WMI monitor instance mapping is only attached to a display where its hardware identity can be matched; otherwise it appears as a separate WMI endpoint rather than silently controlling another panel.
+Laptop/internal brightness uses Windows-provided WMI COM interfaces in ROOT\\WMI; no System.Management dependency or third-party library. WmiMonitorBrightnessEvent notifications are drained nonblockingly by the existing UI message loop, without spawning a worker thread or helper process. WMI monitor instance mapping is only attached to a display where its hardware identity can be matched; otherwise it appears as a separate WMI endpoint rather than silently controlling another panel.
 
 ## Scheduling and settings
 
