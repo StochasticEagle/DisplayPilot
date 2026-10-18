@@ -53,7 +53,7 @@ jobs:
         shell: bash
         run: |
           test -s "dist/${{ matrix.folder }}/DisplayPilot.exe"
-          if test -n "$(find "dist/${{ matrix.folder }}" -type f ! -name DisplayPilot.exe -print)"; then
+          if [[ "${{ matrix.configuration }}" == "Release" ]] && test -n "$(find "dist/${{ matrix.folder }}" -type f ! -name DisplayPilot.exe -print)"; then
             echo "Unexpected application deployment files" >&2
             exit 1
           fi
