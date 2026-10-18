@@ -48,7 +48,7 @@ jobs:
             choco install innosetup --yes --no-progress
           fi
           test -f "$compiler"
-          "$compiler" "/DAppArch=${{ matrix.folder }}" installer/DisplayPilot.iss
+          "$compiler" installer/DisplayPilot.iss "/dAppArch=${{ matrix.folder }}"
           test -s "installers/${{ matrix.folder }}/DisplayPilot-Setup.exe"
       - uses: actions/upload-artifact@v4
         with:
