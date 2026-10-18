@@ -29,6 +29,9 @@ jobs:
   build:
     name: Windows x64
     runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
 
     steps:
       - name: Check out source
@@ -64,133 +67,100 @@ jobs:
           --no-restore
           --output artifacts/DisplayPilot-win-x64
 
-      - name: Finalize published WinUI resources
-        shell: pwsh
+      - name: Verify compiled XAML resource indexes
         run: |
-          $publishDirectory = (Resolve-Path "artifacts\DisplayPilot-win-x64").Path
-          $resourceIndex = Join-Path $publishDirectory "resources.pri"
-          if (-not (Test-Path $resourceIndex -PathType Leaf)) {
-            $projectResourceIndex = Get-ChildItem `
-              "src\DisplayPilot.App\bin\Release" `
-              -Recurse `
-              -File `
-              -Include "DisplayPilot.pri", "DisplayPilot.App.pri" |
-                Where-Object { -not $_.FullName.StartsWith($publishDirectory) } |
-                Sort-Object LastWriteTimeUtc -Descending |
-                Select-Object -First 1
+          for mode in Debug Release; do
+            if [[ "$mode" == Debug ]]; then
+              output="artifacts/DisplayPilot-debug-win-x64"
+            else
+              output="artifacts/DisplayPilot-win-x64"
+            fi
+            if [[ ! -f "$output/resources.pri" ]]; then
+              source=$(find "src/DisplayPilot.App/bin/$mode" -type f \
+                \( -name 'resources.pri' -o -name 'DisplayPilot.pri' -o -name 'DisplayPilot.App.pri' \) \
+                -print -quit)
+              if [[ -z "$source" ]]; then
+                echo "WinUI compiled resource index missing for $mode" >&2
+                exit 1
+              fi
+              cp "$source" "$output/resources.pri"
+            fi
+            test -s "$output/resources.pri"
+          done
 
-            if ($null -eq $projectResourceIndex) {
-              Get-ChildItem "src\DisplayPilot.App" -Recurse -File -Filter "*.pri" |
-                Select-Object -ExpandProperty FullName
-              throw "The WinUI build did not generate a DisplayPilot resource index."
-            }
-
-            Copy-Item $projectResourceIndex.FullName $resourceIndex
-          }
-
-          if (-not (Test-Path $resourceIndex -PathType Leaf)) {
-            throw "The published app is missing resources.pri and will fail during WinUI initialization."
-          }
-
-      - name: Verify managed-language Native AOT application
-        shell: pwsh
+      - name: Verify Debug and Release application outputs
         run: |
-          foreach ($directory in @('artifacts/DisplayPilot-debug-win-x64','artifacts/DisplayPilot-win-x64')) {
-            $exe = Join-Path $directory 'DisplayPilot.exe'
-            if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) { throw "Missing $exe" }
-            $size = (Get-Item -LiteralPath $exe).Length
-            if ($size -ge 38797312) { throw "DisplayPilot executable must be under 37 MB; actual $size bytes" }
-            & $exe --verify-native-build
-            if ($LASTEXITCODE -ne 0) { throw "Native AOT executable startup failed: $exe" }
-            $forbidden = @(Get-ChildItem $directory -Recurse -File | Where-Object {
-              $_.Name -in @('DisplayPilot.runtimeconfig.json','DisplayPilot.deps.json','App.xbf','MainWindow.xbf',
-                'coreclr.dll','hostfxr.dll')
-            })
-            if ($forbidden.Count) { $forbidden.FullName; throw "Forbidden output files in $directory" }
-          }
+          for output in artifacts/DisplayPilot-debug-win-x64 artifacts/DisplayPilot-win-x64; do
+            exe="$output/DisplayPilot.exe"
+            test -f "$exe"
+            bytes=$(wc -c < "$exe")
+            if (( bytes >= 38797312 )); then
+              echo "DisplayPilot.exe exceeds the 37 MB limit: $bytes bytes" >&2
+              exit 1
+            fi
+            "./$exe" --verify-native-build
+            forbidden=$(find "$output" -type f \( \
+              -name 'DisplayPilot.runtimeconfig.json' -o \
+              -name 'DisplayPilot.deps.json' -o \
+              -name 'App.xbf' -o -name 'MainWindow.xbf' -o \
+              -name 'coreclr.dll' -o -name 'hostfxr.dll' -o \
+              -name 'Microsoft.ui.xaml.dll' \) -print)
+            if [[ -n "$forbidden" ]]; then
+              echo "Forbidden output files: $forbidden" >&2
+              exit 1
+            fi
+          done
+          release=artifacts/DisplayPilot-win-x64
+          unwanted=$(find "$release" -type f \( \
+            -iname '*.pdb' -o -name 'DirectML.dll' -o \
+            -name 'Microsoft.ML.OnnxRuntime.dll' -o \
+            -name 'Microsoft.Windows.AI.MachineLearning.dll' -o \
+            -name 'onnxruntime.dll' -o -name 'WebView2Loader.dll' -o \
+            -name 'Microsoft.Windows.AI.*' -o \
+            -name 'Microsoft.Windows.Widgets.*' -o \
+            -name 'Microsoft.Web.WebView2.*' \) -print)
+          if [[ -n "$unwanted" ]]; then
+            echo "Unexpected release payload: $unwanted" >&2
+            exit 1
+          fi
+          if [[ -d "$release/Assets" ]]; then
+            echo "Unexpected loose Assets directory in release" >&2
+            exit 1
+          fi
 
-      - name: Verify externally installed Windows App SDK runtime
-        shell: pwsh
+      - name: Download and validate runtime installers
         run: |
-          $bundledRuntimes = @(
-            Get-ChildItem "artifacts\DisplayPilot-win-x64" -Recurse -File |
-              Where-Object {
-                $_.Name -in @(
-                  "coreclr.dll",
-                  "hostfxr.dll",
-                  "Microsoft.ui.xaml.dll"
-                )
-              }
-          )
-          if ($bundledRuntimes.Count -ne 0) {
-            $bundledRuntimes.FullName
-            throw "The published app unexpectedly contains bundled runtimes."
-          }
-
-          $unexpectedReleaseFiles = @(
-            Get-ChildItem "artifacts\DisplayPilot-win-x64" -Recurse -File |
-              Where-Object {
-                $_.Extension -eq ".pdb" -or
-                $_.Name -in @(
-                  "DirectML.dll",
-                  "Microsoft.ML.OnnxRuntime.dll",
-                  "Microsoft.Windows.AI.MachineLearning.dll",
-                  "onnxruntime.dll",
-                  "WebView2Loader.dll"
-                ) -or
-                $_.Name -like "Microsoft.Windows.AI.*" -or
-                $_.Name -like "Microsoft.Windows.Widgets.*" -or
-                $_.Name -like "Microsoft.Web.WebView2.*"
-              }
-          )
-          if ($unexpectedReleaseFiles.Count -ne 0) {
-            $unexpectedReleaseFiles.FullName
-            throw "The release contains debug symbols or unused Windows App SDK feature payloads."
-          }
-
-          if (Test-Path "artifacts\DisplayPilot-win-x64\Assets") {
-            throw "The release unexpectedly contains a separate Assets directory."
-          }
-
-      - name: Download system runtime installers
-        shell: pwsh
-        run: |
-          $prerequisites = "artifacts\prerequisites"
-          New-Item -ItemType Directory $prerequisites -Force | Out-Null
-
-          $downloads = @{
-            "WindowsAppRuntimeInstall-x64.exe" =
-              "https://aka.ms/windowsappsdk/2.3/latest/windowsappruntimeinstall-x64.exe"
-            "vc_redist.x64.exe" =
-              "https://aka.ms/vs/17/release/vc_redist.x64.exe"
-          }
-
-          foreach ($download in $downloads.GetEnumerator()) {
-            $destination = Join-Path $prerequisites $download.Key
-            Invoke-WebRequest $download.Value -OutFile $destination
-
-            $signature = Get-AuthenticodeSignature $destination
-            if ($signature.Status -ne "Valid") {
-              throw "$($download.Key) does not have a valid Authenticode signature."
-            }
-          }
+          mkdir -p artifacts/prerequisites
+          curl.exe -fsSL --retry 3 \
+            -o artifacts/prerequisites/WindowsAppRuntimeInstall-x64.exe \
+            https://aka.ms/windowsappsdk/2.3/latest/windowsappruntimeinstall-x64.exe
+          curl.exe -fsSL --retry 3 \
+            -o artifacts/prerequisites/vc_redist.x64.exe \
+            https://aka.ms/vs/17/release/vc_redist.x64.exe
+          kitdir='/c/Program Files (x86)/Windows Kits/10/bin'
+          signtool=$(find "$kitdir" -type f -path '*/x64/signtool.exe' \
+            | sort -V | tail -n 1)
+          if [[ -z "$signtool" ]]; then
+            echo 'Windows SDK signtool.exe is required for signature verification' >&2
+            exit 1
+          fi
+          for binary in artifacts/prerequisites/*.exe; do
+            "$signtool" verify /pa "$binary"
+          done
 
       - name: Install Inno Setup
-        shell: pwsh
         run: |
-          $compiler = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
-          if (-not (Test-Path $compiler)) {
+          compiler='/c/Program Files (x86)/Inno Setup 6/ISCC.exe'
+          if [[ ! -f "$compiler" ]]; then
             choco install innosetup --no-progress --yes
-          }
+          fi
+          test -f "$compiler"
 
       - name: Build installer
-        shell: pwsh
         run: |
-          $compiler = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
-          & $compiler "installer\DisplayPilot.iss"
-          if ($LASTEXITCODE -ne 0) {
-            exit $LASTEXITCODE
-          }
+          compiler='/c/Program Files (x86)/Inno Setup 6/ISCC.exe'
+          "$compiler" installer/DisplayPilot.iss
+          test -f artifacts/installer/DisplayPilot-Setup-win-x64.exe
 
       - name: Upload verification app
         uses: actions/upload-artifact@v7

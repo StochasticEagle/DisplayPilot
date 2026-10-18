@@ -37,14 +37,20 @@
     <ProjectReference Include="..\DisplayPilot.Windows\DisplayPilot.Windows.csproj" />
   </ItemGroup>
 
-  <!-- Verify the WinUI compiled markup is inside the resource index before
-       removing loose files. This runs in both Debug and Release. -->
-  <Target Name="ConsolidateWinUIResources" AfterTargets="Build"
-          Condition="'$(DesignTimeBuild)' != 'true' and '$(IsCrossTargetingBuild)' != 'true'">
-    <Exec Command='powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\..\..\scripts\consolidate-winui-xbf.ps1&quot; -Directory &quot;$(TargetDir)&quot;' />
+  <!-- XAML is compiled into the WinUI resource index; remove only loose
+       copies after packaging. These tasks use MSBuild, not a shell. -->
+  <Target Name="RemoveLooseCompiledXamlFromBuild" AfterTargets="Build"
+          Condition="'$(DesignTimeBuild)' != 'true'">
+    <ItemGroup>
+      <LooseCompiledXaml Include="$(TargetDir)**\App.xbf;$(TargetDir)**\MainWindow.xbf" />
+    </ItemGroup>
+    <Delete Files="@(LooseCompiledXaml)" />
   </Target>
-  <Target Name="ConsolidatePublishedWinUIResources" AfterTargets="Publish">
-    <Exec Command='powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\..\..\scripts\consolidate-winui-xbf.ps1&quot; -Directory &quot;$(PublishDir)&quot; -BuildDirectory &quot;$(TargetDir)&quot;' />
+  <Target Name="RemoveLooseCompiledXamlFromPublish" AfterTargets="Publish">
+    <ItemGroup>
+      <PublishedCompiledXaml Include="$(PublishDir)**\App.xbf;$(PublishDir)**\MainWindow.xbf" />
+    </ItemGroup>
+    <Delete Files="@(PublishedCompiledXaml)" />
   </Target>
 
   <Target Name="RemoveUnusedWebViewRuntime" AfterTargets="Publish">
