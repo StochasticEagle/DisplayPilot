@@ -48,6 +48,16 @@
     <WholeProgramOptimization>true</WholeProgramOptimization>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ItemGroup Condition="'$(DisplayPilotPlatform)'=='Win64' and '$(DesignTimeBuild)'!='true'">
+    <ProjectConfiguration Include="Debug|$(Platform)">
+      <Configuration>Debug</Configuration>
+      <Platform>$(Platform)</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|$(Platform)">
+      <Configuration>Release</Configuration>
+      <Platform>$(Platform)</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
   <ImportGroup Label="ExtensionSettings" />
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(DisplayPilotPlatform)'=='Debug|Win32'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props"
