@@ -167,4 +167,95 @@ internal static partial class DisplayNative
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static unsafe partial bool CapabilitiesRequestAndCapabilitiesReply(
         nint handle, byte* buffer, uint length);
+
+    internal const int InvalidDataError = 13;
+    internal const uint PhysicalMonitorLimit = 64;
+    internal const int HandleAttempts = 3;
+    internal const int HandleRetryMilliseconds = 200;
+    internal const int ReadAttempts = 3;
+    internal const int ReadRetryMilliseconds = 75;
+
+    internal static List<LogicalDisplayMonitor> EnumerateLogicalMonitors()
+    {
+        var monitors = new List<LogicalDisplayMonitor>();
+        MonitorCallback callback = (monitor, _, _, _) =>
+        {
+            unsafe
+            {
+                var info = new DisplayMonitorInfo { Size = (uint)sizeof(DisplayMonitorInfo) };
+                if (GetMonitorInfo(monitor, &info))
+                    monitors.Add(new LogicalDisplayMonitor(monitor, info.GetDeviceName()));
+            }
+            return true;
+        };
+
+        if (!EnumDisplayMonitors(0, 0, callback, 0))
+            throw new System.ComponentModel.Win32Exception(Marshal.GetLastPInvokeError());
+
+        return monitors;
+    }
+
+    internal static LogicalDisplayMonitor? FindLogicalMonitor(string name) =>
+        EnumerateLogicalMonitors().FirstOrDefault(monitor =>
+            string.Equals(monitor.DeviceName, name, StringComparison.OrdinalIgnoreCase));
+
+    internal static unsafe DdcMonitorHandle[]? AcquirePhysicalMonitors(
+        nint monitor, out uint count, out int error)
+    {
+        error = 0;
+        count = 0;
+        if (!GetNumberOfPhysicalMonitorsFromHMONITOR(monitor, out count))
+        {
+            error = Marshal.GetLastPInvokeError();
+            return null;
+        }
+        if (count is 0 or > PhysicalMonitorLimit)
+        {
+            if (count != 0) error = InvalidDataError;
+            return null;
+        }
+
+        var handles = new DdcMonitorHandle[count];
+        fixed (DdcMonitorHandle* pointer = handles)
+        {
+            if (!GetPhysicalMonitorsFromHMONITOR(monitor, count, pointer))
+            {
+                error = Marshal.GetLastPInvokeError();
+                // A driver may have returned partial handles before failing.
+                ReleasePhysicalMonitors(handles);
+                return null;
+            }
+        }
+        return handles;
+    }
+
+    internal static void ReleasePhysicalMonitors(IEnumerable<DdcMonitorHandle> monitors)
+    {
+        foreach (var monitor in monitors)
+            if (monitor.Handle != 0) _ = DestroyPhysicalMonitor(monitor.Handle);
+    }
+
+    internal static bool TryReadVcp(
+        nint handle, byte code, out uint current, out uint maximum, out int error) =>
+        TryReadVcp(handle, code, out current, out maximum, out error, out _);
+
+    internal static bool TryReadVcp(
+        nint handle, byte code, out uint current, out uint maximum,
+        out int error, out int attempts)
+    {
+        error = 0;
+        for (attempts = 1; attempts <= ReadAttempts; attempts++)
+        {
+            if (GetVCPFeatureAndVCPFeatureReply(handle, code, 0, out current, out maximum))
+                return true;
+
+            error = Marshal.GetLastPInvokeError();
+            if (attempts < ReadAttempts) Thread.Sleep(ReadRetryMilliseconds);
+        }
+        attempts = ReadAttempts;
+        current = maximum = 0;
+        return false;
+    }
 }
+
+internal sealed record LogicalDisplayMonitor(nint Handle, string DeviceName);
