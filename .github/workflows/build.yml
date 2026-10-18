@@ -40,6 +40,25 @@ jobs:
             exit 1
           fi
           echo "DisplayPilot.exe: $(wc -c < "dist/${{ matrix.folder }}/DisplayPilot.exe") bytes"
+      - name: Smoke test application startup
+        shell: pwsh
+        run: |
+          $exe = (Resolve-Path "dist/${{ matrix.folder }}/DisplayPilot.exe").Path
+          $process = Start-Process -FilePath $exe -PassThru
+          try {
+            Start-Sleep -Seconds 12
+            $process.Refresh()
+            if ($process.HasExited) {
+              throw ("DisplayPilot exited during startup (code: 0x{0:X8})" -f ($process.ExitCode -band 0xffffffff))
+            }
+            Write-Host "DisplayPilot remained running after startup"
+          }
+          finally {
+            $process.Refresh()
+            if (-not $process.HasExited) {
+              Stop-Process -Id $process.Id -Force
+            }
+          }
       - name: Build native Inno Setup installer
         shell: bash
         run: |
