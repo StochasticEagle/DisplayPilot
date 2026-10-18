@@ -28,7 +28,7 @@
   </PropertyGroup>
   <PropertyGroup>
     <DisplayPilotPlatform>$(Platform)</DisplayPilotPlatform>
-    <Platform Condition="'$(DisplayPilotPlatform)'=='Win64'">$([System.String]::Concat('x','64'))</Platform>
+    <Platform Condition="'$(DisplayPilotPlatform)'=='Win64'">Win64</Platform>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(DisplayPilotPlatform)'=='Debug|Win32'" Label="Configuration">
