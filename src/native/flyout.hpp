@@ -46,7 +46,7 @@ private:
     HWND title_ = nullptr;
     HWND empty_ = nullptr;
     HWND themeLight_ = nullptr;
-    HWND themeDark_ = nullptr;
+    HWND themeDarkButton_ = nullptr;
     HWND schedule_ = nullptr;
     HWND advanced_ = nullptr;
     int scroll_ = 0;

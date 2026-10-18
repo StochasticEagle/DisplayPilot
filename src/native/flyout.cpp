@@ -139,7 +139,7 @@ void Flyout::rebuild() {
     if (themeSupported_) {
         themeLight_ = add(L"BUTTON", L"Light", BS_AUTORADIOBUTTON | WS_GROUP | WS_TABSTOP,
                           lightId);
-        themeDark_ = add(L"BUTTON", L"Dark", BS_AUTORADIOBUTTON | WS_TABSTOP,
+        themeDarkButton_ = add(L"BUTTON", L"Dark", BS_AUTORADIOBUTTON | WS_TABSTOP,
                          darkId);
     }
     schedule_ = add(L"BUTTON", L"Automatic schedule",
@@ -190,7 +190,7 @@ void Flyout::layout() {
     }
     if (themeSupported_) {
         place(themeLight_, margin, y, available / 2, px(28));
-        place(themeDark_, margin + available / 2, y, available / 2, px(28));
+        place(themeDarkButton_, margin + available / 2, y, available / 2, px(28));
         y += px(36);
     }
     place(schedule_, margin, y, available, px(29));
@@ -212,7 +212,7 @@ void Flyout::scrollBy(int delta) {
     if (!window_) return;
     RECT client{};
     GetClientRect(window_, &client);
-    const int maxScroll = std::max(0, contentHeight_ - (client.bottom - client.top));
+    const int maxScroll = std::max(0, contentHeight_ - static_cast<int>(client.bottom - client.top));
     const int next = std::clamp(scroll_ + delta, 0, maxScroll);
     if (next == scroll_) return;
     scroll_ = next;
@@ -246,7 +246,7 @@ void Flyout::synchronize() {
     }
     if (themeLight_) SendMessageW(themeLight_, BM_SETCHECK,
                                   themeDark_ ? BST_UNCHECKED : BST_CHECKED, 0);
-    if (themeDark_) SendMessageW(themeDark_, BM_SETCHECK,
+    if (themeDarkButton_) SendMessageW(themeDarkButton_, BM_SETCHECK,
                                  themeDark_ ? BST_CHECKED : BST_UNCHECKED, 0);
     if (schedule_) SendMessageW(schedule_, BM_SETCHECK,
                                 scheduleEnabled_ ? BST_CHECKED : BST_UNCHECKED, 0);
@@ -278,8 +278,8 @@ void Flyout::show(const RECT& anchor, std::vector<Monitor>* monitors) {
     if (!GetMonitorInfoW(MonitorFromPoint(center, MONITOR_DEFAULTTONEAREST), &info))
         return;
     const RECT work = info.rcWork;
-    const int actualWidth = std::min(width, work.right - work.left);
-    const int actualHeight = std::min(desiredHeight, work.bottom - work.top);
+    const int actualWidth = std::min(width, static_cast<int>(work.right - work.left));
+    const int actualHeight = std::min(desiredHeight, static_cast<int>(work.bottom - work.top));
     const int x = std::clamp(anchor.left, work.left, work.right - actualWidth);
     const int y = anchor.top > work.top + (work.bottom - work.top) / 2
         ? std::max(work.top, anchor.top - actualHeight)
