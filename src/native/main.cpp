@@ -320,7 +320,9 @@ LRESULT CALLBACK ownerProcedure(HWND hwnd, UINT msg, WPARAM w, LPARAM l) {
             GetCursorPos(&pointer);
             RECT bounds{};
             if (app.flyout.handle()) GetWindowRect(app.flyout.handle(), &bounds);
-            if (contains(bounds, pointer) || contains(iconRectangle(), pointer))
+            if (GetForegroundWindow() == app.flyout.handle() ||
+                GetCapture() == app.flyout.handle() ||
+                contains(bounds, pointer) || contains(iconRectangle(), pointer))
                 app.lastNearIcon = GetTickCount();
             else if (GetTickCount() - app.lastNearIcon > 480)
                 hideFlyout();
@@ -441,6 +443,10 @@ int run(HINSTANCE instance) {
 
     MSG message{};
     while (GetMessageW(&message, nullptr, 0, 0) > 0) {
+        if (app.flyout.visible() &&
+            IsDialogMessageW(app.flyout.handle(), &message)) continue;
+        if (app.advanced.visible() &&
+            IsDialogMessageW(app.advanced.handle(), &message)) continue;
         TranslateMessage(&message);
         DispatchMessageW(&message);
     }

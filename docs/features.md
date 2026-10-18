@@ -2,7 +2,7 @@
 
 | Feature | Implementation | Validation |
 | --- | --- | --- |
-| Tray icon and flyout | Native Win32 and Direct2D | DPI, taskbar positions, focus |
+| Tray icon and flyout | Native Win32 controls and system styling | DPI, taskbar positions, focus |
 | Context menu | Native Windows popup menu | Mouse and keyboard |
 | Advanced window | Resizable top-level window | Layout, controls, scrolling |
 | Brightness and contrast | External DDC/CI monitors | Hardware read-back |
