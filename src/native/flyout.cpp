@@ -169,7 +169,7 @@ void Flyout::paint() {
                         float w, float h, IDWriteTextFormat* format,
                         unsigned color) {
         brush_->SetColor(D2D1::ColorF(color));
-        target_->DrawTextW(value.c_str(), static_cast<UINT32>(value.size()),
+        target_->DrawText(value.c_str(), static_cast<UINT32>(value.size()),
             format, D2D1::RectF(x, y, x + w, y + h), brush_);
     };
     label(L"DisplayPilot", 22, 13, 300, 32, heading_, 0xFFFFFF);
