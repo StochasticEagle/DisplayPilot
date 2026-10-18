@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Unlicense
 using DisplayPilot.Display.Ddc;
 using DisplayPilot.Display.Discovery;
 using Microsoft.VisualStudio.TestTools.UnitTesting;

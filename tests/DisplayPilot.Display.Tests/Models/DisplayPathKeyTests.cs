@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Unlicense
 // DisplayPilot monitor matching regression tests
 using DisplayPilot.Display.Models;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
