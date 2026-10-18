@@ -1,7 +1,7 @@
 # DisplayPilot
 
 [![Build](https://github.com/StochasticEagle/DisplayPilot/actions/workflows/build.yml/badge.svg?branch=master)](https://github.com/StochasticEagle/DisplayPilot/actions/workflows/build.yml)
-[![License: The Unlicense + MIT](https://img.shields.io/badge/License-Unlicense%20%2B%20MIT-blue.svg)](LICENSE)
+[![License: Unlicense](https://img.shields.io/badge/License-Unlicense-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078D4.svg)](#system-requirements)
 [![Release](https://img.shields.io/badge/release-0.9.1%20beta-orange.svg)](https://github.com/StochasticEagle/DisplayPilot/releases)
 
@@ -180,8 +180,7 @@ constraints.
 
 ## License
 
-DisplayPilot is distributed under [The Unlicense and MIT License](LICENSE),
-as specified in the repository's license text and applicable source headers.
+DisplayPilot is released under the [project's public-domain dedication (Unlicense)](LICENSE).
 
 Generative AI assisted development and testing. Independently original
 AI-assisted contributions controlled by the maintainer are dedicated to

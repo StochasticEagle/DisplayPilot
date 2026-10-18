@@ -52,7 +52,7 @@ results from the documents under `docs/`.
 - Verify writes by reading values back when the interface permits it.
 - Keep UI operations responsive and serialize hardware writes where required.
 - Preserve per-user privacy and avoid telemetry or third-party solar services.
-- Use independently authored code and retain any applicable source license notices.
+- Keep source contributions consistent with the repository LICENSE.
 - Do not add ARM64-specific claims without corresponding hardware validation.
 
 ## Hardware reports
