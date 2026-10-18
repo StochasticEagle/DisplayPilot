@@ -14,10 +14,6 @@ namespace DisplayPilot.Display.Interop;
 /// </summary>
 public sealed class WindowsDdcBrightnessWriter : IBrightnessWriter
 {
-    private const int MaximumHandleAttempts = 3;
-    private const int MaximumReadAttempts = 3;
-    private const int HandleRetryDelayMilliseconds = 200;
-    private const int ReadRetryDelayMilliseconds = 75;
     private const int ErrorInvalidData = 13;
 
     public BrightnessWriteResult WriteBrightness(MonitorDisplayInfo display, int requestedPercent)
@@ -27,7 +23,7 @@ public sealed class WindowsDdcBrightnessWriter : IBrightnessWriter
 
         try
         {
-            var logicalMonitor = FindLogicalMonitor(display.GdiDeviceName);
+            var logicalMonitor = DisplayNative.FindLogicalMonitor(display.GdiDeviceName);
             return logicalMonitor is null
                 ? Failed(requestedPercent, ErrorInvalidData, "The active logical monitor was not found.")
                 : WriteLogicalMonitor(logicalMonitor, requestedPercent);
@@ -42,111 +38,42 @@ public sealed class WindowsDdcBrightnessWriter : IBrightnessWriter
         }
     }
 
-    private static LogicalMonitor? FindLogicalMonitor(string gdiDeviceName)
+    private static BrightnessWriteResult WriteLogicalMonitor(
+        LogicalDisplayMonitor logicalMonitor, int requestedPercent)
     {
-        LogicalMonitor? match = null;
-        DisplayNative.MonitorCallback callback = (monitor, _, _, _) =>
+        var lastError = DisplayNative.InvalidDataError;
+        for (int attempt = 1; attempt <= DisplayNative.HandleAttempts; attempt++)
         {
-            unsafe
-            {
-                var info = new DisplayMonitorInfo { Size = (uint)sizeof(DisplayMonitorInfo) };
-                if (DisplayNative.GetMonitorInfo(monitor, &info)
-                    && string.Equals(info.GetDeviceName(), gdiDeviceName, StringComparison.OrdinalIgnoreCase))
-                {
-                    match = new LogicalMonitor(monitor);
-                    return false;
-                }
-            }
-
-            return true;
-        };
-
-        var enumerationSucceeded = DisplayNative.EnumDisplayMonitors(0, 0, callback, 0);
-        if (!enumerationSucceeded && match is null)
-        {
-            throw new Win32Exception(Marshal.GetLastPInvokeError());
-        }
-
-        return match;
-    }
-
-    private static unsafe BrightnessWriteResult WriteLogicalMonitor(
-        LogicalMonitor logicalMonitor,
-        int requestedPercent)
-    {
-        var lastError = ErrorInvalidData;
-        for (var attempt = 1; attempt <= MaximumHandleAttempts; attempt++)
-        {
-            if (attempt > 1)
-            {
-                Thread.Sleep(HandleRetryDelayMilliseconds);
-            }
-
-            if (!DisplayNative.GetNumberOfPhysicalMonitorsFromHMONITOR(logicalMonitor.Handle, out var count))
-            {
-                lastError = Marshal.GetLastPInvokeError();
-                continue;
-            }
-
-            if (count is 0 or > 64)
-            {
-                lastError = ErrorInvalidData;
-                continue;
-            }
-
-            var physicalMonitors = new DdcMonitorHandle[count];
-            var acquired = false;
-            fixed (DdcMonitorHandle* pointer = physicalMonitors)
-            {
-                acquired = DisplayNative.GetPhysicalMonitorsFromHMONITOR(logicalMonitor.Handle, count, pointer);
-                if (!acquired)
-                {
-                    lastError = Marshal.GetLastPInvokeError();
-                }
-            }
-
-            if (!acquired)
-            {
-                continue;
-            }
+            if (attempt > 1) Thread.Sleep(DisplayNative.HandleRetryMilliseconds);
+            var physicalMonitors = DisplayNative.AcquirePhysicalMonitors(
+                logicalMonitor.Handle, out _, out lastError);
+            if (physicalMonitors is null) continue;
 
             try
             {
                 if (physicalMonitors.Any(monitor => monitor.Handle == 0))
                 {
-                    lastError = ErrorInvalidData;
+                    lastError = DisplayNative.InvalidDataError;
                     continue;
                 }
 
                 var verifiedPercent = -1;
-                foreach (var physicalMonitor in physicalMonitors)
+                foreach (var monitor in physicalMonitors)
                 {
-                    var result = WritePhysicalMonitor(physicalMonitor, requestedPercent);
-                    if (!result.Succeeded)
-                    {
-                        return result;
-                    }
-
+                    var result = WritePhysicalMonitor(monitor, requestedPercent);
+                    if (!result.Succeeded) return result;
                     verifiedPercent = result.VerifiedPercent;
                 }
 
                 return new BrightnessWriteResult(
                     BrightnessWriteProvider.DdcCi,
                     BrightnessWriteStatus.WriteSucceeded,
-                    requestedPercent,
-                    requestedPercent,
-                    verifiedPercent,
+                    requestedPercent, requestedPercent, verifiedPercent,
                     Message: $"Set and verified {physicalMonitors.Length} physical monitor handle(s).");
             }
             finally
             {
-                foreach (var physicalMonitor in physicalMonitors)
-                {
-                    if (physicalMonitor.Handle != 0)
-                    {
-                        _ = DisplayNative.DestroyPhysicalMonitor(physicalMonitor.Handle);
-                    }
-                }
+                DisplayNative.ReleasePhysicalMonitors(physicalMonitors);
             }
         }
 
@@ -157,7 +84,7 @@ public sealed class WindowsDdcBrightnessWriter : IBrightnessWriter
         DdcMonitorHandle physicalMonitor,
         int requestedPercent)
     {
-        if (!TryReadBrightness(physicalMonitor.Handle, out _, out var maximum, out var readError)
+        if (!DisplayNative.TryReadVcp(physicalMonitor.Handle, DisplayInteropConstants.VcpCodeBrightness, out _, out var maximum, out var readError)
             || maximum == 0)
         {
             return Failed(requestedPercent, readError, "Could not read the monitor brightness range before writing.");
@@ -169,8 +96,8 @@ public sealed class WindowsDdcBrightnessWriter : IBrightnessWriter
             return Failed(requestedPercent, Marshal.GetLastPInvokeError(), "SetVCPFeature rejected brightness VCP 0x10.");
         }
 
-        Thread.Sleep(ReadRetryDelayMilliseconds);
-        if (!TryReadBrightness(physicalMonitor.Handle, out var current, out maximum, out readError)
+        Thread.Sleep(DisplayNative.ReadRetryMilliseconds);
+        if (!DisplayNative.TryReadVcp(physicalMonitor.Handle, DisplayInteropConstants.VcpCodeBrightness, out var current, out maximum, out readError)
             || maximum == 0)
         {
             return new BrightnessWriteResult(
@@ -200,37 +127,6 @@ public sealed class WindowsDdcBrightnessWriter : IBrightnessWriter
                 Message: "Brightness read-back did not match the requested percentage.");
     }
 
-    private static bool TryReadBrightness(
-        nint handle,
-        out uint current,
-        out uint maximum,
-        out int error)
-    {
-        error = 0;
-        for (var attempt = 1; attempt <= MaximumReadAttempts; attempt++)
-        {
-            if (DisplayNative.GetVCPFeatureAndVCPFeatureReply(
-                handle,
-                DisplayInteropConstants.VcpCodeBrightness,
-                0,
-                out current,
-                out maximum))
-            {
-                return true;
-            }
-
-            error = Marshal.GetLastPInvokeError();
-            if (attempt < MaximumReadAttempts)
-            {
-                Thread.Sleep(ReadRetryDelayMilliseconds);
-            }
-        }
-
-        current = 0;
-        maximum = 0;
-        return false;
-    }
-
     private static BrightnessWriteResult Failed(int requestedPercent, int error, string message) =>
         new(
             BrightnessWriteProvider.DdcCi,
@@ -241,5 +137,4 @@ public sealed class WindowsDdcBrightnessWriter : IBrightnessWriter
             error,
             message);
 
-    private sealed record LogicalMonitor(nint Handle);
 }
