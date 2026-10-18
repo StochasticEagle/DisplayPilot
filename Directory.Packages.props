@@ -7,6 +7,8 @@
     <PackageVersion Include="Microsoft.WindowsAppSDK.WinUI" Version="2.3.0" />
     <PackageVersion Include="Microsoft.WindowsAppSDK.Runtime" Version="2.3.1" />
     <PackageVersion Include="Microsoft.WindowsAppSDK.Foundation" Version="2.3.5" />
+    <!-- Required transitively by WinUI 2.3.0 and Foundation 2.3.5; avoid NU1603. -->
+    <PackageVersion Include="Microsoft.WindowsAppSDK.InteractiveExperiences" Version="2.1.3" />
     <PackageVersion Include="MSTest" Version="3.8.3" />
     <PackageVersion Include="System.Management" Version="10.0.0" />
   </ItemGroup>
