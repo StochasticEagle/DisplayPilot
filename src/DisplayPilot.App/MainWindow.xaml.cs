@@ -150,25 +150,71 @@ public sealed partial class MainWindow : Window, IDisposable
     private string? _startupRegistrationError;
     private Win32Exception? _lastDiagnosticError;
 
+    // The application starts with its native notification window and background
+    // coordinator only. The WinUI XAML tree is built upon the first UI request.
+    private bool _visualsReady;
+
     public MainWindow()
     {
-        InitializeComponent();
-        AdvancedVersionText.Text = $"Version {GetDisplayVersion()}";
         if (Environment.ProcessPath is { } processPath)
-        {
             AppWindow.SetIcon(processPath);
-        }
 
-        ConfigureCompactWindow();
         _themeScheduleTimer.Elapsed += ThemeScheduleTimer_Elapsed;
         _brightnessEventWatcher.BrightnessChanged += BrightnessEventWatcher_BrightnessChanged;
         Activated += MainWindow_Activated;
         AppWindow.Closing += AppWindow_Closing;
         Closed += MainWindow_Closed;
+        LoadBackgroundScheduleSettings();
+    }
+
+    private void EnsureVisualsLoaded()
+    {
+        if (_visualsReady)
+            return;
+
+        InitializeComponent();
+        _visualsReady = true;
+        AdvancedVersionText.Text = $"Version {GetDisplayVersion()}";
+        ConfigureCompactWindow();
         LoadScheduleSettings();
         RefreshSchedulePreview();
         RefreshStartupRegistration();
+        RefreshThemeStatus();
         SystemText.Text = GetSystemSummary();
+        UpdateCompactMonitorCards();
+    }
+
+    private void LoadBackgroundScheduleSettings()
+    {
+        try
+        {
+            var loaded = _themeScheduleSettingsStore.Load();
+            _fixedThemeSchedule = loaded.Schedule;
+            _scheduleMode = loaded.ScheduleMode;
+            _solarLocation = loaded.SolarLocation;
+            _scheduleWasLoadedFromDisk = loaded.WasLoadedFromDisk;
+            _scheduleAutomationEnabled = loaded.AutomationEnabled;
+            _reduceBrightnessOnSchedule = loaded.ReduceBrightness;
+            _brightnessReductionActive = loaded.BrightnessReductionActive;
+            _brightnessRestoreValues.Clear();
+            foreach (var (path, brightness) in loaded.BrightnessRestoreValues)
+                _brightnessRestoreValues[DisplayPathKey.FromDevicePath(path)] = brightness;
+            RefreshEffectiveSchedule(DateTimeOffset.Now);
+        }
+        catch (IOException exception) { BackgroundScheduleLoadFailed(exception); }
+        catch (UnauthorizedAccessException exception) { BackgroundScheduleLoadFailed(exception); }
+        catch (SecurityException exception) { BackgroundScheduleLoadFailed(exception); }
+    }
+
+    private void BackgroundScheduleLoadFailed(Exception exception)
+    {
+        _fixedThemeSchedule = JsonThemeScheduleSettingsStore.CreateDefault();
+        _savedThemeSchedule = _fixedThemeSchedule;
+        _scheduleAutomationEnabled = false;
+        _reduceBrightnessOnSchedule = false;
+        _brightnessReductionActive = false;
+        _brightnessRestoreValues.Clear();
+        _scheduleSettingsError = exception.GetType().Name;
     }
 
     private static string GetDisplayVersion()
@@ -198,7 +244,8 @@ public sealed partial class MainWindow : Window, IDisposable
         }
         catch (Win32Exception exception)
         {
-            CompactStatusText.Text = $"Notification-area icon unavailable: {exception.Message}";
+            if (_visualsReady)
+                CompactStatusText.Text = $"Notification-area icon unavailable: {exception.Message}";
             return false;
         }
     }
@@ -288,6 +335,7 @@ public sealed partial class MainWindow : Window, IDisposable
             return;
         }
 
+        EnsureVisualsLoaded();
         ShowCompactView();
 
         if (_activeMonitors.Count > 0)
@@ -355,6 +403,7 @@ public sealed partial class MainWindow : Window, IDisposable
         _ = DispatcherQueue.TryEnqueue(async () =>
         {
             await InitializeAsync();
+            EnsureVisualsLoaded();
             ShowAdvancedView();
             if (_activeMonitors.Count > 0)
             {
@@ -691,6 +740,7 @@ public sealed partial class MainWindow : Window, IDisposable
         }
 
         await InitializeAsync();
+        EnsureVisualsLoaded();
         ShowCompactView();
         if (_activeMonitors.Count > 0)
             await ProbeDdcBrightnessAsync(includeExtended: !_extendedControlsReady);
