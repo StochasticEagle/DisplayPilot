@@ -111,6 +111,7 @@ public sealed partial class MainWindow : Window, IDisposable
     private bool _initialScanStarted;
     private bool _displayScanStarted;
     private bool _displayInventoryStale;
+    private bool _extendedControlsReady;
     private bool _topologyRefreshQueued;
     private bool _sessionIsActive = true;
     private bool _advancedIconLoaded;
@@ -253,10 +254,8 @@ public sealed partial class MainWindow : Window, IDisposable
         {
             _displayScanStarted = true;
             await RefreshDisplaysAsync();
-            if (_activeMonitors.Count > 0 && _lastDdcProbes.Count == 0)
-            {
-                await ProbeDdcBrightnessAsync();
-            }
+            if (_activeMonitors.Count > 0 && (!_extendedControlsReady || _lastDdcProbes.Count == 0))
+                await ProbeDdcBrightnessAsync(includeExtended: false);
             await EvaluateAndApplyScheduleAsync();
         }
     }
@@ -292,7 +291,7 @@ public sealed partial class MainWindow : Window, IDisposable
 
         ShowCompactView();
 
-        if (_activeMonitors.Count > 0 && _lastDdcProbes.Count == 0)
+        if (_activeMonitors.Count > 0 && (!_extendedControlsReady || _lastDdcProbes.Count == 0))
         {
             await ProbeDdcBrightnessAsync();
             await EvaluateAndApplyScheduleAsync();
@@ -357,7 +356,7 @@ public sealed partial class MainWindow : Window, IDisposable
         {
             await InitializeAsync();
             ShowAdvancedView();
-            if (_activeMonitors.Count > 0)
+            if (_activeMonitors.Count > 0 && (!_extendedControlsReady || _lastDdcProbes.Count == 0))
             {
                 await ProbeDdcBrightnessAsync();
                 await EvaluateAndApplyScheduleAsync();
@@ -646,7 +645,8 @@ public sealed partial class MainWindow : Window, IDisposable
         if (_displayScanStarted)
         {
             await RefreshDisplaysAsync();
-            if (_activeMonitors.Count > 0) await ProbeDdcBrightnessAsync();
+            if (_activeMonitors.Count > 0)
+                await ProbeDdcBrightnessAsync(includeExtended: AppWindow.IsVisible);
         }
         await EvaluateAndApplyScheduleAsync();
         UpdateThemeScheduleTimer();
@@ -1173,6 +1173,7 @@ public sealed partial class MainWindow : Window, IDisposable
             _lastContrastProbes = [];
             _lastColorTemperatureProbes = [];
             _lastDdcCapabilities = [];
+            _extendedControlsReady = false;
             UpdateCompactMonitorCards();
             EmptyState.Visibility = monitors.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
             StatusText.Text = string.Format(
@@ -1214,7 +1215,7 @@ public sealed partial class MainWindow : Window, IDisposable
         }
     }
 
-    private async Task ProbeDdcBrightnessAsync()
+    private async Task ProbeDdcBrightnessAsync(bool includeExtended = true)
     {
         if (_displayOperationRunning || !_sessionIsActive)
         {
@@ -1234,14 +1235,24 @@ public sealed partial class MainWindow : Window, IDisposable
 
         try
         {
-            var probes = await Task.Run(() => (
-                Ddc: WindowsDdcVcpFeatureService.ReadSnapshot(_activeMonitors, _lastDdcCapabilities),
-                Wmi: _wmiProbeService.ProbeBrightness(_activeMonitors)));
-            _lastDdcProbes = probes.Ddc.Brightness;
+            var probes = await Task.Run(() =>
+            {
+                var all = includeExtended
+                    ? WindowsDdcVcpFeatureService.ReadSnapshot(_activeMonitors, _lastDdcCapabilities)
+                    : null;
+                return (
+                    Brightness: all?.Brightness ?? _ddcProbeService.ProbeBrightness(_activeMonitors),
+                    Wmi: _wmiProbeService.ProbeBrightness(_activeMonitors),
+                    Contrast: all?.Contrast ?? _lastContrastProbes,
+                    ColorTemperature: all?.ColorTemperature ?? _lastColorTemperatureProbes,
+                    Capabilities: all?.Capabilities ?? _lastDdcCapabilities);
+            });
+            _lastDdcProbes = probes.Brightness;
             _lastWmiProbes = probes.Wmi;
-            _lastContrastProbes = probes.Ddc.Contrast;
-            _lastColorTemperatureProbes = probes.Ddc.ColorTemperature;
-            _lastDdcCapabilities = probes.Ddc.Capabilities;
+            _lastContrastProbes = probes.Contrast;
+            _lastColorTemperatureProbes = probes.ColorTemperature;
+            _lastDdcCapabilities = probes.Capabilities;
+            _extendedControlsReady = includeExtended;
             if (probes.Wmi.Any(item => item.Status == WmiBrightnessProbeStatus.ReadSucceeded))
                 _brightnessEventWatcher.TryStart();
             else
@@ -1269,7 +1280,7 @@ public sealed partial class MainWindow : Window, IDisposable
             UpdateCompactMonitorCards();
 
             var readableCount = _activeMonitors.Count(monitor =>
-                probes.Ddc.Brightness.Any(probe =>
+                probes.Brightness.Any(probe =>
                     string.Equals(probe.Display.DevicePath, monitor.DevicePath, StringComparison.OrdinalIgnoreCase)
                     && probe.PhysicalMonitors.Any(result =>
                         result.Status == DdcBrightnessProbeStatus.ReadSucceeded))
