@@ -20,8 +20,16 @@ jobs:
         include:
           - folder: "32"
             platform: Win32
+            configuration: Release
           - folder: "64"
             platform: Win64
+            configuration: Release
+          - folder: "32"
+            platform: Win32
+            configuration: Debug
+          - folder: "64"
+            platform: Win64
+            configuration: Debug
     steps:
       - uses: actions/checkout@v4
       - name: Discover MSBuild
@@ -30,7 +38,7 @@ jobs:
           vs-version: '[18.0,19.0)'
       - name: Build native Visual Studio project
         shell: cmd
-        run: msbuild DisplayPilot.sln /m /p:Configuration=Release /p:Platform=${{ matrix.platform }} /verbosity:minimal
+        run: msbuild DisplayPilot.sln /m /p:Configuration=${{ matrix.configuration }} /p:Platform=${{ matrix.platform }} /verbosity:minimal
       - name: Verify standalone Windows executable
         shell: bash
         run: |
@@ -60,6 +68,7 @@ jobs:
             }
           }
       - name: Build native Inno Setup installer
+        if: matrix.configuration == 'Release'
         shell: bash
         run: |
           compiler='/c/Program Files (x86)/Inno Setup 6/ISCC.exe'
@@ -70,11 +79,13 @@ jobs:
           MSYS_NO_PATHCONV=1 "$compiler" installer/DisplayPilot.iss "/DAppArch=${{ matrix.folder }}"
           test -s "installers/${{ matrix.folder }}/DisplayPilot-Setup.exe"
       - uses: actions/upload-artifact@v4
+        if: matrix.configuration == 'Release'
         with:
           name: DisplayPilot-Setup-${{ matrix.folder }}
           path: installers/${{ matrix.folder }}/DisplayPilot-Setup.exe
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
+        if: matrix.configuration == 'Release'
         with:
           name: DisplayPilot-${{ matrix.folder }}
           path: dist/${{ matrix.folder }}/DisplayPilot.exe
