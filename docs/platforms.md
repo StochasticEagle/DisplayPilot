@@ -1,11 +1,11 @@
 # Supported platforms
 
 | Windows version | Win32 application | Win64 application |
-| --- | --- | --- |
-| Windows 7 SP1 | Supported | Supported |
-| Windows 8 / 8.1 | Untested | Untested |
-| Windows 10 | Supported | Supported |
-| Windows 11 | Untested | Supported |
+| --- | :---: | :---: |
+| Windows 7 SP1 | 🟢 | 🟢 |
+| Windows 8 / 8.1 | ⚠️ | ⚠️ |
+| Windows 10 | 🟢 | 🟢 |
+| Windows 11 | ❌ | 🟢 |
 
 Windows 7 uses system DPI scaling. Later Windows versions provide optional per-monitor DPI APIs. Windows theme integration is available on Windows 10 and later.
 
