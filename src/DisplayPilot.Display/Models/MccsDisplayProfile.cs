@@ -11,6 +11,7 @@ public sealed class MccsDisplayProfile
     public List<byte> SupportedCommands { get; set; } = [];
     public Dictionary<byte, MccsVcpFeature> Features { get; } = [];
     public List<MccsWindow> Windows { get; } = [];
+    public bool HasWindows => Windows.Count != 0;
 
     public bool SupportsVcp(byte code) => Features.ContainsKey(code);
 

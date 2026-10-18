@@ -571,7 +571,7 @@ public class MccsCapabilitiesParserTests
         var result = MccsCapabilitiesParser.Parse(input);
 
         // Assert
-        Assert.IsTrue(result.Capabilities.HasWindowSupport);
+        Assert.IsTrue(result.Capabilities.HasWindows);
         Assert.AreEqual(1, result.Capabilities.Windows.Count);
 
         var window = result.Capabilities.Windows[0];
@@ -598,7 +598,7 @@ public class MccsCapabilitiesParserTests
         var result = MccsCapabilitiesParser.Parse(input);
 
         // Assert
-        Assert.IsTrue(result.Capabilities.HasWindowSupport);
+        Assert.IsTrue(result.Capabilities.HasWindows);
         Assert.AreEqual(2, result.Capabilities.Windows.Count);
 
         var window1 = result.Capabilities.Windows[0];
@@ -624,7 +624,7 @@ public class MccsCapabilitiesParserTests
         var result = MccsCapabilitiesParser.Parse(input);
 
         // Assert
-        Assert.IsTrue(result.Capabilities.HasWindowSupport);
+        Assert.IsTrue(result.Capabilities.HasWindows);
         Assert.AreEqual(1, result.Capabilities.Windows.Count);
 
         var window = result.Capabilities.Windows[0];
@@ -649,13 +649,13 @@ public class MccsCapabilitiesParserTests
         var result = MccsCapabilitiesParser.Parse(input);
 
         // Assert
-        Assert.IsTrue(result.Capabilities.HasWindowSupport);
+        Assert.IsTrue(result.Capabilities.HasWindows);
         Assert.AreEqual(1, result.Capabilities.Windows.Count);
         Assert.AreEqual("PBP", result.Capabilities.Windows[0].Type);
     }
 
     [TestMethod]
-    public void Parse_NoWindowSegment_HasWindowSupportFalse()
+    public void Parse_NoWindowSegment_HasWindowsFalse()
     {
         // Arrange
         var input = "(prot(monitor)vcp(10 12))";
@@ -664,7 +664,7 @@ public class MccsCapabilitiesParserTests
         var result = MccsCapabilitiesParser.Parse(input);
 
         // Assert
-        Assert.IsFalse(result.Capabilities.HasWindowSupport);
+        Assert.IsFalse(result.Capabilities.HasWindows);
         Assert.AreEqual(0, result.Capabilities.Windows.Count);
     }
 
@@ -696,7 +696,7 @@ public class MccsCapabilitiesParserTests
         Assert.AreEqual("lcd", result.Capabilities.Type);
         Assert.AreEqual("PD3220U", result.Capabilities.Model);
         Assert.AreEqual("2.2", result.Capabilities.MccsVersion);
-        Assert.IsTrue(result.Capabilities.HasWindowSupport);
+        Assert.IsTrue(result.Capabilities.HasWindows);
         Assert.AreEqual("PIP", result.Capabilities.Windows[0].Type);
     }
 
@@ -710,7 +710,7 @@ public class MccsCapabilitiesParserTests
         var result = MccsCapabilitiesParser.Parse(input);
 
         // Assert
-        Assert.IsTrue(result.Capabilities.HasWindowSupport);
+        Assert.IsTrue(result.Capabilities.HasWindows);
         Assert.AreEqual("PIP", result.Capabilities.Windows[0].Type);
         Assert.AreEqual(640, result.Capabilities.Windows[0].Area.X2);
     }
