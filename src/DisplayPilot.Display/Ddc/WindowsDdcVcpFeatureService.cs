@@ -101,7 +101,7 @@ public static class WindowsDdcVcpFeatureService
     }
 
     private static DdcVcpFeatureResult ReadSnapshotFeature(
-        string device, PhysicalMonitor item, byte code, int attempt)
+        string device, DdcMonitorHandle item, byte code, int attempt)
     {
         var description = item.GetDescription();
         if (item.Handle == 0)
@@ -120,7 +120,7 @@ public static class WindowsDdcVcpFeatureService
         parsed = VcpCapabilities.Empty;
         error = ErrorInvalidData;
         if (handle == 0) return false;
-        if (!DdcPInvoke.GetCapabilitiesStringLength(handle, out var size))
+        if (!DisplayNative.GetCapabilitiesStringLength(handle, out var size))
         {
             error = Marshal.GetLastPInvokeError();
             return false;
@@ -129,7 +129,7 @@ public static class WindowsDdcVcpFeatureService
         var buffer = new byte[size];
         fixed (byte* address = buffer)
         {
-            if (!DdcPInvoke.CapabilitiesRequestAndCapabilitiesReply(handle, address, size))
+            if (!DisplayNative.CapabilitiesRequestAndCapabilitiesReply(handle, address, size))
             {
                 error = Marshal.GetLastPInvokeError();
                 return false;
@@ -209,7 +209,7 @@ public static class WindowsDdcVcpFeatureService
                         appliedRaw = continuous
                             ? (uint)DisplayControlReading.FromPercentage(checked((int)requestedValue), checked((int)maximum))
                             : requestedValue;
-                        if (!DdcPInvoke.SetVCPFeature(physicalMonitor.Handle, vcpCode, appliedRaw))
+                        if (!DisplayNative.SetVCPFeature(physicalMonitor.Handle, vcpCode, appliedRaw))
                         {
                             return WriteFailure(vcpCode, requestedValue, Marshal.GetLastPInvokeError(), $"SetVCPFeature rejected VCP 0x{vcpCode:X2}.", appliedRaw);
                         }
@@ -294,12 +294,12 @@ public static class WindowsDdcVcpFeatureService
     private static List<LogicalMonitor> EnumerateLogicalMonitors()
     {
         var monitors = new List<LogicalMonitor>();
-        DdcPInvoke.MonitorEnumProc callback = (monitor, _, _, _) =>
+        DisplayNative.MonitorCallback callback = (monitor, _, _, _) =>
         {
             unsafe
             {
-                var info = new MonitorInfoEx { Size = (uint)sizeof(MonitorInfoEx) };
-                if (DdcPInvoke.GetMonitorInfo(monitor, &info))
+                var info = new DisplayMonitorInfo { Size = (uint)sizeof(DisplayMonitorInfo) };
+                if (DisplayNative.GetMonitorInfo(monitor, &info))
                 {
                     monitors.Add(new LogicalMonitor(monitor, info.GetDeviceName()));
                 }
@@ -308,7 +308,7 @@ public static class WindowsDdcVcpFeatureService
             return true;
         };
 
-        if (!DdcPInvoke.EnumDisplayMonitors(0, 0, callback, 0))
+        if (!DisplayNative.EnumDisplayMonitors(0, 0, callback, 0))
         {
             throw new Win32Exception(Marshal.GetLastPInvokeError());
         }
@@ -316,10 +316,10 @@ public static class WindowsDdcVcpFeatureService
         return monitors;
     }
 
-    private static unsafe PhysicalMonitor[]? AcquirePhysicalMonitors(nint logicalMonitor, out int error)
+    private static unsafe DdcMonitorHandle[]? AcquirePhysicalMonitors(nint logicalMonitor, out int error)
     {
         error = 0;
-        if (!DdcPInvoke.GetNumberOfPhysicalMonitorsFromHMONITOR(logicalMonitor, out var count))
+        if (!DisplayNative.GetNumberOfPhysicalMonitorsFromHMONITOR(logicalMonitor, out var count))
         {
             error = Marshal.GetLastPInvokeError();
             return null;
@@ -331,10 +331,10 @@ public static class WindowsDdcVcpFeatureService
             return null;
         }
 
-        var physicalMonitors = new PhysicalMonitor[count];
-        fixed (PhysicalMonitor* pointer = physicalMonitors)
+        var physicalMonitors = new DdcMonitorHandle[count];
+        fixed (DdcMonitorHandle* pointer = physicalMonitors)
         {
-            if (!DdcPInvoke.GetPhysicalMonitorsFromHMONITOR(logicalMonitor, count, pointer))
+            if (!DisplayNative.GetPhysicalMonitorsFromHMONITOR(logicalMonitor, count, pointer))
             {
                 error = Marshal.GetLastPInvokeError();
                 return null;
@@ -363,7 +363,7 @@ public static class WindowsDdcVcpFeatureService
         error = 0;
         for (attempts = 1; attempts <= MaximumReadAttempts; attempts++)
         {
-            if (DdcPInvoke.GetVCPFeatureAndVCPFeatureReply(handle, vcpCode, 0, out current, out maximum))
+            if (DisplayNative.GetVCPFeatureAndVCPFeatureReply(handle, vcpCode, 0, out current, out maximum))
             {
                 return true;
             }
@@ -381,13 +381,13 @@ public static class WindowsDdcVcpFeatureService
         return false;
     }
 
-    private static void DestroyPhysicalMonitors(IEnumerable<PhysicalMonitor> monitors)
+    private static void DestroyPhysicalMonitors(IEnumerable<DdcMonitorHandle> monitors)
     {
         foreach (var monitor in monitors)
         {
             if (monitor.Handle != 0)
             {
-                _ = DdcPInvoke.DestroyPhysicalMonitor(monitor.Handle);
+                _ = DisplayNative.DestroyPhysicalMonitor(monitor.Handle);
             }
         }
     }

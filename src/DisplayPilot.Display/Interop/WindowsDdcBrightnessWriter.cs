@@ -45,12 +45,12 @@ public sealed class WindowsDdcBrightnessWriter : IBrightnessWriter
     private static LogicalMonitor? FindLogicalMonitor(string gdiDeviceName)
     {
         LogicalMonitor? match = null;
-        DdcPInvoke.MonitorEnumProc callback = (monitor, _, _, _) =>
+        DisplayNative.MonitorCallback callback = (monitor, _, _, _) =>
         {
             unsafe
             {
-                var info = new MonitorInfoEx { Size = (uint)sizeof(MonitorInfoEx) };
-                if (DdcPInvoke.GetMonitorInfo(monitor, &info)
+                var info = new DisplayMonitorInfo { Size = (uint)sizeof(DisplayMonitorInfo) };
+                if (DisplayNative.GetMonitorInfo(monitor, &info)
                     && string.Equals(info.GetDeviceName(), gdiDeviceName, StringComparison.OrdinalIgnoreCase))
                 {
                     match = new LogicalMonitor(monitor);
@@ -61,7 +61,7 @@ public sealed class WindowsDdcBrightnessWriter : IBrightnessWriter
             return true;
         };
 
-        var enumerationSucceeded = DdcPInvoke.EnumDisplayMonitors(0, 0, callback, 0);
+        var enumerationSucceeded = DisplayNative.EnumDisplayMonitors(0, 0, callback, 0);
         if (!enumerationSucceeded && match is null)
         {
             throw new Win32Exception(Marshal.GetLastPInvokeError());
@@ -82,7 +82,7 @@ public sealed class WindowsDdcBrightnessWriter : IBrightnessWriter
                 Thread.Sleep(HandleRetryDelayMilliseconds);
             }
 
-            if (!DdcPInvoke.GetNumberOfPhysicalMonitorsFromHMONITOR(logicalMonitor.Handle, out var count))
+            if (!DisplayNative.GetNumberOfPhysicalMonitorsFromHMONITOR(logicalMonitor.Handle, out var count))
             {
                 lastError = Marshal.GetLastPInvokeError();
                 continue;
@@ -94,11 +94,11 @@ public sealed class WindowsDdcBrightnessWriter : IBrightnessWriter
                 continue;
             }
 
-            var physicalMonitors = new PhysicalMonitor[count];
+            var physicalMonitors = new DdcMonitorHandle[count];
             var acquired = false;
-            fixed (PhysicalMonitor* pointer = physicalMonitors)
+            fixed (DdcMonitorHandle* pointer = physicalMonitors)
             {
-                acquired = DdcPInvoke.GetPhysicalMonitorsFromHMONITOR(logicalMonitor.Handle, count, pointer);
+                acquired = DisplayNative.GetPhysicalMonitorsFromHMONITOR(logicalMonitor.Handle, count, pointer);
                 if (!acquired)
                 {
                     lastError = Marshal.GetLastPInvokeError();
@@ -144,7 +144,7 @@ public sealed class WindowsDdcBrightnessWriter : IBrightnessWriter
                 {
                     if (physicalMonitor.Handle != 0)
                     {
-                        _ = DdcPInvoke.DestroyPhysicalMonitor(physicalMonitor.Handle);
+                        _ = DisplayNative.DestroyPhysicalMonitor(physicalMonitor.Handle);
                     }
                 }
             }
@@ -154,7 +154,7 @@ public sealed class WindowsDdcBrightnessWriter : IBrightnessWriter
     }
 
     private static BrightnessWriteResult WritePhysicalMonitor(
-        PhysicalMonitor physicalMonitor,
+        DdcMonitorHandle physicalMonitor,
         int requestedPercent)
     {
         if (!TryReadBrightness(physicalMonitor.Handle, out _, out var maximum, out var readError)
@@ -164,7 +164,7 @@ public sealed class WindowsDdcBrightnessWriter : IBrightnessWriter
         }
 
         var rawValue = (uint)DisplayControlReading.FromPercentage(requestedPercent, checked((int)maximum));
-        if (!DdcPInvoke.SetVCPFeature(physicalMonitor.Handle, NativeConstants.VcpCodeBrightness, rawValue))
+        if (!DisplayNative.SetVCPFeature(physicalMonitor.Handle, NativeConstants.VcpCodeBrightness, rawValue))
         {
             return Failed(requestedPercent, Marshal.GetLastPInvokeError(), "SetVCPFeature rejected brightness VCP 0x10.");
         }
@@ -209,7 +209,7 @@ public sealed class WindowsDdcBrightnessWriter : IBrightnessWriter
         error = 0;
         for (var attempt = 1; attempt <= MaximumReadAttempts; attempt++)
         {
-            if (DdcPInvoke.GetVCPFeatureAndVCPFeatureReply(
+            if (DisplayNative.GetVCPFeatureAndVCPFeatureReply(
                 handle,
                 NativeConstants.VcpCodeBrightness,
                 0,
