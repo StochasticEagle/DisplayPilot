@@ -147,13 +147,18 @@
                                                 Grid.Row="4"
                                                 Grid.Column="1"
                                                 MinWidth="150"
-                                                DisplayMemberPath="DisplayName"
                                                 IsEnabled="{x:Bind IsColorTemperatureAvailable, Mode=OneTime}"
                                                 ItemsSource="{x:Bind ColorTemperaturePresets, Mode=OneTime}"
                                                 SelectionChanged="CompactColorTemperature_SelectionChanged"
                                                 SelectedItem="{x:Bind SelectedColorTemperaturePreset, Mode=TwoWay}"
                                                 Tag="{x:Bind}"
-                                                Visibility="{x:Bind ColorTemperatureVisibility, Mode=OneTime}" />
+                                                Visibility="{x:Bind ColorTemperatureVisibility, Mode=OneTime}" >
+                                                <ComboBox.ItemTemplate>
+                                                    <DataTemplate x:DataType="local:ColorTemperaturePresetViewModel">
+                                                        <TextBlock Text="{x:Bind DisplayName, Mode=OneTime}" />
+                                                    </DataTemplate>
+                                                </ComboBox.ItemTemplate>
+                                            </ComboBox>
                                             <TextBlock
                                                 Grid.Row="5"
                                                 VerticalAlignment="Center"
@@ -168,10 +173,15 @@
                                                 Visibility="{x:Bind RotationVisibility, Mode=OneTime}">
                                                 <ComboBox
                                                     MinWidth="170"
-                                                    DisplayMemberPath="DisplayName"
                                                     IsEnabled="{x:Bind IsRotationAvailable, Mode=OneTime}"
                                                     ItemsSource="{x:Bind RotationOptions, Mode=OneTime}"
-                                                    SelectedItem="{x:Bind SelectedRotation, Mode=TwoWay}" />
+                                                    SelectedItem="{x:Bind SelectedRotation, Mode=TwoWay}" >
+                                                    <ComboBox.ItemTemplate>
+                                                        <DataTemplate x:DataType="local:RotationOptionViewModel">
+                                                            <TextBlock Text="{x:Bind DisplayName, Mode=OneTime}" />
+                                                        </DataTemplate>
+                                                    </ComboBox.ItemTemplate>
+                                                </ComboBox>
                                                 <Button
                                                     Click="CompactApplyRotationButton_Click"
                                                     Content="Apply"
@@ -527,12 +537,17 @@
                                             Grid.Row="4"
                                             Grid.Column="1"
                                             MinWidth="170"
-                                            DisplayMemberPath="DisplayName"
                                             ItemsSource="{x:Bind ColorTemperaturePresets, Mode=OneTime}"
                                             SelectionChanged="CompactColorTemperature_SelectionChanged"
                                             SelectedItem="{x:Bind SelectedColorTemperaturePreset, Mode=TwoWay}"
                                             Tag="{x:Bind}"
-                                            Visibility="{x:Bind ColorTemperatureVisibility, Mode=OneTime}" />
+                                            Visibility="{x:Bind ColorTemperatureVisibility, Mode=OneTime}" >
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate x:DataType="local:ColorTemperaturePresetViewModel">
+                                                    <TextBlock Text="{x:Bind DisplayName, Mode=OneTime}" />
+                                                </DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
 
                                         <TextBlock
                                             Grid.Row="5"
@@ -548,9 +563,14 @@
                                             Visibility="{x:Bind RotationVisibility, Mode=OneTime}">
                                             <ComboBox
                                                 MinWidth="190"
-                                                DisplayMemberPath="DisplayName"
                                                 ItemsSource="{x:Bind RotationOptions, Mode=OneTime}"
-                                                SelectedItem="{x:Bind SelectedRotation, Mode=TwoWay}" />
+                                                SelectedItem="{x:Bind SelectedRotation, Mode=TwoWay}" >
+                                                <ComboBox.ItemTemplate>
+                                                    <DataTemplate x:DataType="local:RotationOptionViewModel">
+                                                        <TextBlock Text="{x:Bind DisplayName, Mode=OneTime}" />
+                                                    </DataTemplate>
+                                                </ComboBox.ItemTemplate>
+                                            </ComboBox>
                                             <Button
                                                 Click="CompactApplyRotationButton_Click"
                                                 Content="Apply"

@@ -1,24 +1,24 @@
 // SPDX-License-Identifier: Unlicense
-using System.Management;
-using System.Runtime.InteropServices;
+using WmiLight;
 using DisplayPilot.Display.Wmi;
 
 namespace DisplayPilot.Display.Interop;
 
 /// <summary>
-/// Observes Windows changes to an integrated panel's brightness. Windows emits
-/// these events after a standardized HID brightness key changes the panel.
+/// Receives native WMI brightness-key change notifications. The WMI connection
+/// and subscription remain alive only while the watcher is active.
 /// </summary>
 public sealed class WindowsWmiBrightnessEventWatcher : IDisposable
 {
     private const string Scope = @"root\WMI";
     private const string Query = "SELECT Active, Brightness, InstanceName FROM WmiMonitorBrightnessEvent";
-    private ManagementEventWatcher? _watcher;
+    private WmiConnection? _connection;
+    private WmiEventSubscription? _subscription;
     private bool _disposed;
 
     public event EventHandler<WmiBrightnessChangedEventArgs>? BrightnessChanged;
 
-    public bool IsActive => _watcher is not null;
+    public bool IsActive => _subscription is not null;
 
     public int ErrorCode { get; private set; }
 
@@ -27,59 +27,45 @@ public sealed class WindowsWmiBrightnessEventWatcher : IDisposable
     public bool TryStart()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        if (_watcher is not null)
+        if (_subscription is not null)
         {
             return true;
         }
 
-        ManagementEventWatcher? candidate = null;
+        var candidate = new WmiConnection(Scope);
         try
         {
-            candidate = new ManagementEventWatcher(Scope, Query);
-            candidate.EventArrived += Watcher_EventArrived;
-            candidate.Start();
-            _watcher = candidate;
+            var subscription = candidate.CreateEventSubscription(
+                Query,
+                value => BrightnessChanged?.Invoke(
+                    this,
+                    new WmiBrightnessChangedEventArgs(
+                        value.GetPropertyValue<string>("InstanceName") ?? string.Empty,
+                        value.GetPropertyValue<byte>("Brightness"),
+                        value.GetPropertyValue<bool>("Active"))));
+            _connection = candidate;
+            _subscription = subscription;
             ErrorCode = 0;
             ErrorMessage = null;
             return true;
         }
-        catch (ManagementException exception)
+        catch (Exception exception) when (exception is not OutOfMemoryException)
         {
-            RecordFailure(exception.HResult, exception.Message);
+            ErrorCode = exception.HResult;
+            ErrorMessage = exception.Message;
+            candidate.Dispose();
+            return false;
         }
-        catch (COMException exception)
-        {
-            RecordFailure(exception.HResult, exception.Message);
-        }
-        catch (UnauthorizedAccessException exception)
-        {
-            RecordFailure(exception.HResult, exception.Message);
-        }
-        catch (InvalidOperationException exception)
-        {
-            RecordFailure(exception.HResult, exception.Message);
-        }
-        finally
-        {
-            if (_watcher is null && candidate is not null)
-            {
-                candidate.EventArrived -= Watcher_EventArrived;
-                candidate.Dispose();
-            }
-        }
-
-        return false;
     }
 
     public void Stop()
     {
-        var watcher = _watcher;
-        if (watcher is null) return;
-        _watcher = null;
-        watcher.EventArrived -= Watcher_EventArrived;
-        try { watcher.Stop(); }
-        catch (ManagementException) { /* Provider already stopped. */ }
-        watcher.Dispose();
+        var subscription = _subscription;
+        var connection = _connection;
+        _subscription = null;
+        _connection = null;
+        subscription?.Dispose();
+        connection?.Dispose();
     }
 
     public void Dispose()
@@ -92,21 +78,5 @@ public sealed class WindowsWmiBrightnessEventWatcher : IDisposable
         _disposed = true;
         Stop();
         GC.SuppressFinalize(this);
-    }
-
-    private void Watcher_EventArrived(object sender, EventArrivedEventArgs args)
-    {
-        var value = args.NewEvent;
-        BrightnessChanged?.Invoke(this, new WmiBrightnessChangedEventArgs(
-            value["InstanceName"] as string ?? string.Empty,
-            value["Brightness"] is byte brightness ? brightness : (byte)0,
-            value["Active"] is bool active && active));
-    }
-
-    private void RecordFailure(int errorCode, string message)
-    {
-        ErrorCode = errorCode;
-        ErrorMessage = message;
-        _watcher = null;
     }
 }

@@ -74,7 +74,7 @@ jobs:
                   "Microsoft.WindowsAppSDK.Foundation",
                   "Microsoft.WindowsAppSDK.Runtime",
               },
-              "DisplayPilot.Display.csproj": {"System.Management"},
+              "DisplayPilot.Display.csproj": {"WmiLight"},
               "DisplayPilot.Windows.csproj": set(),
               "DisplayPilot.Core.csproj": set(),
           }
@@ -86,6 +86,8 @@ jobs:
               "InteractiveExperiences must remain transitive, never an explicit package reference"
           )
           assert central["Microsoft.WindowsAppSDK.InteractiveExperiences"] == "2.1.3"
+          assert central["WmiLight"] == "7.3.0"
+          assert "System.Management" not in central
 
           apps = [project for project in graph["projects"]
                   if pathlib.PurePath(project.get("path", "").replace("\\", "/")).name == "DisplayPilot.App.csproj"]

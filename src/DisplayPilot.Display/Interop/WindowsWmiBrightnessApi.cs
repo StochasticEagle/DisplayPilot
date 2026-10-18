@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: Unlicense
-using System.Management;
-using System.Runtime.InteropServices;
+using WmiLight;
 using DisplayPilot.Display.Wmi;
 
 namespace DisplayPilot.Display.Interop;
@@ -18,33 +17,28 @@ public sealed class WindowsWmiBrightnessApi : IWmiBrightnessApi
     {
         try
         {
-            using var searcher = new ManagementObjectSearcher(Scope, Query);
-            using var results = searcher.Get();
-            var instances = new List<WmiBrightnessInstance>(results.Count);
+            using var connection = new WmiConnection(Scope);
+            var instances = new List<WmiBrightnessInstance>();
 
-            foreach (ManagementBaseObject result in results)
+            foreach (var result in connection.CreateQuery(Query))
             {
                 using (result)
                 {
                     instances.Add(new WmiBrightnessInstance(
-                        result["InstanceName"] as string ?? string.Empty,
-                        result["Active"] is bool active && active,
-                        result["CurrentBrightness"] is byte brightness ? brightness : (byte)0,
-                        result["Level"] as byte[] ?? []));
+                        result.GetPropertyValue<string>("InstanceName") ?? string.Empty,
+                        result.GetPropertyValue<bool>("Active"),
+                        result.GetPropertyValue<byte>("CurrentBrightness"),
+                        result.GetPropertyValue<byte[]>("Level") ?? []));
                 }
             }
 
             return new WmiBrightnessQueryResult(instances);
         }
-        catch (ManagementException exception)
-        {
-            return WmiBrightnessQueryResult.Failed(exception.HResult, exception.Message);
-        }
         catch (COMException exception)
         {
             return WmiBrightnessQueryResult.Failed(exception.HResult, exception.Message);
         }
-        catch (UnauthorizedAccessException exception)
+        catch (Exception exception) when (exception is not OutOfMemoryException)
         {
             return WmiBrightnessQueryResult.Failed(exception.HResult, exception.Message);
         }
