@@ -34,7 +34,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Register Win64 Visual Studio C++ platform
         shell: cmd
-        run: call tools\Register-Win64Platform.cmd
+        run: call tools\Register-Win64Platform.bat
       - name: Discover MSBuild
         uses: microsoft/setup-msbuild@v3
         with:
