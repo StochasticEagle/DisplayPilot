@@ -78,6 +78,58 @@ std::wstring hardwareId(const std::wstring& instancePath) {
     for (auto& ch : id) ch = static_cast<wchar_t>(towupper(ch));
     return id;
 }
+std::wstring fromWmiInstance(const std::wstring& instance) {
+    const size_t first = instance.find(L'\\');
+    if (first == std::wstring::npos || first == 0) return {};
+    const size_t second = instance.find(L'\\', first + 1);
+    if (second == std::wstring::npos || second == first + 1 ||
+        second + 1 >= instance.size() ||
+        instance.find(L'\\', second + 1) != std::wstring::npos) return {};
+    std::wstring node = instance.substr(second + 1);
+    const size_t underscore = node.rfind(L'_');
+    if (underscore != std::wstring::npos && underscore > 0 &&
+        underscore + 1 < node.size() &&
+        std::all_of(node.begin() + static_cast<std::wstring::difference_type>(underscore + 1),
+                    node.end(), [](wchar_t ch) { return ch >= L'0' && ch <= L'9'; }))
+        node.resize(underscore);
+    return L"\\\\?\\" + instance.substr(0, first) + L"#" +
+        instance.substr(first + 1, second - first - 1) + L"#" + node;
+}
+std::vector<std::pair<std::wstring, std::wstring>> activeDisplayPaths() {
+    std::vector<std::pair<std::wstring, std::wstring>> result;
+    for (unsigned attempt = 0; attempt < 3; ++attempt) {
+        UINT32 count = 0, modes = 0;
+        if (GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, &count, &modes) != ERROR_SUCCESS ||
+            count > 128 || modes > 512) break;
+        std::vector<DISPLAYCONFIG_PATH_INFO> paths(count);
+        std::vector<DISPLAYCONFIG_MODE_INFO> modeInfo(modes);
+        const LONG status = QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS, &count,
+            paths.data(), &modes, modeInfo.data(), nullptr);
+        if (status == ERROR_INSUFFICIENT_BUFFER) continue;
+        if (status != ERROR_SUCCESS) break;
+        for (UINT32 i = 0; i < count; ++i) {
+            DISPLAYCONFIG_SOURCE_DEVICE_NAME source{};
+            source.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_NAME;
+            source.header.size = sizeof(source);
+            source.header.adapterId = paths[i].sourceInfo.adapterId;
+            source.header.id = paths[i].sourceInfo.id;
+            if (DisplayConfigGetDeviceInfo(&source.header) != ERROR_SUCCESS) continue;
+            DISPLAYCONFIG_TARGET_DEVICE_NAME target{};
+            target.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_TARGET_NAME;
+            target.header.size = sizeof(target);
+            target.header.adapterId = paths[i].targetInfo.adapterId;
+            target.header.id = paths[i].targetInfo.id;
+            if (DisplayConfigGetDeviceInfo(&target.header) != ERROR_SUCCESS ||
+                !target.monitorDevicePath[0]) continue;
+            std::wstring path = target.monitorDevicePath;
+            const size_t suffix = path.find(L"#{");
+            if (suffix != std::wstring::npos) path.resize(suffix);
+            result.emplace_back(source.viewGdiDeviceName, std::move(path));
+        }
+        break;
+    }
+    return result;
+}
 std::vector<unsigned> supportedColorPresets(HANDLE monitor) {
     DWORD length = 0;
     if (!GetCapabilitiesStringLength(monitor, &length) || length < 4 || length > 16384)
@@ -343,6 +395,19 @@ std::vector<Monitor> enumerateMonitors() {
                 target->brightnessAvailable = true;
                 target->brightness = entry.second;
                 target->wmiInstance = entry.first;
+            }
+        }
+    }
+    const auto paths = activeDisplayPaths();
+    for (auto& row : result) {
+        if (row.provider == ControlProvider::Wmi)
+            row.persistentPath = fromWmiInstance(row.wmiInstance);
+        if (row.persistentPath.empty()) {
+            for (const auto& entry : paths) {
+                if (equalPath(row.deviceName, entry.first)) {
+                    row.persistentPath = entry.second;
+                    break;
+                }
             }
         }
     }

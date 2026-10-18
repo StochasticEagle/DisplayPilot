@@ -106,7 +106,7 @@ void updateAppearance() {
         readWindowsTheme(dark);
     app.flyout.setAppearance(app.supportsThemes, dark, app.settings.scheduleEnabled);
 }
-std::wstring restoreKey(const Monitor& monitor) {
+std::wstring legacyRestoreKey(const Monitor& monitor) {
     std::wstring stable = monitor.provider == ControlProvider::Wmi
         ? monitor.wmiInstance : monitor.deviceName + L":" + std::to_wstring(monitor.physicalIndex);
     // Registry value-name size is limited. Hashing keeps WMI instance paths bounded.
@@ -117,6 +117,10 @@ std::wstring restoreKey(const Monitor& monitor) {
     }
     return L"Monitor-" + std::to_wstring(hash);
 }
+std::wstring restoreKey(const Monitor& monitor) {
+    return monitor.persistentPath.empty() ?
+        legacyRestoreKey(monitor) : monitor.persistentPath;
+}
 void restoreMonitorBrightness() {
     bool pending = false;
     bool changed = false;
@@ -124,11 +128,15 @@ void restoreMonitorBrightness() {
         if (!monitor.brightnessAvailable) continue;
         const std::wstring key = restoreKey(monitor);
         unsigned previous = 0;
-        if (!restoreBrightness(key, previous)) continue;
-        if (setBrightness(monitor, previous)) {
-            removeSavedBrightness(key);
+        const std::wstring legacy = legacyRestoreKey(monitor);
+        const bool fromLegacy = !restoreBrightness(key, previous) &&
+            key != legacy && restoreBrightness(legacy, previous);
+        if (fromLegacy || restoreBrightness(key, previous)) {
+          if (setBrightness(monitor, previous)) {
+            removeSavedBrightness(fromLegacy ? legacy : key);
             changed = true;
-        } else pending = true;
+          } else pending = true;
+        }
     }
     app.savedBrightness = pending;
     if (changed) queueRefresh();

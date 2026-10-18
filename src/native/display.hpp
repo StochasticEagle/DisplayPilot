@@ -13,6 +13,7 @@ struct Monitor {
     std::wstring name;
     std::wstring deviceName;
     std::wstring hardwareId;
+    std::wstring persistentPath;
     std::wstring wmiInstance;
     RECT bounds{};
     bool brightnessAvailable = false;
