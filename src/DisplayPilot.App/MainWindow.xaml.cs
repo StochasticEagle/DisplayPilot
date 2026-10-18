@@ -1231,6 +1231,8 @@ public sealed partial class MainWindow : Window, IDisposable
         }
 
         _displayOperationRunning = true;
+        if (_visualsReady)
+        {
         RescanButton.IsEnabled = false;
         ProbeDdcButton.IsEnabled = false;
         CompactReadBrightnessButton.IsEnabled = false;
@@ -1241,6 +1243,8 @@ public sealed partial class MainWindow : Window, IDisposable
         StatusText.Text = "Scanning active Windows display paths...";
         CompactStatusText.Text = "Scanning active Windows display paths...";
         EmptyState.Visibility = Visibility.Collapsed;
+
+        }
 
         try
         {
@@ -1257,6 +1261,8 @@ public sealed partial class MainWindow : Window, IDisposable
             _lastColorTemperatureProbes = [];
             _lastDdcCapabilities = [];
             _extendedControlsReady = false;
+            if (_visualsReady)
+            {
             UpdateCompactMonitorCards();
             EmptyState.Visibility = monitors.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
             StatusText.Text = string.Format(
@@ -1268,11 +1274,11 @@ public sealed partial class MainWindow : Window, IDisposable
             CompactStatusText.Text = monitors.Count == 0
                 ? "No active displays were found."
                 : "Open the controls to read current brightness.";
-            _lastDiagnosticError = null;
         }
+            }
+            _lastDiagnosticError = null;
         catch (Win32Exception exception)
         {
-            MonitorList.ItemsSource = null;
             _activeMonitors = [];
             _lastDdcProbes = [];
             _lastWmiProbes = [];
@@ -1280,21 +1286,27 @@ public sealed partial class MainWindow : Window, IDisposable
             _lastColorTemperatureProbes = [];
             _lastDdcCapabilities = [];
             _lastRotationReads = [];
+            if (_visualsReady)
+            {
             UpdateCompactMonitorCards();
             EmptyState.Visibility = Visibility.Visible;
             StatusText.Text = $"Display discovery failed: {exception.Message}";
             CompactStatusText.Text = "Display discovery failed. Open Advanced for details.";
+            }
             _lastDiagnosticError = exception;
         }
         finally
         {
             _displayOperationRunning = false;
+            if (_visualsReady)
+            {
             RescanButton.IsEnabled = true;
             ProbeDdcButton.IsEnabled = _activeMonitors.Count > 0;
             CompactReadBrightnessButton.IsEnabled = _activeMonitors.Count > 0;
             CompactMonitorList.IsEnabled = true;
             MonitorList.IsEnabled = true;
             CopyReportButton.IsEnabled = true;
+            }
         }
     }
 
