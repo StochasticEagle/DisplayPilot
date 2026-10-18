@@ -509,8 +509,7 @@ public sealed partial class MainWindow : Window, IDisposable
                     if (target is not null &&
                         TryGetCurrentBrightnessPercent(target.DevicePath, out var targetPercent))
                     {
-                        _lastWindowsBrightnessStateResult = await Task.Run(() =>
-                            WindowsBrightnessStateService.SetCurrentBrightness(targetPercent));
+                        await SynchronizePowerBrightnessIfChangedAsync(targetPercent);
                     }
                 }
 
@@ -636,6 +635,7 @@ public sealed partial class MainWindow : Window, IDisposable
             _contrastChangeCancellation?.Cancel();
             _themeScheduleTimer.Cancel();
             _brightnessEventWatcher.Stop();
+            _lastWindowsBrightnessStateResult = null;
             _trayContextMenuWindow?.Close();
             AppWindow.Hide();
             return;
@@ -1270,8 +1270,7 @@ public sealed partial class MainWindow : Window, IDisposable
                         TryGetCurrentBrightnessPercent(startupMonitor.DevicePath, out var startupPercent))
                     {
                         _startupBrightnessSyncCount = 1;
-                        _lastWindowsBrightnessStateResult = await Task.Run(() =>
-                            WindowsBrightnessStateService.SetCurrentBrightness(startupPercent));
+                        await SynchronizePowerBrightnessIfChangedAsync(startupPercent);
                         _startupBrightnessSyncSuccessCount =
                             _lastWindowsBrightnessStateResult.Value.Succeeded ? 1 : 0;
                     }
@@ -1314,6 +1313,16 @@ public sealed partial class MainWindow : Window, IDisposable
             MonitorList.IsEnabled = true;
             CopyReportButton.IsEnabled = true;
         }
+    }
+
+    private async Task SynchronizePowerBrightnessIfChangedAsync(int requestedPercent)
+    {
+        if (_lastWindowsBrightnessStateResult is { Succeeded: true } previous &&
+            previous.BrightnessPercent == requestedPercent)
+            return;
+
+        _lastWindowsBrightnessStateResult = await Task.Run(() =>
+            WindowsBrightnessStateService.SetCurrentBrightness(requestedPercent));
     }
 
     private void UpdateVerifiedBrightness(string devicePath, BrightnessWriteResult result)
