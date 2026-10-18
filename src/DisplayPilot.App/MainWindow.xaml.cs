@@ -129,6 +129,7 @@ public sealed partial class MainWindow : Window, IDisposable
     private bool _keyboardBrightnessSyncRunning;
     private int? _pendingKeyboardBrightnessPercent;
     private string? _pendingKeyboardTargetGdiDeviceName;
+    private string? _pendingKeyboardSourceDevicePath;
     private long _keyboardBrightnessEventCount;
     private DateTimeOffset? _lastKeyboardBrightnessEventUtc;
     private int? _lastKeyboardBrightnessPercent;
@@ -291,9 +292,10 @@ public sealed partial class MainWindow : Window, IDisposable
 
         ShowCompactView();
 
-        if (_activeMonitors.Count > 0 && (!_extendedControlsReady || _lastDdcProbes.Count == 0))
+        if (_activeMonitors.Count > 0)
         {
-            await ProbeDdcBrightnessAsync();
+            // Fresh brightness on every opening; extended features only once per topology.
+            await ProbeDdcBrightnessAsync(includeExtended: !_extendedControlsReady);
             await EvaluateAndApplyScheduleAsync();
         }
     }
@@ -356,9 +358,9 @@ public sealed partial class MainWindow : Window, IDisposable
         {
             await InitializeAsync();
             ShowAdvancedView();
-            if (_activeMonitors.Count > 0 && (!_extendedControlsReady || _lastDdcProbes.Count == 0))
+            if (_activeMonitors.Count > 0)
             {
-                await ProbeDdcBrightnessAsync();
+                await ProbeDdcBrightnessAsync(includeExtended: !_extendedControlsReady);
                 await EvaluateAndApplyScheduleAsync();
             }
 
@@ -413,7 +415,7 @@ public sealed partial class MainWindow : Window, IDisposable
             if (_lastWmiProbes.Any(probe =>
                     probe.Status == WmiBrightnessProbeStatus.ReadSucceeded &&
                     string.Equals(probe.Display.DevicePath, identity, StringComparison.OrdinalIgnoreCase)))
-                QueueKeyboardBrightnessSync(args.Brightness);
+                QueueKeyboardBrightnessSync(args.Brightness, identity);
         });
     }
 
@@ -536,8 +538,26 @@ public sealed partial class MainWindow : Window, IDisposable
         }
     }
 
-    private void QueueKeyboardBrightnessSync(int brightnessPercent)
+    private void QueueKeyboardBrightnessSync(int brightnessPercent, string sourceDevicePath)
     {
+        if (!_lastWmiProbes.Any(probe =>
+                probe.Status == WmiBrightnessProbeStatus.ReadSucceeded &&
+                string.Equals(probe.Display.DevicePath, sourceDevicePath, StringComparison.OrdinalIgnoreCase)))
+            return;
+
+        brightnessPercent = Math.Clamp(brightnessPercent, 0, 100);
+        _lastWmiProbes = _lastWmiProbes.Select(probe =>
+            string.Equals(probe.Display.DevicePath, sourceDevicePath, StringComparison.OrdinalIgnoreCase)
+                ? probe with { CurrentBrightness = (byte)brightnessPercent }
+                : probe).ToArray();
+        var sourceCard = (CompactMonitorList.ItemsSource as IEnumerable<CompactMonitorViewModel>)?
+            .FirstOrDefault(item => string.Equals(item.DevicePath, sourceDevicePath, StringComparison.OrdinalIgnoreCase));
+        if (sourceCard is not null)
+        {
+            _updatingCompactControls = true;
+            try { sourceCard.BrightnessPercent = brightnessPercent; }
+            finally { _updatingCompactControls = false; }
+        }
         if (_suppressedWmiBrightnessPercent == brightnessPercent &&
             DateTimeOffset.UtcNow <= _suppressWmiBrightnessUntilUtc)
         {
@@ -552,6 +572,7 @@ public sealed partial class MainWindow : Window, IDisposable
         _lastKeyboardBrightnessEventUtc = DateTimeOffset.UtcNow;
         _lastKeyboardBrightnessPercent = Math.Clamp(brightnessPercent, 0, 100);
         _pendingKeyboardBrightnessPercent = _lastKeyboardBrightnessPercent;
+        _pendingKeyboardSourceDevicePath = sourceDevicePath;
         _pendingKeyboardTargetGdiDeviceName =
             NotificationAreaIcon.TryGetCursorMonitorDeviceName(out var targetName)
                 ? targetName
@@ -571,16 +592,28 @@ public sealed partial class MainWindow : Window, IDisposable
             {
                 _pendingKeyboardBrightnessPercent = null;
                 var targetGdiDeviceName = _pendingKeyboardTargetGdiDeviceName;
+                var sourceDevicePath = _pendingKeyboardSourceDevicePath;
                 _pendingKeyboardTargetGdiDeviceName = null;
+                _pendingKeyboardSourceDevicePath = null;
                 await InitializeAsync();
-                if (!_sessionIsActive || string.IsNullOrWhiteSpace(targetGdiDeviceName))
+                if (!_sessionIsActive || string.IsNullOrWhiteSpace(targetGdiDeviceName) ||
+                    string.IsNullOrWhiteSpace(sourceDevicePath))
                 {
                     continue;
                 }
 
                 await WaitForDisplayIdleAsync();
 
-                if (!_sessionIsActive)
+                // Only mirror an event from a still-active WMI panel to a validated
+                // external DDC/CI display under the cursor at event time.
+                if (!_sessionIsActive || !_lastWmiProbes.Any(probe =>
+                        probe.Status == WmiBrightnessProbeStatus.ReadSucceeded &&
+                        string.Equals(probe.Display.DevicePath, sourceDevicePath, StringComparison.OrdinalIgnoreCase)) ||
+                    !_lastDdcProbes.Any(probe =>
+                        string.Equals(probe.Display.GdiDeviceName, targetGdiDeviceName, StringComparison.OrdinalIgnoreCase) &&
+                        probe.PhysicalMonitors.Any(read => read.Status == DdcBrightnessProbeStatus.ReadSucceeded) &&
+                        !_lastWmiProbes.Any(wmi => wmi.Status == WmiBrightnessProbeStatus.ReadSucceeded &&
+                            string.Equals(wmi.Display.DevicePath, probe.Display.DevicePath, StringComparison.OrdinalIgnoreCase))))
                 {
                     continue;
                 }
@@ -661,6 +694,8 @@ public sealed partial class MainWindow : Window, IDisposable
 
         await InitializeAsync();
         ShowCompactView();
+        if (_activeMonitors.Count > 0)
+            await ProbeDdcBrightnessAsync(includeExtended: !_extendedControlsReady);
     }
 
     private void ShowAdvancedButton_Click(object sender, RoutedEventArgs e)
@@ -1252,7 +1287,7 @@ public sealed partial class MainWindow : Window, IDisposable
             _lastContrastProbes = probes.Contrast;
             _lastColorTemperatureProbes = probes.ColorTemperature;
             _lastDdcCapabilities = probes.Capabilities;
-            _extendedControlsReady = includeExtended;
+            _extendedControlsReady = includeExtended || _extendedControlsReady;
             if (probes.Wmi.Any(item => item.Status == WmiBrightnessProbeStatus.ReadSucceeded))
                 _brightnessEventWatcher.TryStart();
             else
@@ -2414,7 +2449,7 @@ public sealed partial class MainWindow : Window, IDisposable
             _lastDdcProbes.Count == 0 ||
             _lastWmiProbes.Count == 0)
         {
-            await ProbeDdcBrightnessAsync();
+            await ProbeDdcBrightnessAsync(includeExtended: false);
         }
 
         if (shouldReduce)
