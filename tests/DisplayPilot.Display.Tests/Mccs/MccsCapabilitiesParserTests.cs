@@ -135,7 +135,7 @@ public class MccsCapabilitiesParserTests
 
         // Assert - VCP 0x10 is Brightness
         Assert.IsTrue(result.Capabilities.SupportsVcp(0x10));
-        var brightnessInfo = result.Capabilities.GetMccsVcpFeature(0x10);
+        var brightnessInfo = result.Capabilities.FindFeature(0x10);
         Assert.IsNotNull(brightnessInfo);
         Assert.AreEqual(0x10, brightnessInfo.Value.Code);
         Assert.IsTrue(brightnessInfo.Value.IsContinuous);
@@ -159,7 +159,7 @@ public class MccsCapabilitiesParserTests
 
         // Assert - VCP 0x60 is Input Source with discrete values
         Assert.IsTrue(result.Capabilities.SupportsVcp(0x60));
-        var inputSourceInfo = result.Capabilities.GetMccsVcpFeature(0x60);
+        var inputSourceInfo = result.Capabilities.FindFeature(0x60);
         Assert.IsNotNull(inputSourceInfo);
         Assert.IsTrue(inputSourceInfo.Value.HasDiscreteValues);
 
@@ -183,7 +183,7 @@ public class MccsCapabilitiesParserTests
 
         // Assert - VCP 0x14 is Color Preset
         Assert.IsTrue(result.Capabilities.SupportsVcp(0x14));
-        var colorPresetInfo = result.Capabilities.GetMccsVcpFeature(0x14);
+        var colorPresetInfo = result.Capabilities.FindFeature(0x14);
         Assert.IsNotNull(colorPresetInfo);
         Assert.IsTrue(colorPresetInfo.Value.HasDiscreteValues);
 
@@ -205,7 +205,7 @@ public class MccsCapabilitiesParserTests
 
         // Assert - VCP 0xD6 is Power Mode
         Assert.IsTrue(result.Capabilities.SupportsVcp(0xD6));
-        var powerModeInfo = result.Capabilities.GetMccsVcpFeature(0xD6);
+        var powerModeInfo = result.Capabilities.FindFeature(0xD6);
         Assert.IsNotNull(powerModeInfo);
         Assert.IsTrue(powerModeInfo.Value.HasDiscreteValues);
 
@@ -265,7 +265,7 @@ public class MccsCapabilitiesParserTests
 
         // Assert - VCP 0x60 Input Source has values: 01 11 0F
         Assert.IsTrue(result.Capabilities.SupportsVcp(0x60));
-        var inputSourceInfo = result.Capabilities.GetMccsVcpFeature(0x60);
+        var inputSourceInfo = result.Capabilities.FindFeature(0x60);
         Assert.IsNotNull(inputSourceInfo);
 
         var values = inputSourceInfo.Value.SupportedValues;
@@ -283,7 +283,7 @@ public class MccsCapabilitiesParserTests
 
         // Assert - VCP 0xE2 has values: 00 01 02 04 0E 12 14 19
         Assert.IsTrue(result.Capabilities.SupportsVcp(0xE2));
-        var e2Info = result.Capabilities.GetMccsVcpFeature(0xE2);
+        var e2Info = result.Capabilities.FindFeature(0xE2);
         Assert.IsNotNull(e2Info);
 
         var values = e2Info.Value.SupportedValues;
@@ -336,7 +336,7 @@ public class MccsCapabilitiesParserTests
 
         // Assert
         Assert.IsTrue(result.Capabilities.SupportsVcp(0x14));
-        var vcpInfo = result.Capabilities.GetMccsVcpFeature(0x14);
+        var vcpInfo = result.Capabilities.FindFeature(0x14);
         Assert.IsNotNull(vcpInfo);
         Assert.AreEqual(3, vcpInfo.Value.SupportedValues.Count);
     }
@@ -354,18 +354,18 @@ public class MccsCapabilitiesParserTests
         Assert.AreEqual(5, result.Capabilities.Features.Count);
 
         // Continuous codes (no discrete values)
-        var brightness = result.Capabilities.GetMccsVcpFeature(0x10);
+        var brightness = result.Capabilities.FindFeature(0x10);
         Assert.IsTrue(brightness?.IsContinuous ?? false);
 
-        var contrast = result.Capabilities.GetMccsVcpFeature(0x12);
+        var contrast = result.Capabilities.FindFeature(0x12);
         Assert.IsTrue(contrast?.IsContinuous ?? false);
 
         // Discrete codes (with values)
-        var colorPreset = result.Capabilities.GetMccsVcpFeature(0x14);
+        var colorPreset = result.Capabilities.FindFeature(0x14);
         Assert.IsTrue(colorPreset?.HasDiscreteValues ?? false);
         Assert.AreEqual(2, colorPreset?.SupportedValues.Count);
 
-        var inputSource = result.Capabilities.GetMccsVcpFeature(0x60);
+        var inputSource = result.Capabilities.FindFeature(0x60);
         Assert.IsTrue(inputSource?.HasDiscreteValues ?? false);
         Assert.AreEqual(2, inputSource?.SupportedValues.Count);
     }
