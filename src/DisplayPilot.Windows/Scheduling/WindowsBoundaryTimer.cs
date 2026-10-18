@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Unlicense
 using System.Threading;
 namespace DisplayPilot.Windows.Scheduling;
 
