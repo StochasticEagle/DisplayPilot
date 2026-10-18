@@ -601,7 +601,7 @@ public sealed partial class MainWindow : Window, IDisposable
             string.Equals(probe.Display.DevicePath, sourceDevicePath, StringComparison.OrdinalIgnoreCase)
                 ? probe with { CurrentBrightness = (byte)brightnessPercent }
                 : probe).ToArray();
-        var sourceCard = (_visualsReady ? CompactMonitorList.ItemsSource : null) as IEnumerable<CompactMonitorViewModel>)?
+        var sourceCard = ((_visualsReady ? CompactMonitorList.ItemsSource : null) as IEnumerable<CompactMonitorViewModel>)?
             .FirstOrDefault(item => string.Equals(item.DevicePath, sourceDevicePath, StringComparison.OrdinalIgnoreCase));
         if (sourceCard is not null)
         {
