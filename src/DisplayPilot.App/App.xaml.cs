@@ -34,7 +34,8 @@ public partial class App : Application
         await window.InitializeAsync();
         if (!notificationAreaReady)
         {
-            window.Activate();
+            // Fall back to the regular UI if the background tray cannot initialize.
+            window.ShowFromExternalActivation();
         }
     }
 
