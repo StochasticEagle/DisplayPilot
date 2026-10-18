@@ -32,7 +32,7 @@ Produce two **native** C++ executable builds, with exactly these architecture di
 - `dist/32/DisplayPilot.exe` — Windows 7 SP1 32-bit baseline; also usable on supported 64-bit Windows through WOW64.
 - `dist/64/DisplayPilot.exe` — Windows 7 SP1 64-bit baseline.
 
-Use `32` and `64` in build/output and installer artifact directories. Never name directories `x32`, `x64`, `win-x32` or `win-x64`. The build may produce two separate installers, one for each architecture, with correspondingly named output directories (`dist/32/`, `dist/64/`).
+Use `32` and `64` in build/output and installer artifact directories. Never use architecture-prefixed or alternate directory names. The build may produce two separate installers, one for each architecture, with correspondingly named output directories (`dist/32/`, `dist/64/`).
 
 Each installed application directory contains **DisplayPilot.exe only**. Embed icons, user interface, strings and other resources in the PE executable; do not ship external configuration or content files.
 
