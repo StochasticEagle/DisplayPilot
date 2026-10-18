@@ -41,6 +41,9 @@
     <DebugType>none</DebugType>
     <NativeDebugSymbols>false</NativeDebugSymbols>
     <StripSymbols>true</StripSymbols>
+    <!-- AOT compilation resolves references from NuGet; do not mirror the
+         entire managed runtime into the Release build directory. -->
+    <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
     <CopyOutputSymbolsToPublishDirectory>false</CopyOutputSymbolsToPublishDirectory>
     <PublishReferencesSymbols>false</PublishReferencesSymbols>
     <InvariantGlobalization>true</InvariantGlobalization>
@@ -83,6 +86,30 @@
     <RemoveDir Directories="$(PublishDir)ar;$(PublishDir)bg;$(PublishDir)ca;$(PublishDir)cs;$(PublishDir)da;$(PublishDir)de;$(PublishDir)el;$(PublishDir)en;$(PublishDir)es;$(PublishDir)et;$(PublishDir)fi;$(PublishDir)fr;$(PublishDir)he;$(PublishDir)hi;$(PublishDir)hr;$(PublishDir)hu;$(PublishDir)id;$(PublishDir)it;$(PublishDir)ja;$(PublishDir)ko;$(PublishDir)lt;$(PublishDir)lv;$(PublishDir)ms;$(PublishDir)nl;$(PublishDir)no;$(PublishDir)pl;$(PublishDir)pt;$(PublishDir)pt-BR;$(PublishDir)pt-PT;$(PublishDir)ro;$(PublishDir)ru;$(PublishDir)sk;$(PublishDir)sl;$(PublishDir)sr;$(PublishDir)sv;$(PublishDir)th;$(PublishDir)tr;$(PublishDir)uk;$(PublishDir)vi;$(PublishDir)zh-Hans;$(PublishDir)zh-Hant;$(PublishDir)zh-CN;$(PublishDir)zh-TW" />
     <Error Condition="Exists('$(PublishDir)DisplayPilot.runtimeconfig.json') or Exists('$(PublishDir)DisplayPilot.deps.json')"
            Text="Runtime metadata JSON files are prohibited." />
+  </Target>
+
+  <!-- Fail rather than silently falling back to a framework-dependent
+       apphost or bundling the SDK runtimes. Enforced in Debug and Release. -->
+  <Target Name="EnforceCompiledApplication" BeforeTargets="Build;Publish"
+          Condition="'$(DesignTimeBuild)' != 'true'">
+    <Error Condition="'$(PublishAot)' != 'true'"
+           Text="DisplayPilot requires a C# Native AOT application executable." />
+    <Error Condition="'$(PublishSingleFile)' == 'true'"
+           Text="DisplayPilot does not permit single-file .NET bundling." />
+    <Error Condition="'$(WindowsAppSDKSelfContained)' == 'true'"
+           Text="DisplayPilot must use the installed Windows App SDK runtime." />
+    <Error Condition="'$(GenerateDependencyFile)' != 'false' or '$(GenerateRuntimeConfigurationFiles)' != 'false'"
+           Text="DisplayPilot must never generate .deps.json or .runtimeconfig.json." />
+  </Target>
+  <Target Name="RejectRuntimeDeploymentFiles" AfterTargets="Publish">
+    <ItemGroup>
+      <ForbiddenAppJson Include="$(PublishDir)**\*.json" />
+      <ForbiddenRuntime Include="$(PublishDir)**\coreclr.dll;$(PublishDir)**\hostfxr.dll;$(PublishDir)**\hostpolicy.dll;$(PublishDir)**\createdump.exe;$(PublishDir)**\crashdump.exe" />
+    </ItemGroup>
+    <Error Condition="'@(ForbiddenAppJson)' != ''"
+           Text="Application JSON files are prohibited: @(ForbiddenAppJson)" />
+    <Error Condition="'@(ForbiddenRuntime)' != ''"
+           Text="Bundled .NET runtime files are prohibited: @(ForbiddenRuntime)" />
   </Target>
 
   <Target Name="RemoveUnusedWebViewRuntime" AfterTargets="Publish">
