@@ -47,6 +47,11 @@ private:
     HWND latitude_ = nullptr, longitude_ = nullptr, label_ = nullptr;
     HWND startup_ = nullptr, status_ = nullptr;
     HWND save_ = nullptr, diagnostics_ = nullptr;
+    HWND displaysHeading_ = nullptr, scheduleHeading_ = nullptr, integrationHeading_ = nullptr;
+    HWND lightCaption_ = nullptr, darkCaption_ = nullptr;
+    HWND latitudeCaption_ = nullptr, longitudeCaption_ = nullptr, locationCaption_ = nullptr;
+    int dpi_ = 96;
+    int px(int logical) const { return MulDiv(logical, dpi_, 96); }
     int contentHeight_ = 0;
     int scroll_ = 0;
 

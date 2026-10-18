@@ -104,11 +104,16 @@ bool AdvancedWindow::create(HINSTANCE instance) {
     if (!window_) return false;
     applyNativeWindowChrome(window_);
     HDC dc=GetDC(window_);
-    const int size=dc ? -MulDiv(10,GetDeviceCaps(dc,LOGPIXELSY),72):-13;
+    dpi_ = dc ? GetDeviceCaps(dc, LOGPIXELSY) : 96;
     if (dc) ReleaseDC(window_,dc);
-    font_=CreateFontW(size,0,0,0,FW_NORMAL,FALSE,FALSE,FALSE,DEFAULT_CHARSET,
-          OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,
-          DEFAULT_PITCH|FF_SWISS,L"Segoe UI");
+    NONCLIENTMETRICSW metrics{};
+    metrics.cbSize = sizeof(metrics);
+    if (SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, sizeof(metrics), &metrics, 0))
+        font_ = CreateFontIndirectW(&metrics.lfMessageFont);
+    if (!font_) font_ = CreateFontW(-MulDiv(9, dpi_, 72), 0, 0, 0, FW_NORMAL,
+        FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
+        CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS,
+        L"Segoe UI");
     return true;
 }
 
@@ -146,7 +151,10 @@ void AdvancedWindow::rebuild() {
     rows_.clear();
     scheduleCheckbox_=brightnessCheckbox_=mode_=lightTime_=darkTime_=nullptr;
     latitude_=longitude_=label_=startup_=status_=save_=diagnostics_=nullptr;
+    displaysHeading_=scheduleHeading_=integrationHeading_=nullptr;
+    lightCaption_=darkCaption_=latitudeCaption_=longitudeCaption_=locationCaption_=nullptr;
     if (!monitors_ || !settings_) return;
+    displaysHeading_=add(L"STATIC",L"Displays",SS_LEFT,0);
     for (unsigned i=0;i<monitors_->size();++i) {
         auto& m=(*monitors_)[i];
         RowControls row;
@@ -201,6 +209,7 @@ void AdvancedWindow::rebuild() {
         rows_.push_back(std::move(row));
     }
     {
+        scheduleHeading_=add(L"STATIC",L"Appearance and scheduling",SS_LEFT,0);
         if (themesAvailable_) {
             add(L"BUTTON",L"Light mode",BS_PUSHBUTTON|WS_TABSTOP,themeLightId);
             add(L"BUTTON",L"Dark mode",BS_PUSHBUTTON|WS_TABSTOP,themeDarkId);
@@ -214,6 +223,11 @@ void AdvancedWindow::rebuild() {
         SendMessageW(mode_,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(L"Sunrise / sunset"));
         SendMessageW(mode_,CB_SETCURSEL,
             settings_->scheduleMode==ScheduleMode::Solar?1:0,0);
+        lightCaption_=add(L"STATIC",L"Light at",SS_LEFT,0);
+        darkCaption_=add(L"STATIC",L"Dark at",SS_LEFT,0);
+        latitudeCaption_=add(L"STATIC",L"Latitude",SS_LEFT,0);
+        longitudeCaption_=add(L"STATIC",L"Longitude",SS_LEFT,0);
+        locationCaption_=add(L"STATIC",L"Location",SS_LEFT,0);
         lightTime_=add(L"EDIT",formatMinute(settings_->lightMinute),
                        WS_BORDER|ES_AUTOHSCROLL|WS_TABSTOP,lightId);
         darkTime_=add(L"EDIT",formatMinute(settings_->darkMinute),
@@ -230,6 +244,7 @@ void AdvancedWindow::rebuild() {
         SendMessageW(brightnessCheckbox_,BM_SETCHECK,
                      settings_->reduceBrightness?BST_CHECKED:BST_UNCHECKED,0);
     }
+    integrationHeading_=add(L"STATIC",L"Windows integration",SS_LEFT,0);
     startup_=add(L"BUTTON",L"Start when signing into Windows",
                    BS_AUTOCHECKBOX|WS_TABSTOP,startupId);
     SendMessageW(startup_,BM_SETCHECK,
@@ -243,67 +258,92 @@ void AdvancedWindow::rebuild() {
 void AdvancedWindow::layout() {
     if (!window_) return;
     RECT bounds{};
-    GetClientRect(window_,&bounds);
-    const int width=bounds.right;
-    const int height=bounds.bottom;
-    const int left=22, column=170, field=std::max(190,width-250);
-    const int full=std::max(320,width-50);
-    int y=20-scroll_;
-    auto place=[](HWND child,int x,int top,int w,int h) {
-        if(child) MoveWindow(child,x,top,w,h,TRUE);
+    GetClientRect(window_, &bounds);
+    const int width = bounds.right;
+    const int height = bounds.bottom;
+    const int margin = px(24);
+    const int gap = px(12);
+    const int full = std::max(px(250), width - margin * 2);
+    const int labelWidth = px(125);
+    const int fieldX = margin + labelWidth;
+    const int fieldWidth = std::max(px(100), full - labelWidth - px(84));
+    int y = px(18) - scroll_;
+    auto place = [](HWND child, int x, int top, int w, int h) {
+        if (child) MoveWindow(child, x, top, w, h, TRUE);
     };
-    for (auto& row:rows_) {
-        place(row.label,left,y,full,25);
-        y+=32;
-        int member=0;
-        auto control=[&](HWND child,HWND apply) {
+    auto heading = [&](HWND child) {
+        place(child, margin, y, full, px(28));
+        y += px(36);
+    };
+    heading(displaysHeading_);
+    if (rows_.empty()) {
+        y += px(10);
+    }
+    for (auto& row : rows_) {
+        place(row.label, margin, y, full, px(27));
+        y += px(31);
+        int member = 0;
+        auto control = [&](HWND child, HWND apply) {
             if (!child) return;
-            HWND label=member<static_cast<int>(row.members.size())?
-                row.members[static_cast<size_t>(member++)]:nullptr;
-            place(label,left,y+5,column-10,24);
-            place(child,left+column,y,field-85,30);
-            if(apply) place(apply,std::max(left+column+field-78,width-98),y,69,28);
-            y+=38;
+            HWND label = member < static_cast<int>(row.members.size())
+                ? row.members[static_cast<size_t>(member++)] : nullptr;
+            place(label, margin + px(4), y + px(5), labelWidth - px(8), px(24));
+            place(child, fieldX, y, fieldWidth, apply ? px(240) : px(32));
+            if (apply) place(apply, fieldX + fieldWidth + gap, y, px(68), px(29));
+            y += px(39);
         };
-        control(row.brightness,nullptr);
-        control(row.contrast,nullptr);
-        control(row.color,row.colorApply);
-        control(row.rotation,row.rotationApply);
-        y+=12;
+        control(row.brightness, nullptr);
+        control(row.contrast, nullptr);
+        control(row.color, row.colorApply);
+        control(row.rotation, row.rotationApply);
+        y += px(17);
     }
-    {
-        if (themesAvailable_) {
-            place(GetDlgItem(window_,themeLightId),left,y,140,30);
-            place(GetDlgItem(window_,themeDarkId),left+155,y,140,30);
-            y+=40;
-        }
-        place(scheduleCheckbox_,left,y,290,26);
-        place(brightnessCheckbox_,left+300,y,std::max(270,width-345),26);
-        y+=34;
-        place(mode_,left,y,200,100);
-        place(lightTime_,left+213,y,78,26);
-        place(darkTime_,left+302,y,78,26);
-        y+=43;
-        place(latitude_,left,y,118,26);
-        place(longitude_,left+132,y,118,26);
-        place(label_,left+266,y,std::max(145,width-325),26);
-        y+=42;
-        place(save_,left,y,180,31);
-        y+=44;
+    y += px(8);
+    heading(scheduleHeading_);
+    if (themesAvailable_) {
+        place(GetDlgItem(window_, themeLightId), margin, y, px(132), px(31));
+        place(GetDlgItem(window_, themeDarkId), margin + px(145), y, px(132), px(31));
+        y += px(43);
     }
-    place(startup_,left,y,310,29);
-    place(diagnostics_,left+318,y,165,30);
-    y+=45;
-    place(status_,left,y,full,50);
-    contentHeight_=y+scroll_+60;
+    place(scheduleCheckbox_, margin, y, full, px(27));
+    y += px(31);
+    place(brightnessCheckbox_, margin, y, full, px(27));
+    y += px(40);
+
+    place(mode_, margin, y, px(184), px(250));
+    place(lightCaption_, margin + px(199), y + px(5), px(64), px(24));
+    place(lightTime_, margin + px(266), y, px(73), px(27));
+    place(darkCaption_, margin + px(351), y + px(5), px(62), px(24));
+    place(darkTime_, margin + px(415), y, px(73), px(27));
+    y += px(42);
+
+    place(latitudeCaption_, margin, y, px(72), px(24));
+    place(latitude_, margin + px(76), y, px(95), px(27));
+    place(longitudeCaption_, margin + px(187), y, px(78), px(24));
+    place(longitude_, margin + px(268), y, px(95), px(27));
+    y += px(39);
+    place(locationCaption_, margin, y + px(4), px(72), px(24));
+    place(label_, margin + px(76), y, std::max(px(180), full - px(76)), px(27));
+    y += px(44);
+
+    place(save_, margin, y, px(170), px(32));
+    y += px(57);
+    heading(integrationHeading_);
+    place(startup_, margin, y, std::min(full, px(340)), px(30));
+    place(diagnostics_, margin + px(350), y, px(160), px(30));
+    y += px(46);
+    place(status_, margin, y, full, px(48));
+    y += px(60);
+
+    contentHeight_ = y + scroll_;
     SCROLLINFO info{};
-    info.cbSize=sizeof(info);
-    info.fMask=SIF_RANGE|SIF_PAGE|SIF_POS;
-    info.nMin=0;
-    info.nMax=std::max(0,contentHeight_-1);
-    info.nPage=static_cast<UINT>(height);
-    info.nPos=scroll_;
-    SetScrollInfo(window_,SB_VERT,&info,TRUE);
+    info.cbSize = sizeof(info);
+    info.fMask = SIF_RANGE | SIF_PAGE | SIF_POS;
+    info.nMin = 0;
+    info.nMax = std::max(0, contentHeight_ - 1);
+    info.nPage = static_cast<UINT>(std::max(0, height));
+    info.nPos = scroll_;
+    SetScrollInfo(window_, SB_VERT, &info, TRUE);
 }
 void AdvancedWindow::scrollBy(int difference) {
     RECT bounds{};GetClientRect(window_,&bounds);
@@ -440,8 +480,14 @@ LRESULT CALLBACK AdvancedWindow::procedure(HWND hwnd,UINT msg,WPARAM w,LPARAM l)
             }
         }
         return 0;
-    case WM_MOUSEWHEEL:self->scrollBy(-GET_WHEEL_DELTA_WPARAM(w)/WHEEL_DELTA*48);return 0;
+    case WM_MOUSEWHEEL:self->scrollBy(-GET_WHEEL_DELTA_WPARAM(w)/WHEEL_DELTA*self->px(48));return 0;
     case WM_SIZE:self->layout();return 0;
+    case WM_GETMINMAXINFO: {
+        auto* limits = reinterpret_cast<MINMAXINFO*>(l);
+        limits->ptMinTrackSize.x = self->px(680);
+        limits->ptMinTrackSize.y = self->px(430);
+        return 0;
+    }
     case WM_CLOSE:self->hide();return 0;
     case WM_DESTROY:self->window_=nullptr;return 0;
     default:return DefWindowProcW(hwnd,msg,w,l);
