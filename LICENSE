@@ -4,7 +4,7 @@
 
 Original contributions controlled by this project's maintainer, including the maintainer's copyright interests in independently original AI-assisted code, are dedicated to the public domain under The Unlicense below. To the extent that independently generated code is not copyrightable, no license is needed.
 
-The Unlicense dedication does not apply to portions derived from Microsoft PowerToys or other third-party material. Some DisplayPilot files carry MIT license notices and retain permissions under MIT as well. The original Microsoft attribution, conditions and source notices must be preserved where applicable. See NOTICE.md and THIRD-PARTY-NOTICES.md.
+Source files explicitly marked as MIT-licensed retain the MIT terms reproduced below. The Unlicense applies to the remaining original contributions controlled by the maintainer.
 
 This is free and unencumbered software released into the public domain.
 
@@ -33,7 +33,7 @@ For more information, please refer to <http://unlicense.org/>
 
 ---
 
-## MIT License — retained for Microsoft PowerToys-derived material and applicable MIT-licensed code
+## MIT License — applicable MIT-licensed source files
 
 MIT License
 

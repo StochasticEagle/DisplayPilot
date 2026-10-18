@@ -1,7 +1,7 @@
 # Theme verification
 
-This checkpoint validates DisplayPilot's first extracted PowerToys Light Switch
-behavior on Windows 10 and Windows 11. It reads and writes these per-user values:
+This checkpoint validates DisplayPilot's Windows theme integration on
+Windows 10 and Windows 11. It reads and writes these per-user values:
 
 - `AppsUseLightTheme`
 - `SystemUsesLightTheme`
@@ -10,7 +10,7 @@ behavior on Windows 10 and Windows 11. It reads and writes these per-user values
 The values are stored under
 `HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize`. After a
 change, DisplayPilot broadcasts the same `WM_SETTINGCHANGE`, `WM_THEMECHANGED`, and
-colorization notifications used by PowerToys Light Switch.
+colorization notifications recognized by Windows.
 
 ## Scope
 

@@ -10,10 +10,6 @@ Windows 11 that combines monitor controls with automatic Light and Dark theme
 scheduling. It provides a compact flyout for routine adjustments and a detailed
 Advanced view for device information, configuration, and diagnostics.
 
-DisplayPilot is a standalone application inspired by the Microsoft PowerToys
-Light Switch and Power Display utilities. It does not require PowerToys and is
-not affiliated with or supported by Microsoft.
-
 ## Release status
 
 DisplayPilot 0.9.1 is a beta release. The final installer regression suite has
@@ -167,8 +163,8 @@ installer generation, is defined in [`.github/workflows/build.yml`](.github/work
 | `DisplayPilot.Windows` | Windows themes, timers, settings, shell integration, and startup |
 | `tests` | Unit and platform-focused automated tests |
 
-See [Architecture](docs/architecture.md) for component boundaries and source
-extraction policy.
+See [Architecture](docs/architecture.md) for component boundaries and runtime
+constraints.
 
 ## Verification documentation
 
@@ -182,20 +178,14 @@ extraction policy.
 - [Schedule persistence](docs/theme-schedule-persistence-verification.md)
 - [Installer and startup](docs/installer-verification.md)
 
-## License and attribution
+## License
 
-The maintainer's original DisplayPilot contributions are released under
-[The Unlicense](LICENSE). Some source files remain available under MIT as well.
-Microsoft PowerToys-derived portions remain under MIT with their required
-copyright and license notices. See [Notices](NOTICE.md) and
-[Third-party notices](THIRD-PARTY-NOTICES.md) for attribution.
+DisplayPilot is distributed under [The Unlicense and MIT License](LICENSE),
+as specified in the repository's license text and applicable source headers.
 
-Generative AI was used to help design, implement, refactor, and test DisplayPilot.
-AI-assisted changes were reviewed and integrated by the maintainer. To the
-extent the maintainer holds copyright in independently original AI-generated
-or AI-assisted contributions, these rights are dedicated to the public domain.
-This does not relicense pre-existing or derivative Microsoft or other third-party
-code; their applicable licenses and source notices remain in effect.
+Generative AI assisted development and testing. Independently original
+AI-assisted contributions controlled by the maintainer are dedicated to
+the public domain under The Unlicense.
 
 Security reports and contribution requirements are documented in
 [Security policy](SECURITY.md) and [Contributing](CONTRIBUTING.md).

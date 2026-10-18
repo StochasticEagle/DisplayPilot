@@ -1,8 +1,8 @@
 # Custom theme schedule verification
 
-This checkpoint adds a platform-independent fixed-hours evaluator based on the
-PowerToys Light Switch boundary behavior. The app previews which theme a custom
-schedule calls for at the current local time and shows the next transition.
+The fixed-hours evaluator determines the active theme and the next
+transition from a locally configured schedule, including midnight-wrapping
+time ranges.
 
 ## Scope and safety
 

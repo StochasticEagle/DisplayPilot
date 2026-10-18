@@ -19,17 +19,16 @@ theme automation with monitor management.
 - Windows 10 version 1809 or newer.
 - Windows 11 supported.
 - Per-user operation without a required Windows service.
-- No dependency on the PowerToys runner or PowerToys Settings application.
 - Hardware operations remain capability-driven because DDC/CI implementations vary.
 - Notification-area callbacks use a dedicated hidden Win32 window. Native
   callbacks queue commands onto the WinUI dispatcher and never mutate the
   flyout directly from the shell callback.
 
-## Extraction policy
+## Runtime design
 
-PowerToys source is imported selectively. Each imported component must:
-
-1. Retain its original Microsoft copyright header.
-2. Be placed behind a DisplayPilot-owned interface.
-3. Remove dependencies on PowerToys runner IPC, telemetry, GPO, and settings infrastructure.
-4. Receive focused tests before functional changes are introduced.
+- One application process; no independent background services.
+- Event-driven display and session updates, without periodic hardware polling.
+- One-shot theme scheduling at the next required transition.
+- Open DDC/CI monitor handles only for bounded, requested work.
+- Reuse cached monitor state and apply targeted read-back verification after writes.
+- Avoid unnecessary allocations, wakeups, and full UI rebuilds while idle.
