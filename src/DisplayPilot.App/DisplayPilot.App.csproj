@@ -12,6 +12,7 @@
     <ApplicationIcon>Assets\displaypilot-primary.ico</ApplicationIcon>
     <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <SatelliteResourceLanguages Condition="'$(Configuration)' == 'Release'">en</SatelliteResourceLanguages>
   </PropertyGroup>
 
   <ItemGroup>
