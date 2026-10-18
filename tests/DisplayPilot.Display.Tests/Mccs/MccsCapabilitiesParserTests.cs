@@ -31,7 +31,7 @@ public sealed class MccsCapabilitiesParserTests
         Assert.AreEqual("lcd", profile.Type);
         Assert.AreEqual("LabPanel", profile.Model);
         Assert.AreEqual("2.2", profile.MccsVersion);
-        CollectionAssert.AreEqual(new byte[] { 0x01, 0x03, 0x0C }, profile.SupportedCommands);
+        Assert.AreEqual("1,3,12", string.Join(",", profile.SupportedCommands));
         Assert.AreEqual(4, profile.Features.Count);
         Assert.IsTrue(profile.SupportsVcp(0x10));
         Assert.IsTrue(profile.SupportsVcp(0x12));
@@ -45,8 +45,8 @@ public sealed class MccsCapabilitiesParserTests
 
         Assert.IsTrue(profile.FindFeature(0x10)!.Value.IsContinuous);
         Assert.IsTrue(profile.FindFeature(0x14)!.Value.HasDiscreteValues);
-        CollectionAssert.AreEqual(new int[] { 5, 8 }, profile.FeatureValues(0x14)!.ToArray());
-        CollectionAssert.AreEqual(new int[] { 15, 17 }, profile.FeatureValues(0x60)!.ToArray());
+        Assert.AreEqual("5,8", string.Join(",", profile.FeatureValues(0x14)!));
+        Assert.AreEqual("15,17", string.Join(",", profile.FeatureValues(0x60)!));
         Assert.IsNull(profile.FindFeature(0x20));
         Assert.IsNull(profile.FeatureValues(0x20));
     }
@@ -71,7 +71,7 @@ public sealed class MccsCapabilitiesParserTests
         var feature = profile.FindFeature(0x60);
         Assert.IsNotNull(feature);
         Assert.AreEqual("HDMI Input", feature.Value.Name);
-        CollectionAssert.AreEqual(new int[] { 15, 17 }, feature.Value.SupportedValues.ToArray());
+        Assert.AreEqual("15,17", string.Join(",", feature.Value.SupportedValues));
     }
 
     [TestMethod]
