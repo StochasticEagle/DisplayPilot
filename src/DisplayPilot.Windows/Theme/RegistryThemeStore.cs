@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Unlicense
 using Microsoft.Win32;
 namespace DisplayPilot.Windows.Theme;
 
