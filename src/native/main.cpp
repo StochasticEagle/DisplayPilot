@@ -3,11 +3,13 @@
 #include "advanced.hpp"
 #include "settings.hpp"
 #include "wmi_events.hpp"
+#include "location.hpp"
 #include <windows.h>
 #include <shellapi.h>
 #include <algorithm>
 #include <string>
 #include <vector>
+#include <new>
 
 namespace displaypilot {
 namespace {
@@ -33,6 +35,7 @@ struct Application {
     Flyout flyout;
     AdvancedWindow advanced;
     BrightnessEvents brightnessKeys;
+    LocationUpdates* location = nullptr;
     Settings settings;
     std::vector<Monitor> monitors;
     UINT taskbarRestart = 0;
@@ -199,6 +202,7 @@ void manualTheme(bool dark) {
     if (app.settings.scheduleEnabled) {
         app.settings.scheduleEnabled = false;
         saveSettings(app.settings);
+        syncLocation();
     }
     if (app.savedBrightness) restoreMonitorBrightness();
     app.scheduleApplied = false;
@@ -206,10 +210,22 @@ void manualTheme(bool dark) {
     updateAppearance();
     app.advanced.refresh();
 }
+void syncLocation() {
+    if (!app.location) return;
+    if (app.settings.scheduleEnabled && app.settings.scheduleMode == ScheduleMode::Solar &&
+        app.settings.automaticLocation) app.location->start();
+    else app.location->stop();
+}
+void updateLocationNow() {
+    if (!app.location || !app.settings.scheduleEnabled ||
+        app.settings.scheduleMode != ScheduleMode::Solar) return;
+    app.location->updateNow();
+}
 void saveNewSettings(const Settings& next) {
     const bool previousEnabled = app.settings.scheduleEnabled;
     app.settings = next;
     saveSettings(app.settings);
+    syncLocation();
     if (previousEnabled && !next.scheduleEnabled && app.savedBrightness)
         restoreMonitorBrightness();
     applySchedule(true);
@@ -295,6 +311,7 @@ void showContextMenu() {
     case commandSchedule:
         app.settings.scheduleEnabled = !app.settings.scheduleEnabled;
         saveSettings(app.settings);
+        syncLocation();
         applySchedule(true);
         break;
     case commandExit: DestroyWindow(app.owner); break;
@@ -307,6 +324,26 @@ LRESULT CALLBACK ownerProcedure(HWND hwnd, UINT msg, WPARAM w, LPARAM l) {
         return 0;
     }
     switch (msg) {
+    case LocationUpdates::message: {
+        auto* coordinates = reinterpret_cast<LocationCoordinates*>(l);
+        if (coordinates) {
+            if (app.settings.scheduleEnabled && app.settings.scheduleMode == ScheduleMode::Solar &&
+                (app.settings.automaticLocation || w != 0)) {
+                if (!app.settings.locationConfigured ||
+                    app.settings.latitude != coordinates->latitude ||
+                    app.settings.longitude != coordinates->longitude) {
+                    app.settings.latitude = coordinates->latitude;
+                    app.settings.longitude = coordinates->longitude;
+                    app.settings.locationConfigured = true;
+                    saveSettings(app.settings);
+                    applySchedule(true);
+                    app.advanced.refresh();
+                }
+            }
+            delete coordinates;
+        }
+        return 0;
+    }
     case trayMessage: {
         const UINT event = LOWORD(l);
         if (event == WM_MOUSEMOVE) {
@@ -400,6 +437,15 @@ LRESULT CALLBACK ownerProcedure(HWND hwnd, UINT msg, WPARAM w, LPARAM l) {
         KillTimer(hwnd, refreshTimer);
         KillTimer(hwnd, brightnessEventTimer);
         app.brightnessKeys.stop();
+        if (app.location) {
+            app.location->stop();
+            app.location->Release();
+            app.location = nullptr;
+        }
+        MSG pending{};
+        while (PeekMessageW(&pending, hwnd, LocationUpdates::message,
+                            LocationUpdates::message, PM_REMOVE))
+            delete reinterpret_cast<LocationCoordinates*>(pending.lParam);
         hideFlyout();
         restoreMonitorBrightness();
         if (app.advanced.handle()) DestroyWindow(app.advanced.handle());
@@ -452,6 +498,7 @@ int run(HINSTANCE instance) {
     app.flyout.scheduleChanged = [](bool enabled) {
         app.settings.scheduleEnabled = enabled;
         saveSettings(app.settings);
+        syncLocation();
         applySchedule(true);
     };
     app.advanced.brightnessChanged = changeBrightness;
@@ -460,8 +507,11 @@ int run(HINSTANCE instance) {
     app.advanced.rotationChanged = changeRotation;
     app.advanced.themeChanged = manualTheme;
     app.advanced.settingsChanged = saveNewSettings;
+    app.advanced.locationUpdateRequested = updateLocationNow;
+    app.location = new (std::nothrow) LocationUpdates(app.owner);
 
     refreshMonitors();
+    syncLocation();
     applySchedule(true);
     updateIcon(true);
 
