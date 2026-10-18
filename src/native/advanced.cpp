@@ -547,7 +547,7 @@ LRESULT CALLBACK AdvancedWindow::procedure(HWND hwnd,UINT msg,WPARAM w,LPARAM l)
                        self->appIcon_, size, size, 0, nullptr, DI_NORMAL);
             return TRUE;
         }
-        break;
+        return DefWindowProcW(hwnd, msg, w, l);
     }
     case WM_DPICHANGED: {
         const RECT* suggested = reinterpret_cast<const RECT*>(l);
