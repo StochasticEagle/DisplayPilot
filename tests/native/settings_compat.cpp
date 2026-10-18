@@ -50,6 +50,12 @@ int main() {
 
     unsigned brightness = 0;
     if (!restoreBrightness(L"DISPLAY\\ONE", brightness) || brightness != 73) return 3;
+    if (!restoreBrightness(L"display\\one", brightness) || brightness != 73) return 20;
+    saveBrightness(L"display\\one", 73);
+    json_settings::Value caseDoc;
+    if (json_settings::read(caseDoc) != json_settings::ReadResult::Valid ||
+        json_settings::field(caseDoc, "brightnessRestoreValues")->object.size() != 1)
+        return 21;
     s.lightMinute = 495;
     saveSettings(s);
     json_settings::Value doc;
