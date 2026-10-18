@@ -8,7 +8,7 @@ if not exist "%VSWHERE%" (
   exit /b 1
 )
 set "VSROOT="
-for /f "usebackq delims=" %%V in (`"%VSWHERE%" -latest -products * -version "[18.0,19.0)" -property installationPath`) do if not defined VSROOT set "VSROOT=%%V"
+for /f "delims=" %%V in ('"%VSWHERE%" -latest -products * -version "[18.0,19.0)" -property installationPath') do if not defined VSROOT set "VSROOT=%%V"
 if not defined VSROOT (
   echo ERROR: Visual Studio 2026 not found.
   exit /b 1
