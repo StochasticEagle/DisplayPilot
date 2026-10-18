@@ -1272,7 +1272,7 @@ public sealed partial class MainWindow : Window, IDisposable
                         _startupBrightnessSyncCount = 1;
                         await SynchronizePowerBrightnessIfChangedAsync(startupPercent);
                         _startupBrightnessSyncSuccessCount =
-                            _lastWindowsBrightnessStateResult.Value.Succeeded ? 1 : 0;
+                            _lastWindowsBrightnessStateResult?.Succeeded == true ? 1 : 0;
                     }
                 }
             }
