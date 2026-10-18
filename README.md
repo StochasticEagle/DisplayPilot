@@ -1,40 +1,43 @@
 # DisplayPilot — native C++ rebuild
 
-DisplayPilot is a single-process native Windows notification-area monitor utility.
+DisplayPilot is a native, single-process Windows notification-area monitor utility.
 
-The dev/rebuild branch is a **clean new application**, not a port of source code from the previous .NET/WinUI application. Only the existing icons and LICENSE are reused. There are no third-party runtime libraries, .NET, WinUI, XAML, JSON configuration files, web assets or extra application processes.
+This branch is a clean C++ application, with no .NET, WinUI, CMake, JavaScript, web content or third-party runtime libraries. Only the existing icons and license were retained from the former application.
 
-## Current functionality
+## Build in Visual Studio 2026
 
-The first implementation provides a native tray icon, delayed-hover modeless flyout, Direct2D/DirectWrite rendering, an interactive per-monitor DDC/CI brightness slider, a native Windows right-click menu with Open DisplayPilot / Advanced / Exit, an independently movable Advanced window, Explorer restart recovery and a single-instance mutex.
+Open **DisplayPilot.sln** in Visual Studio 2026 with the **Desktop development with C++** workload and a Windows SDK installed. No CMake configuration or scripts are required.
 
-The remaining functionality (internal-panel WMI, VCP contrast/color, rotation, keyboard brightness integration, schedule and location services, full Advanced controls and persistence) is not yet reimplemented. The current source compiles the new foundation; it is not feature-complete.
+Choose **Release** or **Debug** and the desired solution platform:
 
-## Build
+| Visual Studio platform | Application output |
+| --- | --- |
+| Win32 | `dist/32/DisplayPilot.exe` |
+| x64 | `dist/64/DisplayPilot.exe` |
 
-Requires Windows with MSVC C++ desktop build tools, CMake and Windows SDK. Windows 7 SP1 is the minimum runtime target.
+Select **Build > Build Solution** or press **Ctrl+Shift+B**.
 
-    cmake -S . -B build/32 -A Win32
-    cmake --build build/32 --config Release
+The native project defaults to Visual Studio 2026's MSVC **v145** toolset. The GitHub Windows build uses the compatible v143 toolset available on its Visual Studio 2022 runner; no CMake is involved in either build.
 
-    cmake -S . -B build/64 -A x64
-    cmake --build build/64 --config Release
+From the Visual Studio Developer Command Prompt:
 
-The output directories are exactly:
+```cmd
+msbuild DisplayPilot.sln /m /p:Configuration=Release /p:Platform=Win32
+msbuild DisplayPilot.sln /m /p:Configuration=Release /p:Platform=x64
+```
 
-    dist/32/DisplayPilot.exe
-    dist/64/DisplayPilot.exe
+Release uses static C/C++ runtime linking and the Windows system libraries. It does not ship those libraries, debug information, helper executables or separate resources. Both outputs consist only of `DisplayPilot.exe`.
 
-Each app directory contains the executable alone. Windows DLLs are dynamically linked from the operating system; the MSVC C/C++ runtime is statically linked.
+## Implementation status
 
-## Platform compatibility
+The first native implementation includes the notification-area icon, modeless hover flyout rendered with Direct2D, DDC/CI brightness controls, native context menu and separate Advanced window. It is not yet feature-parity complete. Internal-panel WMI, color-temperature controls, rotation, brightness-key routing, complete scheduling and advanced controls will be built on this foundation.
 
-Windows 7 SP1: both 32 and 64 builds; Windows 10: both; Windows 11: 64 is supported, 32 is untested and unblocked. Windows 8/8.1 is untested and unblocked.
+## Platforms
 
-Windows 7 system theme switching is disabled; the other compatible controls remain available. The same DPI-scalable panel is used on all target operating systems.
+Windows 7 SP1 is the minimum runtime target, with 32-bit and 64-bit outputs. Windows 10 is targeted on both architectures. Windows 11 supports 64-bit; running the 32-bit application under WOW64 is untested and unblocked. Windows 8/8.1 is likewise untested and unblocked.
 
-Read the platform specification at docs/rebuild-platforms.md and the architecture overview at docs/architecture.md.
+See [platform requirements](docs/rebuild-platforms.md) and [architecture](docs/architecture.md).
 
 ## License
 
-The Unlicense (LICENSE).
+The [Unlicense](LICENSE).

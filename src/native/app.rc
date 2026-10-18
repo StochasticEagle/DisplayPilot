@@ -1,6 +1,7 @@
 #include <windows.h>
-1 ICON "@APP_ICON@"
+1 ICON "displaypilot-primary.ico"
 1 24 "app.manifest"
+
 1 VERSIONINFO
 FILEVERSION 0,1,0,0
 PRODUCTVERSION 0,1,0,0

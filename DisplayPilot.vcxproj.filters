@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files"><UniqueIdentifier>{B6B655B9-7125-4C59-8094-38CDEB47FA9A}</UniqueIdentifier></Filter>
+    <Filter Include="Header Files"><UniqueIdentifier>{60D8D2ED-FDB2-413C-BEC4-A76056952096}</UniqueIdentifier></Filter>
+    <Filter Include="Resources"><UniqueIdentifier>{BDDD6F6E-3B2F-4421-917B-4FA89FC6D01E}</UniqueIdentifier></Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="src\native\main.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="src\native\display.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="src\native\flyout.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClInclude Include="src\native\display.hpp"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="src\native\flyout.hpp"><Filter>Header Files</Filter></ClInclude>
+    <ResourceCompile Include="src\native\app.rc"><Filter>Resources</Filter></ResourceCompile>
+    <None Include="src\native\app.manifest"><Filter>Resources</Filter></None>
+    <None Include="assets\displaypilot-primary.ico"><Filter>Resources</Filter></None>
+  </ItemGroup>
+</Project>

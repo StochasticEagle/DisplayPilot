@@ -18,30 +18,26 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - arch: "32"
-            generator: Win32
-          - arch: "64"
-            generator: x64
+          - folder: "32"
+            platform: Win32
+          - folder: "64"
+            platform: x64
     steps:
       - uses: actions/checkout@v4
-      - name: Configure MSVC native project
-        shell: bash
-        run: cmake -S . -B build/${{ matrix.arch }} -A ${{ matrix.generator }}
-      - name: Compile Release
-        shell: bash
-        run: cmake --build build/${{ matrix.arch }} --config Release --parallel
-      - name: Verify single executable
+      - name: Build native Visual Studio project
+        shell: cmd
+        run: msbuild DisplayPilot.sln /m /p:Configuration=Release /p:Platform=${{ matrix.platform }} /p:PlatformToolset=v143 /verbosity:minimal
+      - name: Verify standalone Windows executable
         shell: bash
         run: |
-          test -s "dist/${{ matrix.arch }}/DisplayPilot.exe"
-          if test -n "$(find "dist/${{ matrix.arch }}" -type f ! -name DisplayPilot.exe -print)"; then
-            echo "Unexpected non-executable application file" >&2
+          test -s "dist/${{ matrix.folder }}/DisplayPilot.exe"
+          if test -n "$(find "dist/${{ matrix.folder }}" -type f ! -name DisplayPilot.exe -print)"; then
+            echo "Unexpected application deployment files" >&2
             exit 1
           fi
-          echo "DisplayPilot executable size: $(wc -c < "dist/${{ matrix.arch }}/DisplayPilot.exe") bytes"
-      - name: Upload native executable
-        uses: actions/upload-artifact@v4
+          echo "DisplayPilot.exe: $(wc -c < "dist/${{ matrix.folder }}/DisplayPilot.exe") bytes"
+      - uses: actions/upload-artifact@v4
         with:
-          name: DisplayPilot-${{ matrix.arch }}
-          path: dist/${{ matrix.arch }}/DisplayPilot.exe
+          name: DisplayPilot-${{ matrix.folder }}
+          path: dist/${{ matrix.folder }}/DisplayPilot.exe
           if-no-files-found: error

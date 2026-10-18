@@ -13,7 +13,7 @@ This is a new application, not a translation or continuation of the .NET / WinUI
 
 Windows 11 itself is 64-bit only; the `32` application build is a 32-bit program that may execute under WOW64 on Windows 11. It is explicitly **untested and unblocked**, not a required test target. The `64` application build remains supported and tested on Windows 11.
 
-Set the common minimum executable and imported-API baseline to Windows 7 (NT 6.1). Build with a C++ toolset that can still target Windows 7, such as MSVC from Visual Studio 2022; do not switch to a newer default that drops Windows 7 support. Dynamically resolve any newer Windows API before using it, and never require that API for program startup.
+Set the common minimum executable and imported-API baseline to Windows 7 (NT 6.1). Build directly in Visual Studio 2026 from DisplayPilot.sln (MSVC v145, no CMake). Retain the Windows 7 API and subsystem baseline, and dynamically resolve newer APIs instead of introducing OS-version-specific imports. Dynamically resolve any newer Windows API before using it, and never require that API for program startup.
 
 ### DPI and presentation
 

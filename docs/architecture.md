@@ -1,14 +1,14 @@
 # DisplayPilot native architecture
 
-All new application source is original C++ under src/native. No old C# or WinUI source is retained.
+The C++ implementation resides under `src/native` and builds directly as a Visual Studio C++ project. The root `DisplayPilot.sln` opens in Visual Studio 2026; `DisplayPilot.vcxproj` specifies all compiler and linker settings. **CMake is not used.**
 
-- main.cpp: one process, one hidden Win32 owner window, tray icon callback, hover timers, native context menu, Advanced top-level window and system-version feature gating.
-- flyout.cpp: a non-modal WS_POPUP with WS_EX_TOOLWINDOW and WS_EX_NOACTIVATE, rounded-corner geometry, Direct2D graphics, DirectWrite labels and pointer-operated slider controls. No dialog boxes.
-- display.cpp: discover physical monitors with Win32, read and write DDC/CI brightness and contrast via DXVA2 and destroy handles after each operation.
-- app.rc.in: compile the icon and DPI/compatibility manifest into the executable. The resource index remains inside the executable.
+- `main.cpp`: single-process Win32 message loop, notification icon, mouse-hover timing, native context menu, Advanced top-level window and OS-specific feature gating.
+- `flyout.cpp`: a modeless `WS_POPUP` window with `WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE`, Direct2D drawing and interactive slider input. Not a dialog box.
+- `display.cpp`: DXVA2 physical monitor discovery, DDC/CI brightness and contrast queries and writes.
+- `app.rc`: directly compiles the icon and Windows 7-compatible manifest into the executable.
 
-The Windows 7 SP1 API baseline is required on both architectures. Newer DPI functions are resolved at runtime; Windows 7 uses system DPI. Windows-wide theme modification is only offered on Windows 10 and later.
+The project uses the MSVC v145 platform toolset on Visual Studio 2026, C++17 and static C/C++ runtime linking (`/MT`, `/MTd` in Debug). It dynamically imports standard Windows operating-system APIs. The Windows 7 SP1 application baseline is specified with `_WIN32_WINNT=0x0601` and subsystem version 6.01. Higher-version DPI APIs are dynamically resolved. Debug intermediates and PDBs are outside the deployable `dist/32` and `dist/64` folders.
 
-Build with MSVC and /MT to avoid redistributing the VC runtime. Link to Windows-supplied operating-system DLLs by normal dynamic DLL import. There is no .NET, WinUI, third-party code or separate loader.
+The application ships only `DisplayPilot.exe`, with no .NET, JavaScript/web payloads, JSON/XBF files, third-party libraries or additional processes.
 
-The first executable is a foundational slice, **not feature-parity complete**. Future implementation must extend it with WMI brightness, DDC/CI color and contrast UI, display rotation, brightness-key routing, solar scheduling, Windows location, native settings persistence, complete Advanced controls and installer packaging. Platform-specific hardware behavior must be tested on physical machines.
+This is the **first functional native foundation**; full feature parity and architecture-specific hardware validation remain in progress. See [platform specification](rebuild-platforms.md).
