@@ -1,6 +1,8 @@
 #include "advanced.hpp"
 #include "ui_platform.hpp"
 #include <commctrl.h>
+#include <winver.h>
+#include <vector>
 #include <algorithm>
 #include <cmath>
 #include <cwchar>
@@ -12,7 +14,8 @@ namespace {
 constexpr int themeLightId=100, themeDarkId=101, scheduleId=110, reduceId=111;
 constexpr int modeId=112, lightId=113, darkId=114, latitudeId=115;
 constexpr int longitudeId=116, labelId=117, saveId=118, startupId=119;
-constexpr int diagnosticsId=120;
+constexpr int diagnosticsId=120, brandIconId=121;
+constexpr int appIconId=1;
 constexpr int monitorStart=2000;
 int toInt(float n) { return static_cast<int>(std::lround(n)); }
 std::wstring read(HWND window) {
@@ -45,6 +48,27 @@ bool readDecimal(HWND edit, double& number, double range) {
         std::abs(parsed) > range) return false;
     number = parsed;
     return true;
+}
+std::wstring executableVersion() {
+    wchar_t executable[MAX_PATH]{};
+    if (!GetModuleFileNameW(nullptr, executable, MAX_PATH)) return L"Version unavailable";
+    DWORD unused = 0;
+    const DWORD bytes = GetFileVersionInfoSizeW(executable, &unused);
+    if (!bytes) return L"Version unavailable";
+    std::vector<BYTE> data(bytes);
+    if (!GetFileVersionInfoW(executable, 0, bytes, data.data()))
+        return L"Version unavailable";
+    VS_FIXEDFILEINFO* info = nullptr;
+    UINT length = 0;
+    if (!VerQueryValueW(data.data(), L"\\", reinterpret_cast<void**>(&info), &length) ||
+        !info || length < sizeof(VS_FIXEDFILEINFO) ||
+        info->dwSignature != 0xFEEF04BD) return L"Version unavailable";
+    std::wstring version = std::to_wstring(HIWORD(info->dwProductVersionMS)) + L"." +
+        std::to_wstring(LOWORD(info->dwProductVersionMS)) + L"." +
+        std::to_wstring(HIWORD(info->dwProductVersionLS));
+    const auto revision = LOWORD(info->dwProductVersionLS);
+    if (revision) version += L"." + std::to_wstring(revision);
+    return L"Version " + version;
 }
 bool startupEnabled() {
     HKEY key=nullptr;
@@ -81,6 +105,7 @@ void setStartup(bool enabled) {
 
 AdvancedWindow::~AdvancedWindow() {
     if (font_) DeleteObject(font_);
+    if (titleFont_) DeleteObject(titleFont_);
 }
 
 bool AdvancedWindow::create(HINSTANCE instance) {
@@ -95,6 +120,11 @@ bool AdvancedWindow::create(HINSTANCE instance) {
     cls.lpfnWndProc=procedure;
     cls.hCursor=LoadCursorW(nullptr,IDC_ARROW);
     cls.hbrBackground=reinterpret_cast<HBRUSH>(COLOR_WINDOW+1);
+    appIcon_ = static_cast<HICON>(LoadImageW(instance, MAKEINTRESOURCEW(appIconId),
+        IMAGE_ICON, 0, 0, LR_DEFAULTSIZE | LR_SHARED));
+    cls.hIcon = appIcon_;
+    cls.hIconSm = static_cast<HICON>(LoadImageW(instance, MAKEINTRESOURCEW(appIconId),
+        IMAGE_ICON, GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON), LR_SHARED));
     cls.lpszClassName=L"DisplayPilotAdvanced";
     if (!RegisterClassExW(&cls) && GetLastError()!=ERROR_CLASS_ALREADY_EXISTS)
         return false;
@@ -102,19 +132,49 @@ bool AdvancedWindow::create(HINSTANCE instance) {
              WS_OVERLAPPEDWINDOW|WS_VSCROLL, CW_USEDEFAULT,CW_USEDEFAULT,
              860,690,nullptr,nullptr,instance,this);
     if (!window_) return false;
+    SendMessageW(window_, WM_SETICON, ICON_BIG, reinterpret_cast<LPARAM>(cls.hIcon));
+    SendMessageW(window_, WM_SETICON, ICON_SMALL, reinterpret_cast<LPARAM>(cls.hIconSm));
     applyNativeWindowChrome(window_);
     HDC dc=GetDC(window_);
     dpi_ = dc ? GetDeviceCaps(dc, LOGPIXELSY) : 96;
     if (dc) ReleaseDC(window_,dc);
+    updateFonts();
+    return true;
+}
+void AdvancedWindow::updateFonts() {
     NONCLIENTMETRICSW metrics{};
     metrics.cbSize = sizeof(metrics);
-    if (SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, sizeof(metrics), &metrics, 0))
-        font_ = CreateFontIndirectW(&metrics.lfMessageFont);
-    if (!font_) font_ = CreateFontW(-MulDiv(9, dpi_, 72), 0, 0, 0, FW_NORMAL,
+    HFONT normal = nullptr;
+    LOGFONTW title{};
+    if (SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, sizeof(metrics), &metrics, 0)) {
+        normal = CreateFontIndirectW(&metrics.lfMessageFont);
+        title = metrics.lfMessageFont;
+    } else {
+        wcscpy_s(title.lfFaceName, L"Segoe UI");
+    }
+    if (!normal) normal = CreateFontW(-MulDiv(9, dpi_, 72), 0, 0, 0, FW_NORMAL,
         FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
         CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS,
         L"Segoe UI");
-    return true;
+    title.lfHeight = -MulDiv(14, dpi_, 72);
+    title.lfWeight = FW_SEMIBOLD;
+    HFONT heading = CreateFontIndirectW(&title);
+    if (normal) {
+        for (auto* child : children_) {
+            if (IsWindow(child))
+                SendMessageW(child, WM_SETFONT, reinterpret_cast<WPARAM>(normal), TRUE);
+        }
+        HFONT old = font_;
+        font_ = normal;
+        if (old) DeleteObject(old);
+    }
+    if (heading) {
+        if (brandName_ && IsWindow(brandName_))
+            SendMessageW(brandName_, WM_SETFONT, reinterpret_cast<WPARAM>(heading), TRUE);
+        HFONT old = titleFont_;
+        titleFont_ = heading;
+        if (old) DeleteObject(old);
+    }
 }
 
 HWND AdvancedWindow::add(const wchar_t* kind,const std::wstring& caption,DWORD style,int id) {
@@ -152,8 +212,14 @@ void AdvancedWindow::rebuild() {
     scheduleCheckbox_=brightnessCheckbox_=mode_=lightTime_=darkTime_=nullptr;
     latitude_=longitude_=label_=startup_=status_=save_=diagnostics_=nullptr;
     displaysHeading_=scheduleHeading_=integrationHeading_=nullptr;
+    brandIcon_=brandName_=brandVersion_=nullptr;
     lightCaption_=darkCaption_=latitudeCaption_=longitudeCaption_=locationCaption_=nullptr;
     if (!monitors_ || !settings_) return;
+    brandIcon_=add(L"STATIC",L"",SS_OWNERDRAW,brandIconId);
+    brandName_=add(L"STATIC",L"DisplayPilot",SS_LEFT,0);
+    brandVersion_=add(L"STATIC",executableVersion(),SS_LEFT,0);
+    if (brandName_ && titleFont_)
+        SendMessageW(brandName_, WM_SETFONT, reinterpret_cast<WPARAM>(titleFont_), TRUE);
     displaysHeading_=add(L"STATIC",L"Displays",SS_LEFT,0);
     for (unsigned i=0;i<monitors_->size();++i) {
         auto& m=(*monitors_)[i];
@@ -275,6 +341,13 @@ void AdvancedWindow::layout() {
         place(child, margin, y, full, px(28));
         y += px(36);
     };
+    const int iconSize = px(32);
+    const int textX = margin + iconSize + px(12);
+    place(brandIcon_, margin, y + px(4), iconSize, iconSize);
+    place(brandName_, textX, y, std::max(0, full - (textX - margin)), px(27));
+    place(brandVersion_, textX, y + px(28),
+          std::max(0, full - (textX - margin)), px(22));
+    y += px(64);
     heading(displaysHeading_);
     if (rows_.empty()) {
         y += px(10);
@@ -464,6 +537,29 @@ LRESULT CALLBACK AdvancedWindow::procedure(HWND hwnd,UINT msg,WPARAM w,LPARAM l)
     }
     if(!self)return DefWindowProcW(hwnd,msg,w,l);
     switch(msg) {
+    case WM_DRAWITEM: {
+        const auto* item = reinterpret_cast<const DRAWITEMSTRUCT*>(l);
+        if (item && item->CtlID == brandIconId && self->appIcon_) {
+            FillRect(item->hDC, &item->rcItem,
+                     reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1));
+            const int size = self->px(32);
+            DrawIconEx(item->hDC, item->rcItem.left, item->rcItem.top,
+                       self->appIcon_, size, size, 0, nullptr, DI_NORMAL);
+            return TRUE;
+        }
+        break;
+    }
+    case WM_DPICHANGED: {
+        const RECT* suggested = reinterpret_cast<const RECT*>(l);
+        if (suggested)
+            SetWindowPos(hwnd, nullptr, suggested->left, suggested->top,
+                suggested->right - suggested->left, suggested->bottom - suggested->top,
+                SWP_NOZORDER | SWP_NOACTIVATE);
+        self->dpi_ = HIWORD(w);
+        self->updateFonts();
+        self->layout();
+        return 0;
+    }
     case WM_COMMAND:self->onCommand(LOWORD(w),HIWORD(w));return 0;
     case WM_HSCROLL:
         if(l)self->onScroll(reinterpret_cast<HWND>(l));

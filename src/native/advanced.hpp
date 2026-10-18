@@ -37,6 +37,9 @@ private:
     HINSTANCE instance_ = nullptr;
     HWND window_ = nullptr;
     HFONT font_ = nullptr;
+    HFONT titleFont_ = nullptr;
+    HICON appIcon_ = nullptr;
+    HWND brandIcon_ = nullptr, brandName_ = nullptr, brandVersion_ = nullptr;
     std::vector<Monitor>* monitors_ = nullptr;
     Settings* settings_ = nullptr;
     bool themesAvailable_ = false;
@@ -57,6 +60,7 @@ private:
 
     HWND add(const wchar_t* kind, const std::wstring& caption, DWORD style, int id);
     void rebuild();
+    void updateFonts();
     void layout();
     void scrollBy(int delta);
     void onCommand(WORD id, WORD notification);
