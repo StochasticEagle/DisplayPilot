@@ -1736,6 +1736,23 @@ public sealed partial class MainWindow : Window, IDisposable
 
     private async Task<bool> ApplyThemeAsync(ThemeMode mode, bool isScheduledChange)
     {
+        if (!_visualsReady)
+        {
+            if (_themeOperationRunning) return false;
+            _themeOperationRunning = true;
+            try
+            {
+                _lastThemeResult = await Task.Run(() => _themeService.Apply(mode));
+                _themeState = _lastThemeResult.After;
+                return _lastThemeResult.Succeeded;
+            }
+            catch (UnauthorizedAccessException exception) { _scheduleSettingsError = exception.GetType().Name; }
+            catch (SecurityException exception) { _scheduleSettingsError = exception.GetType().Name; }
+            catch (IOException exception) { _scheduleSettingsError = exception.GetType().Name; }
+            finally { _themeOperationRunning = false; }
+            return false;
+        }
+
         if (_themeOperationRunning)
         {
             return false;
@@ -1786,7 +1803,7 @@ public sealed partial class MainWindow : Window, IDisposable
         try
         {
             _themeState = _themeService.ReadState();
-            UpdateThemeStatus(prefix: null);
+            if (_visualsReady) UpdateThemeStatus(prefix: null);
         }
         catch (UnauthorizedAccessException exception)
         {
@@ -2178,6 +2195,7 @@ public sealed partial class MainWindow : Window, IDisposable
 
     private void UpdateSolarTimeDisplays(SolarTimes? solarTimes)
     {
+        if (!_visualsReady) return;
         var hasTimes = solarTimes is
         {
             Condition: SolarDayCondition.Normal,
@@ -2232,6 +2250,11 @@ public sealed partial class MainWindow : Window, IDisposable
 
     private void ReportScheduleSaveFailure(Exception exception)
     {
+        if (!_visualsReady)
+        {
+            _scheduleSettingsError = exception.GetType().Name;
+            return;
+        }
         _scheduleSettingsError = exception.GetType().Name;
         SchedulePersistenceStatusText.Text = "Schedule settings could not be saved.";
 
@@ -2449,7 +2472,7 @@ public sealed partial class MainWindow : Window, IDisposable
 
         if (_manualScheduleOverrideUntil is not null && now < _manualScheduleOverrideUntil)
         {
-            SchedulePersistenceStatusText.Text = string.Format(
+            if (_visualsReady) SchedulePersistenceStatusText.Text = string.Format(
                 CultureInfo.CurrentCulture,
                 "Manual theme override is active until {0:t}.",
                 _manualScheduleOverrideUntil);
@@ -2459,7 +2482,7 @@ public sealed partial class MainWindow : Window, IDisposable
         if (_manualScheduleOverrideUntil is not null)
         {
             _manualScheduleOverrideUntil = null;
-            SchedulePersistenceStatusText.Text = "The schedule boundary ended the manual override.";
+            if (_visualsReady) SchedulePersistenceStatusText.Text = "The schedule boundary ended the manual override.";
         }
 
         RefreshThemeStatus();
@@ -2719,6 +2742,7 @@ public sealed partial class MainWindow : Window, IDisposable
 
     private void ReportThemeFailure(Exception exception)
     {
+        if (!_visualsReady) return;
         ThemeStatusText.Text = string.Format(
             CultureInfo.CurrentCulture,
             "Theme operation failed (0x{0:X8}): {1}",
@@ -2970,6 +2994,7 @@ public sealed partial class MainWindow : Window, IDisposable
 
     private void UpdateCompactScheduleStatus()
     {
+        if (!_visualsReady) return;
         var evaluation = EvaluateSavedSchedule(DateTimeOffset.Now);
         if (evaluation is null)
         {
