@@ -20,4 +20,4 @@ Object files and other build intermediates are placed under `build/32` and `buil
 
 ## Dependencies
 
-DisplayPilot uses the Windows Shell, User32, GDI, Direct2D, DirectWrite, COM/WMI, DXVA2 monitor configuration, and Registry APIs. Release builds statically link the MSVC runtime. Application icons and the manifest are embedded in the executable.
+DisplayPilot uses the Windows Shell, User32, GDI, common controls, COM/WMI, DXVA2 monitor configuration, and Registry APIs. Release builds statically link the MSVC runtime. Application icons and the manifest are embedded in the executable.
