@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<Project DefaultTargets="Build" TreatAsLocalProperty="Platform" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<Project DefaultTargets="Build" InitialTargets="_DisplayPilotInitializeNativePlatform" TreatAsLocalProperty="Platform" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32"><Configuration>Debug</Configuration><Platform>Win32</Platform></ProjectConfiguration>
     <ProjectConfiguration Include="Release|Win32"><Configuration>Release</Configuration><Platform>Win32</Platform></ProjectConfiguration>
@@ -48,9 +48,15 @@
     <WholeProgramOptimization>true</WholeProgramOptimization>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
-  <PropertyGroup Condition="'$(DisplayPilotPlatform)'=='Win64'">
-    <ConfigurationPlatformExists>true</ConfigurationPlatformExists>
-  </PropertyGroup>
+  <Target Name="_DisplayPilotInitializeNativePlatform"
+          Condition="'$(DisplayPilotPlatform)'=='Win64' and '$(DesignTimeBuild)'!='true'">
+    <ItemGroup>
+      <ProjectConfiguration Include="$(Configuration)|$(Platform)">
+        <Configuration>$(Configuration)</Configuration>
+        <Platform>$(Platform)</Platform>
+      </ProjectConfiguration>
+    </ItemGroup>
+  </Target>
   <ImportGroup Label="ExtensionSettings" />
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(DisplayPilotPlatform)'=='Debug|Win32'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props"
