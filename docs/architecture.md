@@ -18,7 +18,7 @@ A single Win32 message loop handles the tray, native popup menu, flyout, and Adv
 
 External monitors are controlled using the DXVA2 physical-monitor APIs. Internal-panel brightness uses COM and `ROOT\WMI`. Display orientation is applied after validating the proposed mode with Windows display configuration functions.
 
-Persistent preferences reside under `HKCU\Software\DisplayPilot\Settings`; brightness restoration state resides under `HKCU\Software\DisplayPilot\Restoration`. Scheduling supports fixed times and sunrise/sunset using configured coordinates.
+Persistent preferences and scheduled-brightness restoration state share the original WinUI versioned JSON file at `%LOCALAPPDATA%\DisplayPilot\settings.json`. Existing native Registry values are used only when that file is absent. Scheduling supports fixed times and sunrise/sunset using configured coordinates.
 
 ## Compilation
 
