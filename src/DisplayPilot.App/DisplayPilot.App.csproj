@@ -9,7 +9,6 @@
     <WindowsAppSDKSelfContained>false</WindowsAppSDKSelfContained>
     <SelfContained>true</SelfContained>
     <PublishAot>true</PublishAot>
-    <PublishWmiLightStaticallyLinked>true</PublishWmiLightStaticallyLinked>
     <PublishSingleFile>false</PublishSingleFile>
     <OptimizationPreference>Size</OptimizationPreference>
     <GenerateDependencyFile>false</GenerateDependencyFile>

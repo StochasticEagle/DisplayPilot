@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Unlicense
-using WmiLight;
+using System.Management;
+using System.Runtime.InteropServices;
 using DisplayPilot.Display.Brightness;
 using DisplayPilot.Display.Discovery;
 using DisplayPilot.Display.Models;
@@ -45,25 +46,25 @@ public sealed class WindowsWmiBrightnessWriter : IBrightnessWriter
         var appliedPercent = NearestSupportedLevel(requestedPercent, brightnessInstance.Levels);
         try
         {
-            using var connection = new WmiConnection(Scope);
-            foreach (var method in connection.CreateQuery(Query))
+            using var searcher = new ManagementObjectSearcher(Scope, Query);
+            using var methods = searcher.Get();
+            foreach (ManagementObject method in methods)
             {
                 using (method)
                 {
                     if (!string.Equals(
-                        DisplayPathKey.FromWmiInstance(method.GetPropertyValue<string>("InstanceName")),
+                        DisplayPathKey.FromWmiInstance(method["InstanceName"] as string),
                         displayId,
                         StringComparison.OrdinalIgnoreCase))
                     {
                         continue;
                     }
 
-                    using var operation = method.GetMethod("WmiSetBrightness");
-                    using var parameters = operation.CreateInParameters();
-                    parameters.SetPropertyValue("Timeout", 0u);
-                    parameters.SetPropertyValue("Brightness", checked((byte)appliedPercent));
-                    var returnValue = method.ExecuteMethod<uint>(operation, parameters, out var output);
-                    output?.Dispose();
+                    using var parameters = method.GetMethodParameters("WmiSetBrightness");
+                    parameters["Timeout"] = 0u;
+                    parameters["Brightness"] = checked((byte)appliedPercent);
+                    using var output = method.InvokeMethod("WmiSetBrightness", parameters, null);
+                    var returnValue = output?["ReturnValue"] is uint value ? value : 0u;
                     if (returnValue != 0)
                     {
                         return Failed(
@@ -79,11 +80,15 @@ public sealed class WindowsWmiBrightnessWriter : IBrightnessWriter
 
             return Failed(requestedPercent, ErrorNotFound, "No WMI brightness-method instance matched this display.");
         }
+        catch (ManagementException exception)
+        {
+            return Failed(requestedPercent, exception.HResult, exception.Message, appliedPercent);
+        }
         catch (COMException exception)
         {
             return Failed(requestedPercent, exception.HResult, exception.Message, appliedPercent);
         }
-        catch (Exception exception) when (exception is not OutOfMemoryException)
+        catch (UnauthorizedAccessException exception)
         {
             return Failed(requestedPercent, exception.HResult, exception.Message, appliedPercent);
         }

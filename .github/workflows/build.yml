@@ -74,7 +74,7 @@ jobs:
                   "Microsoft.WindowsAppSDK.Foundation",
                   "Microsoft.WindowsAppSDK.Runtime",
               },
-              "DisplayPilot.Display.csproj": {"WmiLight"},
+              "DisplayPilot.Display.csproj": {"System.Management"},
               "DisplayPilot.Windows.csproj": set(),
               "DisplayPilot.Core.csproj": set(),
           }
@@ -86,8 +86,13 @@ jobs:
               "InteractiveExperiences must remain transitive, never an explicit package reference"
           )
           assert central["Microsoft.WindowsAppSDK.InteractiveExperiences"] == "2.1.3"
-          assert central["WmiLight"] == "7.3.0"
-          assert "System.Management" not in central
+          assert central["System.Management"] == "10.0.13"
+          assert "WmiLight" not in central
+          assert "WmiLight" not in explicit["DisplayPilot.Display.csproj"]
+          assert all(
+              name.startswith(("Microsoft.", "System.", "MSTest"))
+              for name in central
+          ), "Non-Microsoft package present in central dependency versions"
 
           apps = [project for project in graph["projects"]
                   if pathlib.PurePath(project.get("path", "").replace("\\", "/")).name == "DisplayPilot.App.csproj"]
@@ -104,6 +109,8 @@ jobs:
                   "Microsoft.WindowsAppSDK.Runtime": "2.3.1",
                   "Microsoft.WindowsAppSDK.InteractiveExperiences": "2.1.3",
               }
+              required["System.Management"] = "10.0.13"
+              assert "WmiLight" not in resolved, "Third-party WmiLight package must not be restored"
               for name, expected_version in required.items():
                   assert resolved.get(name) == expected_version, (
                       f"{name} resolved to {resolved.get(name)}, expected {expected_version}"

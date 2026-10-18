@@ -6,6 +6,6 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="WmiLight" />
+    <PackageReference Include="System.Management" />
   </ItemGroup>
 </Project>
