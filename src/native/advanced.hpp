@@ -26,6 +26,7 @@ public:
     std::function<void(unsigned, unsigned)> rotationChanged;
     std::function<void(bool)> themeChanged;
     std::function<void(const Settings&)> settingsChanged;
+    std::function<void()> locationUpdateRequested;
 
 private:
     struct RowControls {
@@ -48,6 +49,7 @@ private:
     HWND scheduleCheckbox_ = nullptr, brightnessCheckbox_ = nullptr;
     HWND mode_ = nullptr, lightTime_ = nullptr, darkTime_ = nullptr;
     HWND latitude_ = nullptr, longitude_ = nullptr, label_ = nullptr;
+    HWND automaticLocation_ = nullptr, updateLocation_ = nullptr;
     HWND startup_ = nullptr, status_ = nullptr;
     HWND save_ = nullptr, diagnostics_ = nullptr;
     HWND displaysHeading_ = nullptr, scheduleHeading_ = nullptr, integrationHeading_ = nullptr;
