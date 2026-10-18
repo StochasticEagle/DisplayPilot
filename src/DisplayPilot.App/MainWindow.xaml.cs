@@ -1225,36 +1225,19 @@ public sealed partial class MainWindow : Window, IDisposable
 
     private async Task RefreshDisplaysAsync()
     {
-        if (_displayOperationRunning || !_sessionIsActive)
-        {
-            return;
-        }
+        if (_displayOperationRunning || !_sessionIsActive) return;
 
         _displayOperationRunning = true;
-        if (_visualsReady)
-        {
-        RescanButton.IsEnabled = false;
-        ProbeDdcButton.IsEnabled = false;
-        CompactReadBrightnessButton.IsEnabled = false;
-        CompactMonitorList.IsEnabled = false;
-        MonitorList.IsEnabled = false;
-        CopyReportButton.IsEnabled = false;
-        CopyReportButton.Content = "Copy diagnostic report";
-        StatusText.Text = "Scanning active Windows display paths...";
-        CompactStatusText.Text = "Scanning active Windows display paths...";
-        EmptyState.Visibility = Visibility.Collapsed;
-
-        }
-
+        if (_visualsReady) SetDisplayControlsEnabled(false);
         try
         {
             var monitors = await Task.Run(_monitorDiscovery.DiscoverActiveMonitors);
-
             _activeMonitors = monitors;
             _displayInventoryStale = false;
-            _lastRotationReads = await Task.Run(() => monitors
-                .Select(monitor => WindowsDisplayRotationService.Read(monitor.GdiDeviceName))
-                .ToArray());
+            _lastRotationReads = _visualsReady
+                ? await Task.Run(() => monitors.Select(monitor =>
+                    WindowsDisplayRotationService.Read(monitor.GdiDeviceName)).ToArray())
+                : [];
             _lastDdcProbes = [];
             _lastWmiProbes = [];
             _lastContrastProbes = [];
@@ -1263,20 +1246,14 @@ public sealed partial class MainWindow : Window, IDisposable
             _extendedControlsReady = false;
             if (_visualsReady)
             {
-            UpdateCompactMonitorCards();
-            EmptyState.Visibility = monitors.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-            StatusText.Text = string.Format(
-                CultureInfo.CurrentCulture,
-                "Found {0} active display {1} at {2:T}.",
-                monitors.Count,
-                monitors.Count == 1 ? "path" : "paths",
-                DateTimeOffset.Now);
-            CompactStatusText.Text = monitors.Count == 0
-                ? "No active displays were found."
-                : "Open the controls to read current brightness.";
-        }
+                UpdateCompactMonitorCards();
+                EmptyState.Visibility = monitors.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+                StatusText.Text = $"Found {monitors.Count} active display paths.";
+                CompactStatusText.Text = monitors.Count == 0
+                    ? "No active displays were found." : "Open the controls to read current brightness.";
             }
             _lastDiagnosticError = null;
+        }
         catch (Win32Exception exception)
         {
             _activeMonitors = [];
@@ -1286,27 +1263,19 @@ public sealed partial class MainWindow : Window, IDisposable
             _lastColorTemperatureProbes = [];
             _lastDdcCapabilities = [];
             _lastRotationReads = [];
+            _lastDiagnosticError = exception;
             if (_visualsReady)
             {
-            UpdateCompactMonitorCards();
-            EmptyState.Visibility = Visibility.Visible;
-            StatusText.Text = $"Display discovery failed: {exception.Message}";
-            CompactStatusText.Text = "Display discovery failed. Open Advanced for details.";
+                UpdateCompactMonitorCards();
+                EmptyState.Visibility = Visibility.Visible;
+                StatusText.Text = $"Display discovery failed: {exception.Message}";
+                CompactStatusText.Text = "Display discovery failed. Open Advanced for details.";
             }
-            _lastDiagnosticError = exception;
         }
         finally
         {
             _displayOperationRunning = false;
-            if (_visualsReady)
-            {
-            RescanButton.IsEnabled = true;
-            ProbeDdcButton.IsEnabled = _activeMonitors.Count > 0;
-            CompactReadBrightnessButton.IsEnabled = _activeMonitors.Count > 0;
-            CompactMonitorList.IsEnabled = true;
-            MonitorList.IsEnabled = true;
-            CopyReportButton.IsEnabled = true;
-            }
+            if (_visualsReady) SetDisplayControlsEnabled(true);
         }
     }
 
