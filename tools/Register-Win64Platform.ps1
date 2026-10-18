@@ -24,10 +24,12 @@ $vcRoot = Join-Path $InstallationPath 'MSBuild\Microsoft\VC'
 $platformRoots = @(Get-ChildItem -LiteralPath $vcRoot -Directory |
     Where-Object { Test-Path -LiteralPath (Join-Path $_.FullName 'Platforms\Win32\Platform.default.props') } |
     Sort-Object Name -Descending)
-if ($platformRoots.Count -ne 1) {
-    throw "Expected one installed Visual C++ platform root; found $($platformRoots.Count)."
+if ($platformRoots.Count -eq 0) {
+    throw 'No installed Visual C++ platform root was found.'
 }
 
+# Visual Studio may install several VC targets versions side by side.
+# Register against the newest one used by this Visual Studio installation.
 $platforms = Join-Path $platformRoots[0].FullName 'Platforms'
 $native64 = ('x' + '64')
 $native = Join-Path $platforms $native64
