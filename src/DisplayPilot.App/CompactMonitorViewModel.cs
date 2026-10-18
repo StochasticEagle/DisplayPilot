@@ -14,6 +14,15 @@ public sealed class CompactMonitorViewModel : INotifyPropertyChanged
     private double _contrastPercent;
     private ColorTemperaturePresetViewModel? _selectedColorTemperaturePreset;
     private RotationOptionViewModel? _selectedRotation;
+    // Shared immutable choices only; current orientation and availability stay per-monitor.
+    private static readonly IReadOnlyList<RotationOptionViewModel> SharedRotationOptions =
+        Array.AsReadOnly<RotationOptionViewModel>(
+        [
+            new(DisplayRotation.Landscape, "Landscape (0°)"),
+            new(DisplayRotation.Portrait, "Portrait (90°)"),
+            new(DisplayRotation.LandscapeFlipped, "Landscape flipped (180°)"),
+            new(DisplayRotation.PortraitFlipped, "Portrait flipped (270°)"),
+        ]);
 
     public CompactMonitorViewModel(
         string devicePath,
@@ -40,13 +49,7 @@ public sealed class CompactMonitorViewModel : INotifyPropertyChanged
         _selectedColorTemperaturePreset = colorTemperaturePresets.FirstOrDefault(preset =>
             preset.RawValue == currentColorTemperatureValue);
         IsRotationAvailable = isRotationAvailable;
-        RotationOptions =
-        [
-            new(DisplayRotation.Landscape, "Landscape (0°)"),
-            new(DisplayRotation.Portrait, "Portrait (90°)"),
-            new(DisplayRotation.LandscapeFlipped, "Landscape flipped (180°)"),
-            new(DisplayRotation.PortraitFlipped, "Portrait flipped (270°)"),
-        ];
+        RotationOptions = SharedRotationOptions;
         _selectedRotation = RotationOptions.FirstOrDefault(option =>
             option.Rotation == currentRotation);
         Status = status;
