@@ -2817,20 +2817,49 @@ public sealed partial class MainWindow : Window, IDisposable
                     : "Brightness control unavailable");
         }).ToArray();
 
-        _compactBrightnessValues.Clear();
-        foreach (var card in cards)
-        {
-            _compactBrightnessValues[card.DevicePath] =
-                Math.Clamp((int)Math.Round(card.BrightnessPercent), 0, 100);
-            _compactContrastValues[card.DevicePath] =
-                Math.Clamp((int)Math.Round(card.ContrastPercent), 0, 100);
-        }
-
+        // Keep bound UI elements and per-monitor selections when only values change.
+        var previous = (CompactMonitorList.ItemsSource as IEnumerable<CompactMonitorViewModel>)?.ToArray() ?? [];
+        var previousByPath = previous.ToDictionary(item => item.DevicePath, StringComparer.OrdinalIgnoreCase);
         _updatingCompactControls = true;
         try
         {
-            CompactMonitorList.ItemsSource = cards;
-            MonitorList.ItemsSource = cards;
+            for (var index = 0; index < cards.Length; index++)
+            {
+                var next = cards[index];
+                if (previousByPath.TryGetValue(next.DevicePath, out var old) &&
+                    string.Equals(old.GdiDeviceName, next.GdiDeviceName, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(old.FriendlyName, next.FriendlyName, StringComparison.Ordinal) &&
+                    string.Equals(old.Status, next.Status, StringComparison.Ordinal) &&
+                    old.IsBrightnessAvailable == next.IsBrightnessAvailable &&
+                    old.IsContrastAvailable == next.IsContrastAvailable &&
+                    old.IsRotationAvailable == next.IsRotationAvailable &&
+                    old.ColorTemperaturePresets.SequenceEqual(next.ColorTemperaturePresets))
+                {
+                    old.BrightnessPercent = next.BrightnessPercent;
+                    old.ContrastPercent = next.ContrastPercent;
+                    old.SelectedRotation = old.RotationOptions.FirstOrDefault(option =>
+                        option.Rotation == next.SelectedRotation?.Rotation);
+                    old.SelectedColorTemperaturePreset = old.ColorTemperaturePresets.FirstOrDefault(option =>
+                        option.RawValue == next.SelectedColorTemperaturePreset?.RawValue);
+                    cards[index] = old;
+                }
+            }
+
+            _compactBrightnessValues.Clear();
+            _compactContrastValues.Clear();
+            foreach (var card in cards)
+            {
+                _compactBrightnessValues[card.DevicePath] =
+                    Math.Clamp((int)Math.Round(card.BrightnessPercent), 0, 100);
+                _compactContrastValues[card.DevicePath] =
+                    Math.Clamp((int)Math.Round(card.ContrastPercent), 0, 100);
+            }
+
+            if (!previous.SequenceEqual(cards))
+            {
+                CompactMonitorList.ItemsSource = cards;
+                MonitorList.ItemsSource = cards;
+            }
         }
         finally
         {
