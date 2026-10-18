@@ -1,5 +1,3 @@
-using System.ComponentModel;
-using System.Runtime.InteropServices;
 using DisplayPilot.Display.Ddc;
 
 namespace DisplayPilot.Display.Interop;
@@ -9,16 +7,11 @@ namespace DisplayPilot.Display.Interop;
 /// </summary>
 public sealed class WindowsDdcProbeApi : IDdcProbeApi
 {
-    private const uint MaximumPhysicalMonitorsPerDisplay = 64;
     private const int ErrorInvalidData = 13;
-    private const int MaximumHandleAcquisitionAttempts = 3;
-    private const int HandleAcquisitionRetryDelayMilliseconds = 200;
-    private const int MaximumVcpReadAttempts = 3;
-    private const int VcpReadRetryDelayMilliseconds = 75;
 
     public IReadOnlyList<DdcBrightnessProbeResult> ProbeBrightness()
     {
-        var logicalMonitors = EnumerateLogicalMonitors();
+        var logicalMonitors = DisplayNative.EnumerateLogicalMonitors();
         var results = new List<DdcBrightnessProbeResult>();
 
         foreach (var monitor in logicalMonitors)
@@ -29,128 +22,45 @@ public sealed class WindowsDdcProbeApi : IDdcProbeApi
         return results;
     }
 
-    private static List<LogicalMonitor> EnumerateLogicalMonitors()
-    {
-        var monitors = new List<LogicalMonitor>();
-
-        DisplayNative.MonitorCallback callback = (monitor, _, _, _) =>
-        {
-            unsafe
-            {
-                var info = new DisplayMonitorInfo
-                {
-                    Size = (uint)sizeof(DisplayMonitorInfo),
-                };
-
-                if (!DisplayNative.GetMonitorInfo(monitor, &info))
-                {
-                    return true;
-                }
-
-                monitors.Add(new LogicalMonitor(monitor, info.GetDeviceName()));
-                return true;
-            }
-        };
-
-        if (!DisplayNative.EnumDisplayMonitors(0, 0, callback, 0))
-        {
-            throw new Win32Exception(Marshal.GetLastPInvokeError());
-        }
-
-        return monitors;
-    }
-
-    private static unsafe void ProbeLogicalMonitor(
-        LogicalMonitor logicalMonitor,
+    private static void ProbeLogicalMonitor(
+        LogicalDisplayMonitor logicalMonitor,
         List<DdcBrightnessProbeResult> results)
     {
         DdcBrightnessProbeResult? lastFailure = null;
-
-        for (var acquisitionAttempt = 1; acquisitionAttempt <= MaximumHandleAcquisitionAttempts; acquisitionAttempt++)
+        for (int attempt = 1; attempt <= DisplayNative.HandleAttempts; attempt++)
         {
-            if (acquisitionAttempt > 1)
+            if (attempt > 1) Thread.Sleep(DisplayNative.HandleRetryMilliseconds);
+            var handles = DisplayNative.AcquirePhysicalMonitors(
+                logicalMonitor.Handle, out var count, out var error);
+            if (handles is null)
             {
-                Thread.Sleep(HandleAcquisitionRetryDelayMilliseconds);
-            }
-
-            if (!DisplayNative.GetNumberOfPhysicalMonitorsFromHMONITOR(logicalMonitor.Handle, out var count))
-            {
-                lastFailure = FailedEnumeration(
-                    logicalMonitor.DeviceName,
-                    Marshal.GetLastPInvokeError(),
-                    acquisitionAttempt);
+                lastFailure = count == 0 && error == 0
+                    ? NoPhysicalMonitor(logicalMonitor.DeviceName, attempt)
+                    : FailedEnumeration(logicalMonitor.DeviceName, error, attempt);
+                if (count > DisplayNative.PhysicalMonitorLimit) break;
                 continue;
             }
-
-            if (count == 0)
-            {
-                lastFailure = NoPhysicalMonitor(logicalMonitor.DeviceName, acquisitionAttempt);
-                continue;
-            }
-
-            if (count > MaximumPhysicalMonitorsPerDisplay)
-            {
-                results.Add(FailedEnumeration(logicalMonitor.DeviceName, ErrorInvalidData, acquisitionAttempt));
-                return;
-            }
-
-            var physicalMonitors = new DdcMonitorHandle[count];
-            var enumerationSucceeded = false;
-            var enumerationError = 0;
-            fixed (DdcMonitorHandle* physicalMonitorPointer = physicalMonitors)
-            {
-                enumerationSucceeded = DisplayNative.GetPhysicalMonitorsFromHMONITOR(
-                    logicalMonitor.Handle,
-                    count,
-                    physicalMonitorPointer);
-                if (!enumerationSucceeded)
-                {
-                    enumerationError = Marshal.GetLastPInvokeError();
-                }
-            }
-
-            if (!enumerationSucceeded)
-            {
-                lastFailure = FailedEnumeration(
-                    logicalMonitor.DeviceName,
-                    enumerationError,
-                    acquisitionAttempt);
-                continue;
-            }
-
             try
             {
-                var hasNullHandles = physicalMonitors.Any(monitor => monitor.Handle == 0);
-                if (hasNullHandles && acquisitionAttempt < MaximumHandleAcquisitionAttempts)
-                {
+                if (handles.Any(monitor => monitor.Handle == 0) &&
+                    attempt < DisplayNative.HandleAttempts)
                     continue;
-                }
 
-                foreach (var physicalMonitor in physicalMonitors)
+                foreach (var handle in handles)
                 {
-                    results.Add(physicalMonitor.Handle == 0
-                        ? HandleUnavailable(logicalMonitor.DeviceName, physicalMonitor, acquisitionAttempt)
-                        : ProbePhysicalMonitor(logicalMonitor.DeviceName, physicalMonitor, acquisitionAttempt));
+                    results.Add(handle.Handle == 0
+                        ? HandleUnavailable(logicalMonitor.DeviceName, handle, attempt)
+                        : ProbePhysicalMonitor(logicalMonitor.DeviceName, handle, attempt));
                 }
-
                 return;
             }
             finally
             {
-                foreach (var physicalMonitor in physicalMonitors)
-                {
-                    if (physicalMonitor.Handle != 0)
-                    {
-                        _ = DisplayNative.DestroyPhysicalMonitor(physicalMonitor.Handle);
-                    }
-                }
+                DisplayNative.ReleasePhysicalMonitors(handles);
             }
         }
-
         results.Add(lastFailure ?? FailedEnumeration(
-            logicalMonitor.DeviceName,
-            ErrorInvalidData,
-            MaximumHandleAcquisitionAttempts));
+            logicalMonitor.DeviceName, DisplayNative.InvalidDataError, DisplayNative.HandleAttempts));
     }
 
     private static DdcBrightnessProbeResult ProbePhysicalMonitor(
@@ -172,43 +82,13 @@ public sealed class WindowsDdcProbeApi : IDdcProbeApi
                 handleAcquisitionAttempts);
         }
 
-        var lastError = 0;
-        for (var attempt = 1; attempt <= MaximumVcpReadAttempts; attempt++)
-        {
-            if (DisplayNative.GetVCPFeatureAndVCPFeatureReply(
-                physicalMonitor.Handle,
-                DisplayInteropConstants.VcpCodeBrightness,
-                0,
-                out var currentValue,
-                out var maximumValue))
-            {
-                return new DdcBrightnessProbeResult(
-                    gdiDeviceName,
-                    description,
-                    DdcBrightnessProbeStatus.ReadSucceeded,
-                    currentValue,
-                    maximumValue,
-                    0,
-                    attempt,
-                    handleAcquisitionAttempts);
-            }
-
-            lastError = Marshal.GetLastPInvokeError();
-            if (attempt < MaximumVcpReadAttempts)
-            {
-                Thread.Sleep(VcpReadRetryDelayMilliseconds);
-            }
-        }
-
+        var success = DisplayNative.TryReadVcp(
+            physicalMonitor.Handle, DisplayInteropConstants.VcpCodeBrightness,
+            out var currentValue, out var maximumValue, out var error, out var readAttempts);
         return new DdcBrightnessProbeResult(
-            gdiDeviceName,
-            description,
-            DdcBrightnessProbeStatus.ReadFailed,
-            0,
-            0,
-            lastError,
-            MaximumVcpReadAttempts,
-            handleAcquisitionAttempts);
+            gdiDeviceName, description,
+            success ? DdcBrightnessProbeStatus.ReadSucceeded : DdcBrightnessProbeStatus.ReadFailed,
+            currentValue, maximumValue, error, readAttempts, handleAcquisitionAttempts);
     }
 
     private static DdcBrightnessProbeResult NoPhysicalMonitor(
@@ -258,5 +138,4 @@ public sealed class WindowsDdcProbeApi : IDdcProbeApi
             handleAcquisitionAttempts);
     }
 
-    private sealed record LogicalMonitor(nint Handle, string DeviceName);
 }
