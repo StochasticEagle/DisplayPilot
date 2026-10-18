@@ -89,7 +89,7 @@ public:
         return SUCCEEDED(result) && report != nullptr;
     }
 private:
-    ~LocationUpdates() override { stop(); }
+    ~LocationUpdates() { stop(); }
     std::atomic<ULONG> references_{1};
     HWND owner_ = nullptr;
     ILocation* service_ = nullptr;
