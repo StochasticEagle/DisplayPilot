@@ -4,10 +4,10 @@ DisplayPilot is a native C++ Windows notification-area application for monitor c
 
 ## Build
 
-Before first opening the solution, register its Win64 C++ platform with Visual Studio. Run **PowerShell as administrator** in the repository root:
+Before first opening the solution, register its Win64 C++ platform with Visual Studio. Run **Command Prompt as administrator** in the repository root:
 
 ```powershell
-./tools/Register-Win64Platform.ps1
+.\tools\Register-Win64Platform.cmd
 ```
 
 The registration uses the installed 64-bit MSVC platform files without changing them. It is idempotent and does not modify the Win32 or Win64 project configurations. Restart Visual Studio if the solution was already open.
