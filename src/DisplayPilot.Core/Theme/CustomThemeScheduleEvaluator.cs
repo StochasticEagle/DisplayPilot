@@ -1,12 +1,5 @@
-// Copyright (c) Microsoft Corporation
-// The Microsoft Corporation licenses this file to you under the MIT license.
-// See the LICENSE file in the project root for more information.
-
 namespace DisplayPilot.Core.Theme;
 
-/// <summary>
-/// C# adaptation of the fixed-hours boundary behavior in PowerToys Light Switch.
-/// </summary>
 public sealed class CustomThemeScheduleEvaluator
 {
     public static ThemeScheduleEvaluation Evaluate(CustomThemeSchedule schedule, TimeOnly now)

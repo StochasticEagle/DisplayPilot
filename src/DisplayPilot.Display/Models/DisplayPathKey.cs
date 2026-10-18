@@ -1,7 +1,3 @@
-// Copyright (c) Microsoft Corporation
-// Licensed under the MIT license; see LICENSE.
-// This implementation was rewritten for DisplayPilot.
-
 namespace DisplayPilot.Display.Models;
 
 public static class DisplayPathKey
