@@ -307,7 +307,6 @@ int run(HINSTANCE instance) {
         DispatchMessageW(&message);
     }
     if (app.flyout.handle()) DestroyWindow(app.flyout.handle());
-    if (app.icon) DestroyIcon(app.icon);
     CloseHandle(singleton);
     return static_cast<int>(message.wParam);
 }
