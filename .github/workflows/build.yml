@@ -40,6 +40,21 @@ jobs:
             exit 1
           fi
           echo "DisplayPilot.exe: $(wc -c < "dist/${{ matrix.folder }}/DisplayPilot.exe") bytes"
+      - name: Build native Inno Setup installer
+        shell: bash
+        run: |
+          compiler='/c/Program Files (x86)/Inno Setup 6/ISCC.exe'
+          if [[ ! -f "$compiler" ]]; then
+            choco install innosetup --yes --no-progress
+          fi
+          test -f "$compiler"
+          MSYS_NO_PATHCONV=1 "$compiler" installer/DisplayPilot.iss "/DAppArch=${{ matrix.folder }}"
+          test -s "installers/${{ matrix.folder }}/DisplayPilot-Setup.exe"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DisplayPilot-Setup-${{ matrix.folder }}
+          path: installers/${{ matrix.folder }}/DisplayPilot-Setup.exe
+          if-no-files-found: error
       - uses: actions/upload-artifact@v4
         with:
           name: DisplayPilot-${{ matrix.folder }}

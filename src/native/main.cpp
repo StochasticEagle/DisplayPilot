@@ -104,16 +104,20 @@ std::wstring restoreKey(const Monitor& monitor) {
     return L"Monitor-" + std::to_wstring(hash);
 }
 void restoreMonitorBrightness() {
-    if (!app.savedBrightness) return;
+    bool pending = false;
+    bool changed = false;
     for (const auto& monitor : app.monitors) {
         if (!monitor.brightnessAvailable) continue;
         const std::wstring key = restoreKey(monitor);
         unsigned previous = 0;
-        if (restoreBrightness(key, previous) && setBrightness(monitor, previous))
+        if (!restoreBrightness(key, previous)) continue;
+        if (setBrightness(monitor, previous)) {
             removeSavedBrightness(key);
+            changed = true;
+        } else pending = true;
     }
-    app.savedBrightness = false;
-    queueRefresh();
+    app.savedBrightness = pending;
+    if (changed) queueRefresh();
 }
 void applyNightBrightness() {
     if (app.savedBrightness) return;
@@ -138,22 +142,21 @@ void applySchedule(bool force) {
     SYSTEMTIME now{};
     GetLocalTime(&now);
     const auto state = evaluateSchedule(app.settings, now);
-    if (!state.valid || !app.supportsThemes) {
-        if (app.savedBrightness) restoreMonitorBrightness();
+    if (!state.valid) {
+        restoreMonitorBrightness();
         app.scheduleApplied = false;
         SetTimer(app.owner, scheduleTimer, 60000, nullptr);
         updateAppearance();
         return;
     }
     if (force || !app.scheduleApplied || app.lastDark != state.dark) {
-        setWindowsTheme(state.dark);
+        if (app.supportsThemes) setWindowsTheme(state.dark);
         if (state.dark && app.settings.reduceBrightness)
             applyNightBrightness();
-        else if (app.savedBrightness)
-            restoreMonitorBrightness();
+        else restoreMonitorBrightness();
         app.lastDark = state.dark;
         app.scheduleApplied = true;
-    } else if (state.dark && !app.settings.reduceBrightness && app.savedBrightness) {
+    } else if (!state.dark || !app.settings.reduceBrightness) {
         restoreMonitorBrightness();
     }
     // Re-evaluate every minute for system time/time-zone adjustments.
@@ -188,7 +191,6 @@ void changeBrightness(unsigned index, unsigned value) {
     const auto key = restoreKey(app.monitors[index]);
     if (app.savedBrightness) {
         removeSavedBrightness(key);
-        app.savedBrightness = false;
     }
     if (setBrightness(app.monitors[index], value)) {
         app.monitors[index].brightness = value;
@@ -341,7 +343,7 @@ LRESULT CALLBACK ownerProcedure(HWND hwnd, UINT msg, WPARAM w, LPARAM l) {
         KillTimer(hwnd, scheduleTimer);
         KillTimer(hwnd, refreshTimer);
         hideFlyout();
-        if (app.savedBrightness) restoreMonitorBrightness();
+        restoreMonitorBrightness();
         if (app.advanced.handle()) DestroyWindow(app.advanced.handle());
         if (app.flyout.handle()) DestroyWindow(app.flyout.handle());
         PostQuitMessage(0);

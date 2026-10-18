@@ -1,23 +1,23 @@
-# DisplayPilot — native C++ rebuild
+# DisplayPilot — Native Windows C++ Application 
 
 DisplayPilot is a native, single-process Windows notification-area monitor utility.
 
-This branch is a clean C++ application, with no .NET, WinUI, CMake, JavaScript, web content or third-party runtime libraries. Only the existing icons and license were retained from the former application.
+This branch is a clean C++ application.
 
 ## Build in Visual Studio 2026
 
-Open **DisplayPilot.sln** in Visual Studio 2026 with the **Desktop development with C++** workload and a Windows SDK installed. No CMake configuration or scripts are required.
+Open **DisplayPilot.sln** in Visual Studio 2026 with the **Desktop development with C++** workload and a Windows SDK installed.
 
 Choose **Release** or **Debug** and the desired solution platform:
 
 | Visual Studio platform | Application output |
 | --- | --- |
 | Win32 | `dist/32/DisplayPilot.exe` |
-| x64 | `dist/64/DisplayPilot.exe` |
+| Win64 | `dist/64/DisplayPilot.exe` |
 
 Select **Build > Build Solution** or press **Ctrl+Shift+B**.
 
-The native project defaults to Visual Studio 2026's MSVC **v145** toolset. The GitHub Windows build uses the compatible v143 toolset available on its Visual Studio 2022 runner; no CMake is involved in either build.
+The native project defaults to Visual Studio 2026's MSVC **v145** toolset. The GitHub Windows build uses the compatible v143 toolset available on its Visual Studio 2022 runner.
 
 From the Visual Studio Developer Command Prompt:
 
@@ -30,7 +30,7 @@ Release uses static C/C++ runtime linking and the Windows system libraries. It d
 
 ## Implementation status
 
-The first native implementation includes the notification-area icon, modeless hover flyout rendered with Direct2D, DDC/CI brightness controls, native context menu and separate Advanced window. It is not yet feature-parity complete. Internal-panel WMI, color-temperature controls, rotation, brightness-key routing, complete scheduling and advanced controls will be built on this foundation.
+The current native implementation includes the notification-area icon, modeless Direct2D flyout, native context menu, expanded Advanced window, DDC/CI brightness and contrast, hardware-advertised color presets, internal-panel WMI brightness, rotation, Windows light/dark controls, scheduling, startup registration, and Registry persistence. Feature parity and hardware testing remain incomplete: brightness-key/WMI event synchronization and automatic Windows location remain to be implemented. See [feature parity](docs/feature-parity.md) and [verification](docs/verification.md).
 
 ## Platforms
 

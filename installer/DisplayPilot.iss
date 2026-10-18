@@ -20,6 +20,9 @@ UninstallDisplayIcon={app}\DisplayPilot.exe
 Compression=lzma2
 SolidCompression=yes
 PrivilegesRequired=admin
+CloseApplications=yes
+RestartApplications=no
+UninstallFilesDir={commonappdata}\DisplayPilot\Uninstall
 #if AppArch == "64"
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
@@ -33,6 +36,3 @@ Name: "{autoprograms}\DisplayPilot"; Filename: "{app}\DisplayPilot.exe"
 
 [Run]
 Filename: "{app}\DisplayPilot.exe"; Description: "Launch DisplayPilot"; Flags: nowait postinstall skipifsilent
-
-[UninstallRun]
-Filename: "{sys}\taskkill.exe"; Parameters: "/F /IM DisplayPilot.exe"; Flags: runhidden; RunOnceId: "StopDisplayPilot"
