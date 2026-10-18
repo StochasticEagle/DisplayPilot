@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Unlicense
 using System.Runtime.InteropServices;
 
 namespace DisplayPilot.Display.Interop;

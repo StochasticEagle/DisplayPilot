@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: Unlicense
 // Windows and VESA-defined constants used by DisplayPilot.
 namespace DisplayPilot.Display.Interop;
 

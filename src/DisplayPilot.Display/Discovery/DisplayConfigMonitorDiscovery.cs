@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Unlicense
 using DisplayPilot.Display.Interop;
 using DisplayPilot.Display.Models;
 
