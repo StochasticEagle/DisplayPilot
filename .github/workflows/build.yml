@@ -1,230 +1,47 @@
-name: Build
-
+name: Native C++ Build
 on:
-  workflow_dispatch:
-    inputs:
-      version:
-        description: Release version without the v prefix
-        required: true
   push:
     branches:
-      - master
-      - development/**
-    tags:
-      - v*
-    paths-ignore:
-      - "**/*.md"
-      - ".github/ISSUE_TEMPLATE/**"
+      - dev/rebuild
   pull_request:
     branches:
       - master
-    paths-ignore:
-      - "**/*.md"
-      - ".github/ISSUE_TEMPLATE/**"
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  build:
-    name: Windows x64
-    runs-on: windows-latest
-
+  native:
+    runs-on: windows-2022
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: "32"
+            generator: Win32
+          - arch: "64"
+            generator: x64
     steps:
-      - name: Check out source
-        uses: actions/checkout@v7
-
-      - name: Install .NET SDK
-        uses: actions/setup-dotnet@v6
-        with:
-          dotnet-version: 10.0.x
-
-      - name: Restore
-        run: dotnet restore DisplayPilot.slnx
-
-      - name: Build
-        run: dotnet build DisplayPilot.slnx --configuration Release --no-restore
-
-      - name: Test
-        run: dotnet test DisplayPilot.slnx --configuration Release --no-build --logger trx
-
-      - name: Publish verification app
-        run: >-
-          dotnet publish src/DisplayPilot.App/DisplayPilot.App.csproj
-          --configuration Release
-          --runtime win-x64
-          --self-contained false
-          --no-restore
-          --output artifacts/DisplayPilot-win-x64
-
-      - name: Finalize published WinUI resources
-        shell: pwsh
-        run: |
-          $publishDirectory = (Resolve-Path "artifacts\DisplayPilot-win-x64").Path
-          $resourceIndex = Join-Path $publishDirectory "resources.pri"
-          if (-not (Test-Path $resourceIndex -PathType Leaf)) {
-            $projectResourceIndex = Get-ChildItem `
-              "src\DisplayPilot.App\bin\Release" `
-              -Recurse `
-              -File `
-              -Include "DisplayPilot.pri", "DisplayPilot.App.pri" |
-                Where-Object { -not $_.FullName.StartsWith($publishDirectory) } |
-                Sort-Object LastWriteTimeUtc -Descending |
-                Select-Object -First 1
-
-            if ($null -eq $projectResourceIndex) {
-              Get-ChildItem "src\DisplayPilot.App" -Recurse -File -Filter "*.pri" |
-                Select-Object -ExpandProperty FullName
-              throw "The WinUI build did not generate a DisplayPilot resource index."
-            }
-
-            Copy-Item $projectResourceIndex.FullName $resourceIndex
-          }
-
-          if (-not (Test-Path $resourceIndex -PathType Leaf)) {
-            throw "The published app is missing resources.pri and will fail during WinUI initialization."
-          }
-
-      - name: Verify framework-dependent app
-        shell: pwsh
-        run: |
-          $bundledRuntimes = @(
-            Get-ChildItem "artifacts\DisplayPilot-win-x64" -Recurse -File |
-              Where-Object {
-                $_.Name -in @(
-                  "coreclr.dll",
-                  "hostfxr.dll",
-                  "Microsoft.ui.xaml.dll"
-                )
-              }
-          )
-          if ($bundledRuntimes.Count -ne 0) {
-            $bundledRuntimes.FullName
-            throw "The published app unexpectedly contains bundled runtimes."
-          }
-
-          $unexpectedReleaseFiles = @(
-            Get-ChildItem "artifacts\DisplayPilot-win-x64" -Recurse -File |
-              Where-Object {
-                $_.Extension -eq ".pdb" -or
-                $_.Name -in @(
-                  "DirectML.dll",
-                  "Microsoft.ML.OnnxRuntime.dll",
-                  "Microsoft.Windows.AI.MachineLearning.dll",
-                  "onnxruntime.dll",
-                  "WebView2Loader.dll"
-                ) -or
-                $_.Name -like "Microsoft.Windows.AI.*" -or
-                $_.Name -like "Microsoft.Windows.Widgets.*" -or
-                $_.Name -like "Microsoft.Web.WebView2.*"
-              }
-          )
-          if ($unexpectedReleaseFiles.Count -ne 0) {
-            $unexpectedReleaseFiles.FullName
-            throw "The release contains debug symbols or unused Windows App SDK feature payloads."
-          }
-
-          if (Test-Path "artifacts\DisplayPilot-win-x64\Assets") {
-            throw "The release unexpectedly contains a separate Assets directory."
-          }
-
-      - name: Download system runtime installers
-        shell: pwsh
-        run: |
-          $prerequisites = "artifacts\prerequisites"
-          New-Item -ItemType Directory $prerequisites -Force | Out-Null
-
-          $downloads = @{
-            "windowsdesktop-runtime-win-x64.exe" =
-              "https://aka.ms/dotnet/10.0/windowsdesktop-runtime-win-x64.exe"
-            "WindowsAppRuntimeInstall-x64.exe" =
-              "https://aka.ms/windowsappsdk/2.3/latest/windowsappruntimeinstall-x64.exe"
-            "vc_redist.x64.exe" =
-              "https://aka.ms/vs/17/release/vc_redist.x64.exe"
-          }
-
-          foreach ($download in $downloads.GetEnumerator()) {
-            $destination = Join-Path $prerequisites $download.Key
-            Invoke-WebRequest $download.Value -OutFile $destination
-
-            $signature = Get-AuthenticodeSignature $destination
-            if ($signature.Status -ne "Valid") {
-              throw "$($download.Key) does not have a valid Authenticode signature."
-            }
-          }
-
-      - name: Install Inno Setup
-        shell: pwsh
-        run: |
-          $compiler = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
-          if (-not (Test-Path $compiler)) {
-            choco install innosetup --no-progress --yes
-          }
-
-      - name: Build installer
-        shell: pwsh
-        run: |
-          $compiler = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
-          & $compiler "installer\DisplayPilot.iss"
-          if ($LASTEXITCODE -ne 0) {
-            exit $LASTEXITCODE
-          }
-
-      - name: Upload verification app
-        uses: actions/upload-artifact@v7
-        with:
-          name: DisplayPilot-win-x64
-          path: artifacts/DisplayPilot-win-x64
-          if-no-files-found: error
-
-      - name: Upload installer
-        uses: actions/upload-artifact@v7
-        with:
-          name: DisplayPilot-Setup-win-x64
-          path: artifacts/installer/DisplayPilot-Setup-win-x64.exe
-          if-no-files-found: error
-
-  release:
-    name: Publish GitHub release
-    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-
-    steps:
-      - name: Download installer
-        uses: actions/download-artifact@v8
-        with:
-          name: DisplayPilot-Setup-win-x64
-          path: release
-
-      - name: Create SHA-256 checksum
+      - uses: actions/checkout@v4
+      - name: Configure MSVC native project
+        shell: bash
+        run: cmake -S . -B build/${{ matrix.arch }} -A ${{ matrix.generator }}
+      - name: Compile Release
+        shell: bash
+        run: cmake --build build/${{ matrix.arch }} --config Release --parallel
+      - name: Verify single executable
         shell: bash
         run: |
-          cd release
-          sha256sum DisplayPilot-Setup-win-x64.exe > DisplayPilot-Setup-win-x64.exe.sha256
-
-      - name: Publish beta release
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REQUESTED_VERSION: ${{ inputs.version }}
-        run: |
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            tag="$GITHUB_REF_NAME"
-            target_arguments=(--verify-tag)
-          else
-            tag="v${REQUESTED_VERSION}"
-            target_arguments=(--target "$GITHUB_SHA")
+          test -s "dist/${{ matrix.arch }}/DisplayPilot.exe"
+          if test -n "$(find "dist/${{ matrix.arch }}" -type f ! -name DisplayPilot.exe -print)"; then
+            echo "Unexpected non-executable application file" >&2
+            exit 1
           fi
-          version="${tag#v}"
-          gh release create "$tag" \
-            --repo "$GITHUB_REPOSITORY" \
-            release/DisplayPilot-Setup-win-x64.exe \
-            release/DisplayPilot-Setup-win-x64.exe.sha256 \
-            --generate-notes \
-            --notes "Beta release. Windows 11 installer regression testing is complete; Windows 10 installer regression testing remains outstanding. See the README for supported features and current limitations." \
-            --prerelease \
-            --title "DisplayPilot ${version} beta" \
-            "${target_arguments[@]}"
+          echo "DisplayPilot executable size: $(wc -c < "dist/${{ matrix.arch }}/DisplayPilot.exe") bytes"
+      - name: Upload native executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: DisplayPilot-${{ matrix.arch }}
+          path: dist/${{ matrix.arch }}/DisplayPilot.exe
+          if-no-files-found: error
