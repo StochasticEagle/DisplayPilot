@@ -13,7 +13,7 @@ Choose **Release** or **Debug** and the desired solution platform:
 | Visual Studio platform | Application output |
 | --- | --- |
 | Win32 | `dist/32/DisplayPilot.exe` |
-| x64 | `dist/64/DisplayPilot.exe` |
+| Win64 | `dist/64/DisplayPilot.exe` |
 
 Select **Build > Build Solution** or press **Ctrl+Shift+B**.
 
