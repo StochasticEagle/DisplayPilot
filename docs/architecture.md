@@ -20,6 +20,6 @@ Laptop/internal brightness uses Windows-provided WMI COM interfaces in ROOT\\WMI
 
 ## Deployment
 
-Visual Studio 2026 uses MSVC v145, C++17, and static CRT linking (`/MT` for Release), linking against Windows-supplied DLLs only. The Windows 7 SP1 imported-API baseline and subsystem version are set in the project. Higher-version DPI functions are resolved dynamically. Output is exactly `dist/32/DisplayPilot.exe` or `dist/64/DisplayPilot.exe`. PDBs and obj files are not installed.
+Visual Studio 2026 uses the installed MSVC v143 toolset, C++17, and static CRT linking (`/MT` for Release), linking against Windows-supplied DLLs only. The Windows 7 SP1 imported-API baseline and subsystem version are set in the project. Higher-version DPI functions are resolved dynamically. Output is exactly `dist/32/DisplayPilot.exe` or `dist/64/DisplayPilot.exe`. PDBs and obj files are not installed.
 
 The existing icons and license are the only reused resources. See [feature parity](feature-parity.md) and [verification](verification.md); the native rebuild is not feature-complete.

@@ -30,7 +30,7 @@ jobs:
           msbuild-architecture: x64
       - name: Build native Visual Studio project
         shell: cmd
-        run: msbuild DisplayPilot.sln /m /p:Configuration=Release /p:Platform=${{ matrix.platform }} /p:PlatformToolset=v143 /verbosity:minimal
+        run: msbuild DisplayPilot.sln /m /p:Configuration=Release /p:Platform=${{ matrix.platform }} /verbosity:minimal
       - name: Verify standalone Windows executable
         shell: bash
         run: |

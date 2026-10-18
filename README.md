@@ -17,13 +17,13 @@ Choose **Release** or **Debug** and the desired solution platform:
 
 Select **Build > Build Solution** or press **Ctrl+Shift+B**.
 
-The native project defaults to Visual Studio 2026's MSVC **v145** toolset. The GitHub Windows build uses the compatible v143 toolset available on its Visual Studio 2022 runner.
+Visual Studio 2026 builds this project with the installed **MSVC v143** toolset for all Debug and Release configurations; v145 is not required. Windows CI uses the same v143 toolset.
 
 From the Visual Studio Developer Command Prompt:
 
 ```cmd
 msbuild DisplayPilot.sln /m /p:Configuration=Release /p:Platform=Win32
-msbuild DisplayPilot.sln /m /p:Configuration=Release /p:Platform=x64
+msbuild DisplayPilot.sln /m /p:Configuration=Release /p:Platform=Win64
 ```
 
 Release uses static C/C++ runtime linking and the Windows system libraries. It does not ship those libraries, debug information, helper executables or separate resources. Both outputs consist only of `DisplayPilot.exe`.
