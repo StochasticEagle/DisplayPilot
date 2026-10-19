@@ -36,6 +36,21 @@ The notification-area icon opens a modeless native Win32 monitor-control flyout.
 
 Windows 7 SP1, Windows 10, and Windows 11 are covered by the supported platform matrix. See [platforms](docs/platforms.md).
 
+## Visual Studio dialog designer
+
+The **Advanced** window and notification-area **flyout** are defined in
+`src/native/app.rc` as native dialog resources. In Visual Studio, open
+**View → Other Windows → Resource View**, expand `app.rc`, then **Dialog**,
+and open `IDD_DISPLAYPILOT_ADVANCED` or `IDD_DISPLAYPILOT_FLYOUT` to edit
+the fixed labels, buttons, edits, and combo boxes.
+
+Monitor-specific rows are generated at runtime because their count and supported
+controls depend on the connected hardware. The native layout code also
+repositions resource controls for DPI, window resizing, and scrolling; changes
+to resource control positions or sizes must be reflected in the corresponding
+layout routines to affect those runtime positions. Resource text, control types,
+styles, and tab order are editable directly in the designer.
+
 ## Documentation
 
 [Architecture](docs/architecture.md) · [Features](docs/features.md) · [Verification](docs/verification.md)
