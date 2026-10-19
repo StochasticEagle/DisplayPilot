@@ -51,6 +51,7 @@
     <ClInclude Include="src\native\resource.h">
       <Filter>Resources</Filter>
     </ClInclude>
+    <ClInclude Include="src\native\raw_brightness.hpp"><Filter>Header Files</Filter></ClInclude>
     <ClInclude Include="src\native\wmi_events.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
