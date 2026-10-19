@@ -37,6 +37,7 @@ private:
     };
     HINSTANCE instance_ = nullptr;
     HWND window_ = nullptr;
+    WNDPROC originalProcedure_ = nullptr;
     HFONT font_ = nullptr;
     HFONT titleFont_ = nullptr;
     HICON appIcon_ = nullptr;
