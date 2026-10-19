@@ -195,6 +195,12 @@ void AdvancedWindow::hide() {
 void AdvancedWindow::refresh() {
     if (visible()) rebuild();
 }
+void AdvancedWindow::refreshLocation() {
+    if(!visible() || !settings_) return;
+    if(latitude_) SetWindowTextW(latitude_,std::to_wstring(settings_->latitude).c_str());
+    if(longitude_) SetWindowTextW(longitude_,std::to_wstring(settings_->longitude).c_str());
+    if(label_) SetWindowTextW(label_,settings_->locationLabel.c_str());
+}
 void AdvancedWindow::synchronizeMonitorControls() {
     if(!visible() || !monitors_ || rows_.size()!=monitors_->size()) return;
     for(size_t i=0;i<rows_.size();++i) {
