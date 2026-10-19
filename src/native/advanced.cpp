@@ -569,6 +569,12 @@ LRESULT CALLBACK AdvancedWindow::procedure(HWND hwnd,UINT msg,WPARAM w,LPARAM l)
     }
     if(!self)return DefWindowProcW(hwnd,msg,w,l);
     switch(msg) {
+    case WM_CTLCOLORSTATIC:
+        // The Advanced window uses COLOR_WINDOW; native STATIC labels otherwise
+        // receive a COLOR_BTNFACE background, leaving gray rectangles behind text.
+        SetBkMode(reinterpret_cast<HDC>(w), TRANSPARENT);
+        SetTextColor(reinterpret_cast<HDC>(w), GetSysColor(COLOR_WINDOWTEXT));
+        return reinterpret_cast<LRESULT>(GetSysColorBrush(COLOR_WINDOW));
     case WM_DRAWITEM: {
         const auto* item = reinterpret_cast<const DRAWITEMSTRUCT*>(l);
         if (item && item->CtlID == brandIconId && self->appIcon_) {
