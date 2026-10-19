@@ -413,7 +413,7 @@ LRESULT CALLBACK ownerProcedure(HWND hwnd, UINT msg, WPARAM w, LPARAM l) {
                     SetTimer(hwnd,refreshTimer,350,nullptr);
                 else {
                     app.flyout.repaint();
-                    app.advanced.refresh();
+                    app.advanced.synchronizeMonitorControls();
                 }
                 if(result->synchronizeShell)
                     syncWindowsBrightness(result->value);
