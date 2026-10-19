@@ -36,8 +36,9 @@ Verify separate architecture installers, application launch, registration at sig
 - WMI brightness events update the integrated panel and avoid echoing recent
   raw-input adjustments. Session lock/disconnect suspends background monitor
   notifications; unlock and reconnect refresh monitor inventory and scheduling.
-- Rapid trackbar dragging coalesces monitor writes; a failed read-back does not
-  overwrite the last verified slider value.
+- Rapid trackbar dragging coalesces monitor writes on a serialized background
+  worker; late results from superseded writes do not overwrite newer slider
+  values, and a failed read-back does not overwrite the last verified value.
 - An unverified night-brightness write must retain its original restoration
   value, including across a restart or monitor disconnect. Manual adjustments
   must also preserve the pre-schedule baseline until restoration.
