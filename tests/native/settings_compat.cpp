@@ -101,8 +101,15 @@ int main() {
         !json_settings::asBoolean(
             json_settings::field(optionalDoc, "automaticLocation"), false))
         return 24;
+    // WinUI's v4 writer omits native-only extensions. The opt-in must survive
+    // this legitimate rewrite while remaining explicit in native saved files.
+    if (!fixture(R"({"version":4,"lightMinutes":420,"darkMinutes":1140,
+        "automationEnabled":true,"reduceBrightness":false,"scheduleMode":1,
+        "latitude":null,"longitude":null})")) return 33;
+    s = loadSettings();
+    if (!s.automaticLocation || s.locationConfigured) return 34;
     s.automaticLocation = false;
-    saveSettings(s);
+    if (!saveSettings(s)) return 35;
     s = loadSettings();
     if (s.automaticLocation || s.locationConfigured) return 25;
 
