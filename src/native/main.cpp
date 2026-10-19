@@ -59,6 +59,7 @@ struct Application {
     bool savedBrightness = false;
     bool manualThemeOverride = false;
     bool sessionActive = true;
+    bool startupBrightnessSynchronized = false;
     HMONITOR pendingBrightnessMonitor = nullptr;
     int pendingBrightnessDelta = 0;
     DWORD lastRawBrightnessEvent = 0;
@@ -117,6 +118,14 @@ void refreshMonitors() {
     } else if (!hasWmi && app.brightnessKeys.active()) {
         KillTimer(app.owner, brightnessEventTimer);
         app.brightnessKeys.stop();
+    }
+    if (!app.startupBrightnessSynchronized) {
+        for (const auto& monitor : app.monitors) {
+            if (monitor.provider==ControlProvider::Wmi && monitor.brightnessAvailable) {
+                app.startupBrightnessSynchronized=syncWindowsBrightness(monitor.brightness);
+                break;
+            }
+        }
     }
     app.flyout.repaint();
     app.advanced.refresh();
@@ -576,6 +585,11 @@ LRESULT CALLBACK ownerProcedure(HWND hwnd, UINT msg, WPARAM w, LPARAM l) {
         SetTimer(hwnd, refreshTimer, 350, nullptr);
         return 0;
     case WM_SETTINGCHANGE:
+        if(l && (wcscmp(reinterpret_cast<const wchar_t*>(l),L"TimeZoneInformation")==0 ||
+                 wcscmp(reinterpret_cast<const wchar_t*>(l),L"intl")==0)) {
+            applySchedule(true);
+            return 0;
+        }
         if (l && wcscmp(reinterpret_cast<const wchar_t*>(l), L"ImmersiveColorSet") == 0) {
             updateAppearance();
             return 0;
