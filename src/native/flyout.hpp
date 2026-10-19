@@ -39,6 +39,7 @@ private:
     };
     HINSTANCE instance_ = nullptr;
     HWND window_ = nullptr;
+    WNDPROC originalProcedure_ = nullptr;
     HFONT font_ = nullptr;
     std::vector<Monitor>* monitors_ = nullptr;
     std::vector<HWND> children_;
