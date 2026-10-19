@@ -207,10 +207,14 @@ Settings loadSettings() {
             (mode != 0 && mode != 1)) return Settings{};
     }
     s.scheduleMode = mode == 1 ? ScheduleMode::Solar : ScheduleMode::Fixed;
-    s.automaticLocation = json_settings::asBoolean(json_settings::field(doc, "automaticLocation"), false);
-    Key preferences(nativePreferencesPath,KEY_READ,false);
-    if(preferences) s.automaticLocation = preferences.getDword(
-        L"AutomaticLocation",s.automaticLocation ? 1 : 0)!=0;
+    const auto* automatic = json_settings::field(doc, "automaticLocation");
+    if(automatic) {
+        s.automaticLocation = json_settings::asBoolean(automatic,false);
+    } else {
+        // WinUI rewrites v4 files without native extensions. Recover opt-in.
+        Key preferences(nativePreferencesPath,KEY_READ,false);
+        s.automaticLocation = preferences.getDword(L"AutomaticLocation",0)!=0;
+    }
     const auto* savedLatitude = json_settings::field(doc, "latitude");
     const auto* savedLongitude = json_settings::field(doc, "longitude");
     if (savedLatitude && savedLongitude &&
