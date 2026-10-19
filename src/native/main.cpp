@@ -447,6 +447,7 @@ LRESULT CALLBACK ownerProcedure(HWND hwnd, UINT msg, WPARAM w, LPARAM l) {
                     // Apply monitor/theme changes solely when the schedule state changes.
                     applySchedule(false);
                     app.advanced.refresh();
+                    app.flyout.refreshLocation();
                 }
             }
             delete coordinates;
