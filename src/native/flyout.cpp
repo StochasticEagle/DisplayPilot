@@ -374,6 +374,12 @@ void Flyout::synchronize() {
     updating_ = false;
 }
 
+void Flyout::refreshLocation() {
+    if(!settings_ || !window_) return;
+    if(latitude_) SetWindowTextW(latitude_,std::to_wstring(settings_->latitude).c_str());
+    if(longitude_) SetWindowTextW(longitude_,std::to_wstring(settings_->longitude).c_str());
+    if(locationLabel_) SetWindowTextW(locationLabel_,settings_->locationLabel.c_str());
+}
 void Flyout::repaint() const {
     auto* self = const_cast<Flyout*>(this);
     if (!window_ || !visible()) return;
