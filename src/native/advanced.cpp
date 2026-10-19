@@ -563,6 +563,14 @@ LRESULT CALLBACK AdvancedWindow::procedure(HWND hwnd,UINT msg,WPARAM w,LPARAM l)
     }
     if(!self)return DefWindowProcW(hwnd,msg,w,l);
     switch(msg) {
+    case WM_ERASEBKGND: {
+        RECT bounds{};
+        GetClientRect(hwnd, &bounds);
+        FillRect(reinterpret_cast<HDC>(w), &bounds, GetSysColorBrush(COLOR_WINDOW));
+        return TRUE;
+    }
+    case WM_CTLCOLORDLG:
+        return reinterpret_cast<LRESULT>(GetSysColorBrush(COLOR_WINDOW));
     case WM_CTLCOLORSTATIC:
         // The Advanced window uses COLOR_WINDOW; native STATIC labels otherwise
         // receive a COLOR_BTNFACE background, leaving gray rectangles behind text.
