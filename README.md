@@ -30,7 +30,7 @@ Release executables use the static MSVC runtime and embed application resources.
 
 ## Features
 
-The notification-area icon opens a modeless native Win32 monitor-control flyout. A native context menu provides quick commands and access to the separate Advanced window. Monitor controls use DDC/CI, WMI, and Windows display APIs. Fixed-time and solar scheduling are available with user-configured coordinates. The native and WinUI applications read and write the same `%LOCALAPPDATA%\DisplayPilot\settings.json` format.
+The notification-area icon opens a modeless native Win32 monitor-control flyout. A native context menu provides quick commands and access to the separate Advanced window. Monitor controls use DDC/CI, WMI, and Windows display APIs. Fixed-time and solar scheduling are available with manually entered coordinates or optional Windows location reports. Automatic location subscriptions are active only while solar scheduling and automatic location are enabled; Update location now performs a user-requested one-time lookup. Location access is never required for startup or manual settings. The native and WinUI applications read and write the same `%LOCALAPPDATA%\DisplayPilot\settings.json` format.
 
 ## Supported Windows versions
 
