@@ -130,6 +130,19 @@ void Flyout::rebuild() {
                                  static_cast<WPARAM>(index),preset);
             }
         }
+        if(monitor.rotationAvailable) {
+            row.rotationLabel=take(IDC_FLY_ROW_ROTATION_LABEL,0);
+            row.rotation=take(IDC_FLY_ROW_ROTATION,base+4);
+            row.rotationApply=take(IDC_FLY_ROW_ROTATION_APPLY,base+5);
+            if(row.rotation) for(unsigned rotation=0;rotation<4;++rotation) {
+                const auto name=rotationLabel(rotation);
+                const LRESULT index=SendMessageW(row.rotation,CB_ADDSTRING,0,
+                    reinterpret_cast<LPARAM>(name.c_str()));
+                SendMessageW(row.rotation,CB_SETITEMDATA,index,rotation);
+                if(rotation==monitor.rotation)
+                    SendMessageW(row.rotation,CB_SETCURSEL,index,0);
+            }
+        }
         if(templateRow) DestroyWindow(templateRow);
         rows_.push_back(row);
     }
@@ -180,6 +193,12 @@ void Flyout::layout() {
                   std::max(px(85), available - px(112)), px(240));
             y += px(39);
         }
+        if(row.rotation) {
+            place(row.rotationLabel,margin+px(4),y+px(4),px(105),px(25));
+            place(row.rotation,margin+px(112),y,std::max(px(65),available-px(182)),px(240));
+            place(row.rotationApply,margin+available-px(66),y,px(66),px(29));
+            y+=px(39);
+        }
         y += px(12);
     }
     if (themeSupported_) {
@@ -225,6 +244,15 @@ void Flyout::synchronize() {
                 SendMessageW(row.brightness, TBM_SETPOS, TRUE, monitor.brightness);
             if (row.contrast)
                 SendMessageW(row.contrast, TBM_SETPOS, TRUE, monitor.contrast);
+            if (row.rotation) {
+                for(LRESULT index=0,count=SendMessageW(row.rotation,CB_GETCOUNT,0,0);
+                    index<count;++index)
+                    if(static_cast<unsigned>(SendMessageW(row.rotation,CB_GETITEMDATA,
+                          static_cast<WPARAM>(index),0))==monitor.rotation) {
+                        SendMessageW(row.rotation,CB_SETCURSEL,static_cast<WPARAM>(index),0);
+                        break;
+                    }
+            }
             if (row.color) {
                 const LRESULT count = SendMessageW(row.color, CB_GETCOUNT, 0, 0);
                 for (LRESULT item = 0; item < count; ++item) {
@@ -315,6 +343,16 @@ void Flyout::onCommand(WORD id, WORD notification) {
             scheduleChanged(SendMessageW(schedule_, BM_GETCHECK, 0, 0) == BST_CHECKED);
         else if (id == advancedId && advancedRequested) advancedRequested();
         else if (id == IDC_FLY_REFRESH && refreshRequested) refreshRequested();
+    }
+    if (notification == BN_CLICKED && id >= firstMonitor && monitors_ &&
+        (id-firstMonitor)%10==5) {
+        const size_t index=static_cast<size_t>((id-firstMonitor)/10);
+        if(index<rows_.size() && rows_[index].rotation && rotationChanged) {
+            const LRESULT choice=SendMessageW(rows_[index].rotation,CB_GETCURSEL,0,0);
+            if(choice!=CB_ERR) rotationChanged(static_cast<unsigned>(index),
+                static_cast<unsigned>(SendMessageW(rows_[index].rotation,CB_GETITEMDATA,
+                    static_cast<WPARAM>(choice),0)));
+        }
     }
     if (notification == CBN_SELCHANGE && id >= firstMonitor && monitors_) {
         const size_t index = static_cast<size_t>((id - firstMonitor) / 10);

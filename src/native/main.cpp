@@ -618,6 +618,7 @@ int run(HINSTANCE instance) {
     app.flyout.brightnessChanged = changeBrightness;
     app.flyout.contrastChanged = changeContrast;
     app.flyout.colorChanged = changeColor;
+    app.flyout.rotationChanged = changeRotation;
     app.flyout.advancedRequested = showAdvanced;
     app.flyout.refreshRequested = refreshMonitors;
     app.flyout.themeChanged = manualTheme;

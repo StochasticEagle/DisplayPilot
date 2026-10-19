@@ -23,6 +23,7 @@ public:
     std::function<void(unsigned, unsigned)> brightnessChanged;
     std::function<void(unsigned, unsigned)> contrastChanged;
     std::function<void(unsigned, unsigned)> colorChanged;
+    std::function<void(unsigned, unsigned)> rotationChanged;
     std::function<void()> advancedRequested;
     std::function<void()> refreshRequested;
     std::function<void(bool)> themeChanged;
@@ -37,6 +38,9 @@ private:
         HWND contrast = nullptr;
         HWND colorLabel = nullptr;
         HWND color = nullptr;
+        HWND rotationLabel = nullptr;
+        HWND rotation = nullptr;
+        HWND rotationApply = nullptr;
     };
     HINSTANCE instance_ = nullptr;
     HWND window_ = nullptr;
