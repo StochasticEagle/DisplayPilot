@@ -227,10 +227,10 @@ void syncLocation() {
         app.settings.automaticLocation) app.location->start();
     else app.location->stop();
 }
-void updateLocationNow() {
+bool updateLocationNow() {
     if (!app.location || !app.settings.scheduleEnabled ||
-        app.settings.scheduleMode != ScheduleMode::Solar) return;
-    app.location->updateNow();
+        app.settings.scheduleMode != ScheduleMode::Solar) return false;
+    return app.location->updateNow();
 }
 void saveNewSettings(const Settings& next) {
     const bool previousEnabled = app.settings.scheduleEnabled;
