@@ -15,6 +15,14 @@ inline bool syncWindowsBrightness(unsigned percent) {
         return false;
     }
     percent=percent>100?100:percent;
+    DWORD current=0;
+    const DWORD read=status.ACLineStatus==0 ?
+        PowerReadDCValueIndex(nullptr,scheme,&video,&brightness,&current) :
+        PowerReadACValueIndex(nullptr,scheme,&video,&brightness,&current);
+    if(read==ERROR_SUCCESS && current==percent) {
+        LocalFree(scheme);
+        return true;
+    }
     const DWORD result=status.ACLineStatus==0 ?
         PowerWriteDCValueIndex(nullptr,scheme,&video,&brightness,percent) :
         PowerWriteACValueIndex(nullptr,scheme,&video,&brightness,percent);
