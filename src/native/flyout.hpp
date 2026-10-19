@@ -59,7 +59,6 @@ private:
     bool updating_ = false;
 
     int px(int logical) const;
-    HWND add(const wchar_t* kind, const wchar_t* caption, DWORD style, int id);
     void rebuild();
     void layout();
     void scrollBy(int delta);
