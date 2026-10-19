@@ -205,7 +205,9 @@ void AdvancedWindow::refreshLocation() {
         SYSTEMTIME now{};
         GetLocalTime(&now);
         const auto result=evaluateSchedule(*settings_,now);
-        if(result.valid) {
+        if(result.valid && result.lightMinute==result.darkMinute) {
+            SetWindowTextW(solarTimes_,result.dark ? L"Polar night (Dark)" : L"Polar day (Light)");
+        } else if(result.valid) {
             const std::wstring times=L"Light "+formatMinute(result.lightMinute)+
                 L", Dark "+formatMinute(result.darkMinute);
             SetWindowTextW(solarTimes_,times.c_str());
@@ -566,8 +568,9 @@ void AdvancedWindow::previewSchedule() {
         swprintf_s(buffer,L"%02u:%02u",value/60,value%60);
         return buffer;
     };
-    const std::wstring result = L"Light " + time(state.lightMinute) +
-        L", Dark " + time(state.darkMinute);
+    const std::wstring result = state.lightMinute==state.darkMinute ?
+        (state.dark ? L"Polar night (Dark)" : L"Polar day (Light)") :
+        L"Light " + time(state.lightMinute) + L", Dark " + time(state.darkMinute);
     SetWindowTextW(solarTimes_,result.c_str());
     SetWindowTextW(status_,state.dark ? L"Preview: Dark mode" : L"Preview: Light mode");
 }
