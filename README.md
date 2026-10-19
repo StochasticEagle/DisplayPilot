@@ -58,3 +58,12 @@ or dimensions also need corresponding changes to the adaptive layout routines.
 ## License
 
 [The Unlicense](LICENSE).
+
+### Native compact schedule editor
+
+The tray flyout has a collapsible **Schedule options** section, allowing
+fixed times, sunrise/sunset coordinates, and scheduled brightness reduction
+to be edited without opening the Advanced window. Location permissions are
+optional; the **Update location now** button explicitly requests a reading.
+Automatic location notifications are subscribed only while sunrise/sunset
+scheduling and automatic location are enabled. No location polling is used.
