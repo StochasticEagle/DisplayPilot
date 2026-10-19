@@ -158,6 +158,19 @@ std::wstring restoreKey(const Monitor& monitor) {
 }
 void handleAsyncResult(ControlResult* result) {
         if(result) {
+            const bool latest=app.controls.isLatest(
+                result->key,result->operation,result->generation);
+            const bool userEditing=std::any_of(app.pendingControls.begin(),
+                app.pendingControls.end(),[&](const PendingControlWrite& pending) {
+                    return pending.monitorKey==result->key &&
+                        pending.contrast==(result->operation==ControlOperation::Contrast) &&
+                        (result->operation==ControlOperation::Brightness ||
+                         result->operation==ControlOperation::Contrast);
+                });
+            if(!latest || userEditing) {
+                delete result;
+                return;
+            }
             bool matched=false;
             for(auto& monitor:app.monitors) {
                 if(restoreKey(monitor)!=result->key) continue;
