@@ -203,16 +203,20 @@ Settings loadSettings() {
     }
     s.scheduleMode = mode == 1 ? ScheduleMode::Solar : ScheduleMode::Fixed;
     s.automaticLocation = json_settings::asBoolean(json_settings::field(doc, "automaticLocation"), false);
-    if (s.scheduleMode == ScheduleMode::Solar) {
-        if (!json_settings::asNumber(json_settings::field(doc, "latitude"), s.latitude) ||
-            !json_settings::asNumber(json_settings::field(doc, "longitude"), s.longitude) ||
-            std::abs(s.latitude) > 90 || std::abs(s.longitude) > 180)
-            return Settings{};
-        s.locationConfigured = true;
-        const auto* label = json_settings::field(doc, "locationLabel");
-        if (label && label->type == JsonValue::Type::String)
-            s.locationLabel = json_settings::toWide(label->scalar);
+    const auto* savedLatitude = json_settings::field(doc, "latitude");
+    const auto* savedLongitude = json_settings::field(doc, "longitude");
+    if (savedLatitude && savedLongitude &&
+        savedLatitude->type != JsonValue::Type::Null &&
+        savedLongitude->type != JsonValue::Type::Null) {
+        if (json_settings::asNumber(savedLatitude, s.latitude) &&
+            json_settings::asNumber(savedLongitude, s.longitude) &&
+            std::isfinite(s.latitude) && std::isfinite(s.longitude) &&
+            std::abs(s.latitude) <= 90 && std::abs(s.longitude) <= 180)
+            s.locationConfigured = true;
     }
+    const auto* label = json_settings::field(doc, "locationLabel");
+    if (label && label->type == JsonValue::Type::String)
+        s.locationLabel = json_settings::toWide(label->scalar);
     return s;
 }
 
