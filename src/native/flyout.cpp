@@ -74,17 +74,6 @@ void Flyout::setAppearance(bool supported, bool dark, bool scheduled) {
     repaint();
 }
 
-HWND Flyout::add(const wchar_t* kind, const wchar_t* caption, DWORD style, int id) {
-    HWND child = CreateWindowExW(0, kind, caption, WS_CHILD | WS_VISIBLE | style,
-        0, 0, 10, 10, window_, reinterpret_cast<HMENU>(static_cast<INT_PTR>(id)),
-        instance_, nullptr);
-    if (child) {
-        SendMessageW(child, WM_SETFONT, reinterpret_cast<WPARAM>(font_), FALSE);
-        children_.push_back(child);
-    }
-    return child;
-}
-
 void Flyout::rebuild() {
     if (!window_) return;
     for (HWND child : children_) DestroyWindow(child);
