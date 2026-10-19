@@ -8,7 +8,7 @@
 | Brightness and contrast | External DDC/CI monitors | Hardware read-back |
 | Color temperature | Hardware-advertised VCP presets | Monitor capabilities |
 | Internal panel brightness | WMI COM | Laptop and mixed monitor setups |
-| Brightness-key notifications | WMI event handling | Device-specific events |
+| Brightness-key notifications | WMI brightness events update the internal panel and route matching values to the DDC display under the pointer | Mixed-monitor keyboard events |
 | Display rotation | Windows display configuration | Validation and read-back |
 | Appearance | Windows personalization | Theme updates |
 | Scheduling | Fixed times and sunrise/sunset | Time zones and date transitions |
