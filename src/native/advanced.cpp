@@ -490,6 +490,23 @@ void AdvancedWindow::copyDiagnostics() {
     if(settings_) {
         report+=L"Scheduled automation: ";
         report+=settings_->scheduleEnabled?L"enabled":L"disabled";
+        report+=L"\r\nSchedule mode: ";
+        report+=settings_->scheduleMode==ScheduleMode::Solar?L"sunrise/sunset":L"fixed";
+        report+=L"\r\nCoordinates available: ";
+        report+=settings_->locationConfigured?L"yes":L"no";
+        report+=L"\r\nAutomatic location: ";
+        report+=settings_->automaticLocation?L"enabled":L"disabled";
+        report+=L"\r\nScheduled brightness reduction: ";
+        report+=settings_->reduceBrightness?L"enabled":L"disabled";
+        SYSTEMTIME now{};
+        GetLocalTime(&now);
+        const auto next=evaluateSchedule(*settings_,now);
+        report+=L"\r\nSchedule evaluation: ";
+        report+=next.valid?(next.dark?L"dark":L"light"):L"unavailable";
+        if(next.valid) {
+            report+=L"\r\nNext schedule evaluation in milliseconds: ";
+            report+=std::to_wstring(next.millisecondsUntilChange);
+        }
         report+=L"\r\n";
     }
     if(!OpenClipboard(window_))return;
