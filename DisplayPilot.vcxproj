@@ -257,6 +257,7 @@
     <ClInclude Include="src\native\location.hpp" />
     <ClInclude Include="src\native\raw_brightness.hpp" />
     <ClInclude Include="src\native\power_brightness.hpp" />
+    <ClInclude Include="src\native\async_controls.hpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="src\native\app.rc" />
