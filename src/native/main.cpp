@@ -334,7 +334,7 @@ void showFlyout() {
     KillTimer(app.owner, hoverTimer);
     refreshMonitors();
     updateAppearance();
-    app.flyout.show(iconRectangle(), &app.monitors);
+    app.flyout.show(iconRectangle(), &app.monitors, &app.settings);
     app.lastNearIcon = GetTickCount();
     SetTimer(app.owner, leaveTimer, 180, nullptr);
 }
@@ -668,6 +668,8 @@ int run(HINSTANCE instance) {
     app.flyout.advancedRequested = showAdvanced;
     app.flyout.refreshRequested = refreshMonitors;
     app.flyout.themeChanged = manualTheme;
+    app.flyout.settingsChanged = saveNewSettings;
+    app.flyout.locationUpdateRequested = updateLocationNow;
     app.flyout.scheduleChanged = [](bool enabled) {
         app.settings.scheduleEnabled = enabled;
         app.manualThemeOverride = false;
