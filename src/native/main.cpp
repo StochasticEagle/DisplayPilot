@@ -328,7 +328,8 @@ LRESULT CALLBACK ownerProcedure(HWND hwnd, UINT msg, WPARAM w, LPARAM l) {
     case LocationUpdates::message: {
         auto* coordinates = reinterpret_cast<LocationCoordinates*>(l);
         if (coordinates) {
-            if (app.settings.scheduleEnabled && app.settings.scheduleMode == ScheduleMode::Solar) {
+            if (app.settings.scheduleEnabled && app.settings.scheduleMode == ScheduleMode::Solar &&
+                (app.settings.automaticLocation || w != 0)) {
                 if (!app.settings.locationConfigured ||
                     app.settings.latitude != coordinates->latitude ||
                     app.settings.longitude != coordinates->longitude) {
