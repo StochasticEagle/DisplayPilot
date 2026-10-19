@@ -589,10 +589,7 @@ LRESULT CALLBACK ownerProcedure(HWND hwnd, UINT msg, WPARAM w, LPARAM l) {
         } else if (w == brightnessEventTimer) {
             std::vector<BrightnessKeyEvent> updates;
             if (!app.brightnessKeys.poll(updates)) {
-                KillTimer(hwnd, brightnessEventTimer);
-        KillTimer(hwnd, rawBrightnessTimer);
-        KillTimer(hwnd, hardwareDebounceTimer);
-        app.pendingControls.clear();
+                KillTimer(hwnd,brightnessEventTimer);
             } else {
                 bool changed = false;
                 for (const auto& update : updates) {
@@ -610,6 +607,7 @@ LRESULT CALLBACK ownerProcedure(HWND hwnd, UINT msg, WPARAM w, LPARAM l) {
                         }
                     }
                     if (!sourcePresent || GetTickCount()-app.lastRawBrightnessEvent<500) continue;
+                    syncWindowsBrightness(update.percent);
                     POINT cursor{};
                     if (!GetCursorPos(&cursor)) continue;
                     const HMONITOR target = MonitorFromPoint(cursor, MONITOR_DEFAULTTONULL);
@@ -625,7 +623,7 @@ LRESULT CALLBACK ownerProcedure(HWND hwnd, UINT msg, WPARAM w, LPARAM l) {
                 }
                 if (changed) {
                     app.flyout.repaint();
-                    app.advanced.refresh();
+                    app.advanced.synchronizeMonitorControls();
                 }
             }
         } else if (w == refreshTimer) {
@@ -664,6 +662,9 @@ LRESULT CALLBACK ownerProcedure(HWND hwnd, UINT msg, WPARAM w, LPARAM l) {
         KillTimer(hwnd, scheduleTimer);
         KillTimer(hwnd, refreshTimer);
         KillTimer(hwnd, brightnessEventTimer);
+        KillTimer(hwnd, rawBrightnessTimer);
+        KillTimer(hwnd, hardwareDebounceTimer);
+        app.pendingControls.clear();
         app.brightnessKeys.stop();
         app.controls.stop();
         MSG completed{};
