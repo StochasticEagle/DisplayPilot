@@ -5,11 +5,11 @@
 | Tray icon and flyout | Native resource-based controls; collapsible fixed/solar editor, manual location, brightness, contrast, color and rotation | DPI, taskbar positions, focus |
 | Context menu | Native Windows popup menu | Mouse and keyboard |
 | Advanced window | Resizable top-level window | Layout, controls, scrolling |
-| Brightness and contrast | External DDC/CI monitors | Hardware read-back |
-| Color temperature | Hardware-advertised VCP presets | Monitor capabilities |
+| Brightness and contrast | External DDC/CI and WMI controls; serialized background writes, debounced sliders and verified read-back | Hardware read-back |
+| Color temperature | Hardware-advertised VCP presets and serialized asynchronous writes | Monitor capabilities |
 | Internal panel brightness | WMI COM | Laptop and mixed monitor setups |
 | Brightness-key notifications | WMI events and raw HID Consumer Control keys; cursor-targeted DDC adjustment, coalesced changes, Windows power brightness synchronization | Mixed-monitor keyboard events |
-| Display rotation | Windows display configuration | Validation and read-back |
+| Display rotation | Windows display configuration, asynchronous writes and read-back | Validation and read-back |
 | Appearance | Windows personalization; manual Light/Dark overrides end at the next enabled schedule boundary | Theme updates and transition timing |
 | Scheduling | Fixed times and sunrise/sunset | Time zones and date transitions |
 | Automatic location | Opt-in Windows Location API notifications and explicit Update location now button; never polled | Windows location enabled, denied, or unavailable |
