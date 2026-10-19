@@ -185,17 +185,21 @@ void applyNightBrightness() {
         if (!monitor.brightnessAvailable) continue;
         std::wstring key = restoreKey(monitor);
         unsigned baseline = 0;
-        if (!restoreBrightness(key, baseline)) {
-            const auto legacy = legacyRestoreKey(monitor);
-            if (key != legacy && restoreBrightness(legacy, baseline)) {
-                key = legacy;
-            } else {
-                baseline = monitor.brightness;
-                if (!saveBrightness(key, baseline)) continue;
-            }
+        if (restoreBrightness(key, baseline)) {
+            // As in master: already-reduced monitors keep their current manual
+            // adjustment until the original baseline is restored at daybreak.
+            any = true;
+            continue;
         }
-        // Never throw away a saved baseline if a hardware write fails:
-        // it might have reached the device despite failing verification.
+        const auto legacy = legacyRestoreKey(monitor);
+        if (key != legacy && restoreBrightness(legacy, baseline)) {
+            any = true;
+            continue;
+        }
+        baseline = monitor.brightness;
+        if (!saveBrightness(key, baseline)) continue;
+        // Keep the original value even if the hardware accepted the write but
+        // verification failed. A future restore must still be attempted.
         any = true;
         const unsigned target = baseline > 10U ? baseline / 2U : 0U;
         setBrightness(monitor, target);
