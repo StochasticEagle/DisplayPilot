@@ -44,6 +44,7 @@ struct Application {
     bool scheduleApplied = false;
     bool lastDark = false;
     bool savedBrightness = false;
+    bool manualThemeOverride = false;
 } app;
 void syncLocation();
 
@@ -182,6 +183,7 @@ void applySchedule(bool force) {
     GetLocalTime(&now);
     const auto state = evaluateSchedule(app.settings, now);
     if (!state.valid) {
+        app.manualThemeOverride = false;
         restoreMonitorBrightness();
         app.scheduleApplied = false;
         // Polar dates need a fresh calculation tomorrow; absent coordinates do not.
@@ -191,8 +193,11 @@ void applySchedule(bool force) {
         updateAppearance();
         return;
     }
+    const bool activeOverride = app.manualThemeOverride &&
+        app.scheduleApplied && app.lastDark == state.dark;
+    if (!activeOverride) app.manualThemeOverride = false;
     if (force || !app.scheduleApplied || app.lastDark != state.dark) {
-        if (app.supportsThemes) setWindowsTheme(state.dark);
+        if (app.supportsThemes && !activeOverride) setWindowsTheme(state.dark);
         if (state.dark && app.settings.reduceBrightness)
             applyNightBrightness();
         else restoreMonitorBrightness();
@@ -210,13 +215,22 @@ void applySchedule(bool force) {
 }
 void manualTheme(bool dark) {
     if (!app.supportsThemes) return;
+    // Match WinUI: preserve enabled scheduling and override only until the
+    // next schedule boundary. The existing one-shot timer remains armed.
     if (app.settings.scheduleEnabled) {
-        app.settings.scheduleEnabled = false;
-        saveSettings(app.settings);
-        syncLocation();
+        SYSTEMTIME now{};
+        GetLocalTime(&now);
+        const auto current = evaluateSchedule(app.settings, now);
+        app.manualThemeOverride = current.valid;
+        if (current.valid) {
+            app.lastDark = current.dark;
+            app.scheduleApplied = true;
+        }
+    } else {
+        app.manualThemeOverride = false;
+        if (app.savedBrightness) restoreMonitorBrightness();
+        app.scheduleApplied = false;
     }
-    if (app.savedBrightness) restoreMonitorBrightness();
-    app.scheduleApplied = false;
     setWindowsTheme(dark);
     updateAppearance();
     app.advanced.refresh();
@@ -235,6 +249,7 @@ bool updateLocationNow() {
 void saveNewSettings(const Settings& next) {
     const bool previousEnabled = app.settings.scheduleEnabled;
     app.settings = next;
+    app.manualThemeOverride = false;
     saveSettings(app.settings);
     syncLocation();
     if (previousEnabled && !next.scheduleEnabled && app.savedBrightness)
@@ -321,6 +336,7 @@ void showContextMenu() {
     case commandDark: manualTheme(true); break;
     case commandSchedule:
         app.settings.scheduleEnabled = !app.settings.scheduleEnabled;
+        app.manualThemeOverride = false;
         saveSettings(app.settings);
         syncLocation();
         applySchedule(true);
@@ -525,6 +541,7 @@ int run(HINSTANCE instance) {
     app.flyout.themeChanged = manualTheme;
     app.flyout.scheduleChanged = [](bool enabled) {
         app.settings.scheduleEnabled = enabled;
+        app.manualThemeOverride = false;
         saveSettings(app.settings);
         syncLocation();
         applySchedule(true);
