@@ -1,4 +1,5 @@
 #include "flyout.hpp"
+#include "resource.h"
 #include "ui_platform.hpp"
 #include <commctrl.h>
 #include <algorithm>
@@ -41,20 +42,14 @@ int Flyout::create(HINSTANCE instance, HWND owner) {
     controls.dwSize = sizeof(controls);
     controls.dwICC = ICC_BAR_CLASSES;
     if (!InitCommonControlsEx(&controls)) return 1;
-    WNDCLASSEXW cls{};
-    cls.cbSize = sizeof(cls);
-    cls.hInstance = instance;
-    cls.lpfnWndProc = procedure;
-    cls.lpszClassName = L"DisplayPilotFlyout";
-    cls.hCursor = LoadCursorW(nullptr, IDC_ARROW);
-    cls.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
-    cls.style = CS_DROPSHADOW;
-    if (!RegisterClassExW(&cls) && GetLastError() != ERROR_CLASS_ALREADY_EXISTS)
-        return 2;
-    window_ = CreateWindowExW(WS_EX_TOOLWINDOW,
-        cls.lpszClassName, L"DisplayPilot", WS_POPUP | WS_BORDER | WS_VSCROLL |
-        WS_CLIPCHILDREN, 0, 0, 304, 200, owner, nullptr, instance, this);
+    window_ = CreateDialogParamW(instance, MAKEINTRESOURCEW(IDD_DISPLAYPILOT_FLYOUT),
+        owner, [](HWND, UINT, WPARAM, LPARAM) -> INT_PTR { return FALSE; }, 0);
     if (!window_) return 3;
+    SetWindowLongPtrW(window_, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(this));
+    originalProcedure_ = reinterpret_cast<WNDPROC>(
+        SetWindowLongPtrW(window_, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(procedure)));
+    SetWindowPos(window_, nullptr, 0, 0, 304, 200,
+        SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
     dpi_ = windowDpi(window_);
     NONCLIENTMETRICSW metrics{};
     metrics.cbSize = sizeof(metrics);
@@ -96,9 +91,9 @@ void Flyout::rebuild() {
     children_.clear();
     rows_.clear();
     title_ = empty_ = themeLight_ = themeDarkButton_ = schedule_ = advanced_ = nullptr;
-    title_ = add(L"STATIC", L"DisplayPilot", SS_LEFT, 0);
-    if (!monitors_ || monitors_->empty())
-        empty_ = add(L"STATIC", L"No controllable monitors detected", SS_LEFT, 0);
+    title_ = GetDlgItem(window_, IDC_FLY_TITLE);
+    empty_ = GetDlgItem(window_, IDC_FLY_EMPTY);
+    ShowWindow(empty_, (!monitors_ || monitors_->empty()) ? SW_SHOW : SW_HIDE);
     else for (size_t i = 0; i < monitors_->size(); ++i) {
         const auto& monitor = (*monitors_)[i];
         const int base = firstMonitor + static_cast<int>(i) * 10;
@@ -139,16 +134,12 @@ void Flyout::rebuild() {
         }
         rows_.push_back(row);
     }
-    if (themeSupported_) {
-        themeLight_ = add(L"BUTTON", L"Light", BS_AUTORADIOBUTTON | WS_GROUP | WS_TABSTOP,
-                          lightId);
-        themeDarkButton_ = add(L"BUTTON", L"Dark", BS_AUTORADIOBUTTON | WS_TABSTOP,
-                         darkId);
-    }
-    schedule_ = add(L"BUTTON", L"Automatic schedule",
-                    BS_AUTOCHECKBOX | WS_TABSTOP, scheduleId);
-    advanced_ = add(L"BUTTON", L"Advanced settings...",
-                    BS_PUSHBUTTON | WS_TABSTOP, advancedId);
+    themeLight_ = GetDlgItem(window_, lightId);
+    themeDarkButton_ = GetDlgItem(window_, darkId);
+    ShowWindow(themeLight_, themeSupported_ ? SW_SHOW : SW_HIDE);
+    ShowWindow(themeDarkButton_, themeSupported_ ? SW_SHOW : SW_HIDE);
+    schedule_ = GetDlgItem(window_, scheduleId);
+    advanced_ = GetDlgItem(window_, advancedId);
     layout();
     synchronize();
 }
@@ -393,7 +384,7 @@ LRESULT CALLBACK Flyout::procedure(HWND hwnd, UINT message, WPARAM w, LPARAM l) 
         self->window_ = nullptr;
         return 0;
     default:
-        return DefWindowProcW(hwnd, message, w, l);
+        return CallWindowProcW(self->originalProcedure_, hwnd, message, w, l);
     }
 }
 }
