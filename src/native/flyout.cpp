@@ -4,6 +4,8 @@
 #include <commctrl.h>
 #include <algorithm>
 #include <string>
+#include <cmath>
+#include <cwchar>
 
 namespace displaypilot {
 namespace {
@@ -13,6 +15,36 @@ constexpr int darkId = 101;
 constexpr int scheduleId = 102;
 constexpr int advancedId = 103;
 constexpr int scrollStep = 40;
+std::wstring editText(HWND control) {
+    if(!control) return {};
+    const int length=GetWindowTextLengthW(control);
+    std::wstring out(static_cast<size_t>(length+1),L'\0');
+    GetWindowTextW(control,out.data(),length+1);
+    out.resize(static_cast<size_t>(length));
+    return out;
+}
+std::wstring minuteText(unsigned minute) {
+    wchar_t buffer[16]{};
+    swprintf_s(buffer,L"%02u:%02u",minute/60,minute%60);
+    return buffer;
+}
+bool minuteValue(const std::wstring& s,unsigned& result) {
+    unsigned h=0,m=0;
+    wchar_t extra=L'\0';
+    if(swscanf_s(s.c_str(),L"%u:%u%c",&h,&m,&extra,1U)!=2 || h>23 || m>59)
+        return false;
+    result=h*60+m;
+    return true;
+}
+bool coordinateValue(const std::wstring& text,double limit,double& out) {
+    if(text.empty()) return false;
+    wchar_t* end=nullptr;
+    const double number=wcstod(text.c_str(),&end);
+    if(end==text.c_str() || *end!=L'\0' || !std::isfinite(number) ||
+       std::abs(number)>limit) return false;
+    out=number;
+    return true;
+}
 
 int windowDpi(HWND window) {
     using DpiFunction = UINT (WINAPI*)(HWND);
@@ -152,6 +184,33 @@ void Flyout::rebuild() {
     ShowWindow(themeDarkButton_, themeSupported_ ? SW_SHOW : SW_HIDE);
     schedule_ = GetDlgItem(window_, scheduleId);
     advanced_ = GetDlgItem(window_, advancedId);
+    options_ = GetDlgItem(window_, IDC_FLY_SCHEDULE_OPTIONS);
+    scheduleMode_ = GetDlgItem(window_, IDC_FLY_MODE);
+    lightTime_ = GetDlgItem(window_, IDC_FLY_LIGHT_TIME);
+    darkTime_ = GetDlgItem(window_, IDC_FLY_DARK_TIME);
+    latitude_ = GetDlgItem(window_, IDC_FLY_LATITUDE);
+    longitude_ = GetDlgItem(window_, IDC_FLY_LONGITUDE);
+    locationLabel_ = GetDlgItem(window_, IDC_FLY_LOCATION_LABEL);
+    reduce_ = GetDlgItem(window_, IDC_FLY_REDUCE);
+    saveSchedule_ = GetDlgItem(window_, IDC_FLY_SAVE_SCHEDULE);
+    scheduleStatus_ = GetDlgItem(window_, IDC_FLY_SCHEDULE_STATUS);
+    solarUpdate_ = GetDlgItem(window_, IDC_FLY_SOLAR_UPDATE);
+    timeCaption_ = GetDlgItem(window_, IDC_FLY_TIME_CAPTION);
+    coordinateCaption_ = GetDlgItem(window_, IDC_FLY_COORDINATE_CAPTION);
+    SendMessageW(scheduleMode_,CB_RESETCONTENT,0,0);
+    SendMessageW(scheduleMode_,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(L"Fixed times"));
+    SendMessageW(scheduleMode_,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(L"Sunrise / sunset"));
+    if(settings_) {
+        SendMessageW(scheduleMode_,CB_SETCURSEL,
+            settings_->scheduleMode==ScheduleMode::Solar?1:0,0);
+        SetWindowTextW(lightTime_,minuteText(settings_->lightMinute).c_str());
+        SetWindowTextW(darkTime_,minuteText(settings_->darkMinute).c_str());
+        SetWindowTextW(latitude_,std::to_wstring(settings_->latitude).c_str());
+        SetWindowTextW(longitude_,std::to_wstring(settings_->longitude).c_str());
+        SetWindowTextW(locationLabel_,settings_->locationLabel.c_str());
+        SendMessageW(reduce_,BM_SETCHECK,
+            settings_->reduceBrightness?BST_CHECKED:BST_UNCHECKED,0);
+    }
     layout();
     synchronize();
 }
@@ -207,7 +266,47 @@ void Flyout::layout() {
         y += px(36);
     }
     place(schedule_, margin, y, available, px(29));
-    y += px(40);
+    y += px(35);
+    place(options_,margin,y,available,px(29));
+    y += px(35);
+    const bool solar=SendMessageW(scheduleMode_,CB_GETCURSEL,0,0)==1;
+    for(HWND child:{scheduleMode_,lightTime_,darkTime_,latitude_,longitude_,
+                    locationLabel_,reduce_,saveSchedule_,scheduleStatus_,
+                    solarUpdate_,timeCaption_,coordinateCaption_})
+        if(child) ShowWindow(child,scheduleExpanded_ ? SW_SHOW : SW_HIDE);
+    if(scheduleExpanded_) {
+        place(scheduleMode_,margin,y,available,px(200));
+        y+=px(36);
+        ShowWindow(timeCaption_,solar ? SW_HIDE : SW_SHOW);
+        ShowWindow(lightTime_,solar ? SW_HIDE : SW_SHOW);
+        ShowWindow(darkTime_,solar ? SW_HIDE : SW_SHOW);
+        ShowWindow(coordinateCaption_,solar ? SW_SHOW : SW_HIDE);
+        ShowWindow(latitude_,solar ? SW_SHOW : SW_HIDE);
+        ShowWindow(longitude_,solar ? SW_SHOW : SW_HIDE);
+        place(timeCaption_,margin,y,available,px(24));
+        place(coordinateCaption_,margin,y,available,px(24));
+        y+=px(23);
+        place(lightTime_,margin,y,(available-px(12))/2,px(29));
+        place(darkTime_,margin+(available+px(12))/2,y,(available-px(12))/2,px(29));
+        place(latitude_,margin,y,(available-px(12))/2,px(29));
+        place(longitude_,margin+(available+px(12))/2,y,(available-px(12))/2,px(29));
+        y+=px(35);
+        if(solar) {
+            place(locationLabel_,margin,y,available,px(29));
+            y+=px(35);
+            place(solarUpdate_,margin,y,available,px(30));
+            y+=px(37);
+        } else {
+            ShowWindow(locationLabel_,SW_HIDE);
+            ShowWindow(solarUpdate_,SW_HIDE);
+        }
+        place(reduce_,margin,y,available,px(28));
+        y+=px(34);
+        place(saveSchedule_,margin,y,available,px(31));
+        y+=px(38);
+        place(scheduleStatus_,margin,y,available,px(40));
+        y+=px(43);
+    }
     place(advanced_, margin, y, available, px(33));
     y += px(48);
     contentHeight_ = y + scroll_;
@@ -282,14 +381,21 @@ void Flyout::repaint() const {
     else self->synchronize();
 }
 
-void Flyout::show(const RECT& anchor, std::vector<Monitor>* monitors) {
+void Flyout::show(const RECT& anchor, std::vector<Monitor>* monitors, Settings* settings) {
     if (!window_) return;
     monitors_ = monitors;
+    settings_ = settings;
+    anchor_ = anchor;
+    scheduleExpanded_ = false;
     dpi_ = windowDpi(window_);
     scroll_ = 0;
     rebuild();
-    RECT client{};
-    GetClientRect(window_, &client);
+    resizeToContent();
+}
+void Flyout::resizeToContent() {
+    if(!window_) return;
+    layout();
+    const RECT anchor=anchor_;
     const int width = px(304);
     // The first layout computes the required content height.
     const int desiredHeight = contentHeight_ + px(4);
@@ -334,6 +440,38 @@ void Flyout::onTrackbar(HWND control) {
     }
 }
 
+bool Flyout::saveSchedule() {
+    if(!settings_ || !settingsChanged) return false;
+    Settings updated=*settings_;
+    if(!minuteValue(editText(lightTime_),updated.lightMinute) ||
+       !minuteValue(editText(darkTime_),updated.darkMinute) ||
+       updated.lightMinute==updated.darkMinute) {
+        SetWindowTextW(scheduleStatus_,L"Enter distinct Light and Dark times (HH:MM).");
+        return false;
+    }
+    updated.scheduleMode=SendMessageW(scheduleMode_,CB_GETCURSEL,0,0)==1 ?
+        ScheduleMode::Solar : ScheduleMode::Fixed;
+    updated.reduceBrightness=SendMessageW(reduce_,BM_GETCHECK,0,0)==BST_CHECKED;
+    if(updated.scheduleMode==ScheduleMode::Solar) {
+        const auto lat=editText(latitude_),lon=editText(longitude_);
+        if(lat.empty() || lon.empty()) {
+            updated.locationConfigured=false;
+        } else if(coordinateValue(lat,90,updated.latitude) &&
+                  coordinateValue(lon,180,updated.longitude)) {
+            updated.locationConfigured=true;
+        } else {
+            SetWindowTextW(scheduleStatus_,L"Enter valid latitude and longitude.");
+            return false;
+        }
+        updated.locationLabel=editText(locationLabel_);
+    }
+    if(!settingsChanged(updated)) {
+        SetWindowTextW(scheduleStatus_,L"Settings could not be saved.");
+        return false;
+    }
+    SetWindowTextW(scheduleStatus_,L"Schedule saved.");
+    return true;
+}
 void Flyout::onCommand(WORD id, WORD notification) {
     if (updating_) return;
     if (notification == BN_CLICKED) {
@@ -343,6 +481,18 @@ void Flyout::onCommand(WORD id, WORD notification) {
             scheduleChanged(SendMessageW(schedule_, BM_GETCHECK, 0, 0) == BST_CHECKED);
         else if (id == advancedId && advancedRequested) advancedRequested();
         else if (id == IDC_FLY_REFRESH && refreshRequested) refreshRequested();
+        else if(id==IDC_FLY_SCHEDULE_OPTIONS) {
+            scheduleExpanded_=!scheduleExpanded_;
+            SetWindowTextW(options_,scheduleExpanded_ ?
+                L"Hide schedule options" : L"Schedule options...");
+            resizeToContent();
+        } else if(id==IDC_FLY_SAVE_SCHEDULE) saveSchedule();
+        else if(id==IDC_FLY_SOLAR_UPDATE && locationUpdateRequested) {
+            const bool result=locationUpdateRequested();
+            SetWindowTextW(scheduleStatus_,result ?
+                L"Valid location update requested." :
+                L"Location unavailable; saved coordinates retained.");
+        }
     }
     if (notification == BN_CLICKED && id >= firstMonitor && monitors_ &&
         (id-firstMonitor)%10==5) {
@@ -353,6 +503,9 @@ void Flyout::onCommand(WORD id, WORD notification) {
                 static_cast<unsigned>(SendMessageW(rows_[index].rotation,CB_GETITEMDATA,
                     static_cast<WPARAM>(choice),0)));
         }
+    }
+    if(notification==CBN_SELCHANGE && id==IDC_FLY_MODE) {
+        resizeToContent();
     }
     if (notification == CBN_SELCHANGE && id >= firstMonitor && monitors_) {
         const size_t index = static_cast<size_t>((id - firstMonitor) / 10);
