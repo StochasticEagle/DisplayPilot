@@ -83,7 +83,7 @@ RECT iconRectangle() {
 bool contains(const RECT& area, POINT point) {
     return PtInRect(&area, point) != FALSE;
 }
-void updateIcon(bool add) {
+bool updateIcon(bool add) {
     NOTIFYICONDATAW data{};
     data.cbSize = sizeof(data);
     data.hWnd = app.owner;
@@ -92,10 +92,12 @@ void updateIcon(bool add) {
     data.uCallbackMessage = trayMessage;
     data.hIcon = app.icon;
     lstrcpynW(data.szTip, L"DisplayPilot", ARRAYSIZE(data.szTip));
-    if (Shell_NotifyIconW(add ? NIM_ADD : NIM_MODIFY, &data)) {
+    const bool registered=Shell_NotifyIconW(add ? NIM_ADD : NIM_MODIFY,&data)!=FALSE;
+    if(registered) {
         data.uVersion = NOTIFYICON_VERSION_4;
         Shell_NotifyIconW(NIM_SETVERSION, &data);
     }
+    return registered;
 }
 
 void hideFlyout() {
@@ -379,7 +381,7 @@ void showContextMenu() {
 }
 LRESULT CALLBACK ownerProcedure(HWND hwnd, UINT msg, WPARAM w, LPARAM l) {
     if (msg == app.taskbarRestart && app.taskbarRestart != 0) {
-        updateIcon(true);
+        if(!updateIcon(true)) showAdvanced();
         return 0;
     }
     switch (msg) {
@@ -684,7 +686,7 @@ int run(HINSTANCE instance) {
     refreshMonitors();
     syncLocation();
     applySchedule(true);
-    updateIcon(true);
+    if(!updateIcon(true)) showAdvanced();
 
     MSG message{};
     while (GetMessageW(&message, nullptr, 0, 0) > 0) {
