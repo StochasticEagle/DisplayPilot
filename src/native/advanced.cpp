@@ -200,6 +200,17 @@ void AdvancedWindow::refreshLocation() {
     if(latitude_) SetWindowTextW(latitude_,std::to_wstring(settings_->latitude).c_str());
     if(longitude_) SetWindowTextW(longitude_,std::to_wstring(settings_->longitude).c_str());
     if(label_) SetWindowTextW(label_,settings_->locationLabel.c_str());
+    if(solarTimes_ && settings_->scheduleEnabled &&
+       settings_->scheduleMode==ScheduleMode::Solar) {
+        SYSTEMTIME now{};
+        GetLocalTime(&now);
+        const auto result=evaluateSchedule(*settings_,now);
+        if(result.valid) {
+            const std::wstring times=L"Light "+formatMinute(result.lightMinute)+
+                L", Dark "+formatMinute(result.darkMinute);
+            SetWindowTextW(solarTimes_,times.c_str());
+        } else SetWindowTextW(solarTimes_,L"");
+    }
 }
 void AdvancedWindow::synchronizeMonitorControls() {
     if(!visible() || !monitors_ || rows_.size()!=monitors_->size()) return;
