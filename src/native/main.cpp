@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <string>
 #include <vector>
+#include <map>
 #include <new>
 
 namespace displaypilot {
@@ -53,6 +54,7 @@ struct Application {
     Settings settings;
     std::vector<Monitor> monitors;
     std::vector<PendingControlWrite> pendingControls;
+    std::map<std::wstring,unsigned> keyboardDesired;
     UINT taskbarRestart = 0;
     DWORD lastNearIcon = 0;
     bool supportsThemes = false;
@@ -171,6 +173,8 @@ void handleAsyncResult(ControlResult* result) {
                 delete result;
                 return;
             }
+            if(result->operation==ControlOperation::Brightness)
+                app.keyboardDesired.erase(result->key);
             bool matched=false;
             for(auto& monitor:app.monitors) {
                 if(restoreKey(monitor)!=result->key) continue;
@@ -579,10 +583,18 @@ LRESULT CALLBACK ownerProcedure(HWND hwnd, UINT msg, WPARAM w, LPARAM l) {
                 for(unsigned i=0;i<app.monitors.size();++i) {
                     const auto& m=app.monitors[i];
                     if(m.handle==target && m.brightnessAvailable) {
-                        const int percent=std::clamp(static_cast<int>(m.brightness)+delta,0,100);
-                        changeBrightness(i,static_cast<unsigned>(percent));
-                        if(app.monitors[i].brightness==static_cast<unsigned>(percent))
-                            syncWindowsBrightness(static_cast<unsigned>(percent));
+                        const auto key=restoreKey(m);
+                        const auto previous=app.keyboardDesired.find(key);
+                        const int base=previous==app.keyboardDesired.end() ?
+                            static_cast<int>(m.brightness) : static_cast<int>(previous->second);
+                        const auto percent=static_cast<unsigned>(std::clamp(base+delta,0,100));
+                        app.keyboardDesired[key]=percent;
+                        if(!app.controls.enqueue(m,key,ControlOperation::Brightness,percent,true)) {
+                            app.keyboardDesired.erase(key);
+                            changeBrightness(i,percent);
+                            if(app.monitors[i].brightness==percent)
+                                syncWindowsBrightness(percent);
+                        }
                     }
                 }
             }
@@ -616,8 +628,15 @@ LRESULT CALLBACK ownerProcedure(HWND hwnd, UINT msg, WPARAM w, LPARAM l) {
                         const auto& monitor = app.monitors[i];
                         if (monitor.provider == ControlProvider::Ddc &&
                             monitor.brightnessAvailable && monitor.handle == target) {
-                            if (monitor.brightness != update.percent)
-                                changeBrightness(i, update.percent);
+                            if (monitor.brightness != update.percent) {
+                                const auto key=restoreKey(monitor);
+                                app.keyboardDesired[key]=update.percent;
+                                if(!app.controls.enqueue(monitor,key,ControlOperation::Brightness,
+                                                         update.percent,true)) {
+                                    app.keyboardDesired.erase(key);
+                                    changeBrightness(i,update.percent);
+                                }
+                            }
                         }
                     }
                 }
@@ -665,6 +684,7 @@ LRESULT CALLBACK ownerProcedure(HWND hwnd, UINT msg, WPARAM w, LPARAM l) {
         KillTimer(hwnd, rawBrightnessTimer);
         KillTimer(hwnd, hardwareDebounceTimer);
         app.pendingControls.clear();
+        app.keyboardDesired.clear();
         app.brightnessKeys.stop();
         app.controls.stop();
         MSG completed{};
