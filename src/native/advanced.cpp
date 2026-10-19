@@ -195,6 +195,29 @@ void AdvancedWindow::hide() {
 void AdvancedWindow::refresh() {
     if (visible()) rebuild();
 }
+void AdvancedWindow::synchronizeMonitorControls() {
+    if(!visible() || !monitors_ || rows_.size()!=monitors_->size()) return;
+    for(size_t i=0;i<rows_.size();++i) {
+        const auto& value=(*monitors_)[i];
+        const auto& row=rows_[i];
+        if(row.brightness)
+            SendMessageW(row.brightness,TBM_SETPOS,TRUE,value.brightness);
+        if(row.contrast)
+            SendMessageW(row.contrast,TBM_SETPOS,TRUE,value.contrast);
+        auto select=[&](HWND combo,unsigned selected) {
+            if(!combo) return;
+            const LRESULT count=SendMessageW(combo,CB_GETCOUNT,0,0);
+            for(LRESULT index=0;index<count;++index)
+                if(static_cast<unsigned>(SendMessageW(combo,CB_GETITEMDATA,
+                    static_cast<WPARAM>(index),0))==selected) {
+                    SendMessageW(combo,CB_SETCURSEL,static_cast<WPARAM>(index),0);
+                    break;
+                }
+        };
+        select(row.color,value.colorPreset);
+        select(row.rotation,value.rotation);
+    }
+}
 void AdvancedWindow::rebuild() {
     if (!window_) return;
     for (auto* child: children_) DestroyWindow(child);
