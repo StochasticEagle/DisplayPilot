@@ -98,40 +98,49 @@ void Flyout::rebuild() {
         const auto& monitor = (*monitors_)[i];
         const int base = firstMonitor + static_cast<int>(i) * 10;
         MonitorControls row{};
-        row.name = add(L"STATIC", monitor.name.c_str(), SS_LEFT, 0);
-        if (monitor.brightnessAvailable) {
-            row.brightnessLabel = add(L"STATIC", L"Brightness", SS_LEFT, 0);
-            row.brightness = add(TRACKBAR_CLASSW, L"",
-                TBS_HORZ | TBS_NOTICKS | WS_TABSTOP, base);
-            if (row.brightness) {
-                SendMessageW(row.brightness, TBM_SETRANGE, FALSE, MAKELPARAM(0, 100));
-                SendMessageW(row.brightness, TBM_SETPOS, TRUE, monitor.brightness);
+        HWND templateRow=CreateDialogParamW(instance_,
+            MAKEINTRESOURCEW(IDD_FLYOUT_MONITOR),window_,
+            [](HWND,UINT,WPARAM,LPARAM)->INT_PTR { return FALSE; },0);
+        auto take=[&](int resourceId,int runtimeId)->HWND {
+            if(!templateRow) return nullptr;
+            HWND child=GetDlgItem(templateRow,resourceId);
+            if(!child || !SetParent(child,window_)) return nullptr;
+            SetWindowLongPtrW(child,GWLP_ID,static_cast<LONG_PTR>(runtimeId));
+            SendMessageW(child,WM_SETFONT,reinterpret_cast<WPARAM>(font_),FALSE);
+            children_.push_back(child);
+            return child;
+        };
+        row.name=take(IDC_FLY_ROW_NAME,0);
+        if(row.name) SetWindowTextW(row.name,monitor.name.c_str());
+        if(monitor.brightnessAvailable) {
+            row.brightnessLabel=take(IDC_FLY_ROW_BRIGHTNESS_LABEL,0);
+            row.brightness=take(IDC_FLY_ROW_BRIGHTNESS,base);
+            if(row.brightness) {
+                SendMessageW(row.brightness,TBM_SETRANGE,FALSE,MAKELPARAM(0,100));
+                SendMessageW(row.brightness,TBM_SETPOS,TRUE,monitor.brightness);
             }
         }
-        if (monitor.contrastAvailable) {
-            row.contrastLabel = add(L"STATIC", L"Contrast", SS_LEFT, 0);
-            row.contrast = add(TRACKBAR_CLASSW, L"",
-                TBS_HORZ | TBS_NOTICKS | WS_TABSTOP, base + 1);
-            if (row.contrast) {
-                SendMessageW(row.contrast, TBM_SETRANGE, FALSE, MAKELPARAM(0, 100));
-                SendMessageW(row.contrast, TBM_SETPOS, TRUE, monitor.contrast);
+        if(monitor.contrastAvailable) {
+            row.contrastLabel=take(IDC_FLY_ROW_CONTRAST_LABEL,0);
+            row.contrast=take(IDC_FLY_ROW_CONTRAST,base+1);
+            if(row.contrast) {
+                SendMessageW(row.contrast,TBM_SETRANGE,FALSE,MAKELPARAM(0,100));
+                SendMessageW(row.contrast,TBM_SETPOS,TRUE,monitor.contrast);
             }
         }
-        if (monitor.colorAvailable && !monitor.colorPresets.empty()) {
-            row.colorLabel = add(L"STATIC", L"Color temperature", SS_LEFT, 0);
-            row.color = add(L"COMBOBOX", L"",
-                CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP, base + 2);
-            if (row.color) {
-                for (unsigned preset : monitor.colorPresets) {
-                    const auto name = colorPresetLabel(preset);
-                    const LRESULT index = SendMessageW(row.color, CB_ADDSTRING, 0,
-                        reinterpret_cast<LPARAM>(name.c_str()));
-                    if (index != CB_ERR && index != CB_ERRSPACE)
-                        SendMessageW(row.color, CB_SETITEMDATA,
-                                     static_cast<WPARAM>(index), preset);
-                }
+        if(monitor.colorAvailable && !monitor.colorPresets.empty()) {
+            row.colorLabel=take(IDC_FLY_ROW_COLOR_LABEL,0);
+            row.color=take(IDC_FLY_ROW_COLOR,base+2);
+            if(row.color) for(unsigned preset:monitor.colorPresets) {
+                const auto name=colorPresetLabel(preset);
+                const LRESULT index=SendMessageW(row.color,CB_ADDSTRING,0,
+                    reinterpret_cast<LPARAM>(name.c_str()));
+                if(index!=CB_ERR && index!=CB_ERRSPACE)
+                    SendMessageW(row.color,CB_SETITEMDATA,
+                                 static_cast<WPARAM>(index),preset);
             }
         }
+        if(templateRow) DestroyWindow(templateRow);
         rows_.push_back(row);
     }
     themeLight_ = GetDlgItem(window_, lightId);
