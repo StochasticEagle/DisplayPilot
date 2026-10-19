@@ -52,12 +52,13 @@ private:
     HKEY handle_ = nullptr;
 };
 
-bool solarMinutes(const SYSTEMTIME& date, const Settings& settings,
+enum class SolarCondition { Invalid, Normal, PolarDay, PolarNight };
+SolarCondition solarMinutes(const SYSTEMTIME& date, const Settings& settings,
                   unsigned& sunrise, unsigned& sunset) {
     const int year = date.wYear, month = date.wMonth, day = date.wDay;
     static constexpr int daysBeforeMonth[12] =
         {0,31,59,90,120,151,181,212,243,273,304,334};
-    if (month < 1 || month > 12 || day < 1 || day > 31) return false;
+    if (month < 1 || month > 12 || day < 1 || day > 31) return SolarCondition::Invalid;
     const bool leap = (year % 4 == 0 && year % 100 != 0) || year % 400 == 0;
     const int yearDay = daysBeforeMonth[month-1] + day + (leap && month > 2 ? 1 : 0);
     const double gamma = (2.0 * pi / (leap ? 366.0 : 365.0)) * (yearDay - 1);
@@ -68,10 +69,12 @@ bool solarMinutes(const SYSTEMTIME& date, const Settings& settings,
         - 0.002697*cos(3*gamma) + 0.00148*sin(3*gamma);
     const double latitude = settings.latitude * deg2rad;
     const double denominator = cos(latitude) * cos(declination);
-    if (std::abs(denominator) < 0.000001) return false;
-    const double h = (cos(90.833 * deg2rad) - sin(latitude) * sin(declination)) /
-                     denominator;
-    if (h < -1.0 || h > 1.0) return false; // polar day/night
+    const double numerator = cos(90.833 * deg2rad) - sin(latitude) * sin(declination);
+    if (std::abs(denominator) < 0.000001)
+        return numerator < 0 ? SolarCondition::PolarDay : SolarCondition::PolarNight;
+    const double h = numerator / denominator;
+    if (h < -1.0) return SolarCondition::PolarDay;
+    if (h > 1.0) return SolarCondition::PolarNight;
     const double hourAngle = acos(h) / deg2rad;
     // UTC event times. Convert the date's local noon UTC offset to the local
     // sunrise and sunset, preserving daylight-saving rules from Windows.
@@ -81,10 +84,10 @@ bool solarMinutes(const SYSTEMTIME& date, const Settings& settings,
     localNoon.wSecond = 0;
     localNoon.wMilliseconds = 0;
     SYSTEMTIME utcNoon{};
-    if (!TzSpecificLocalTimeToSystemTime(nullptr, &localNoon, &utcNoon)) return false;
+    if (!TzSpecificLocalTimeToSystemTime(nullptr, &localNoon, &utcNoon)) return SolarCondition::Invalid;
     FILETIME localFile{}, utcFile{};
     if (!SystemTimeToFileTime(&localNoon, &localFile) ||
-        !SystemTimeToFileTime(&utcNoon, &utcFile)) return false;
+        !SystemTimeToFileTime(&utcNoon, &utcFile)) return SolarCondition::Invalid;
     ULARGE_INTEGER a{}, b{};
     a.LowPart = localFile.dwLowDateTime; a.HighPart = localFile.dwHighDateTime;
     b.LowPart = utcFile.dwLowDateTime; b.HighPart = utcFile.dwHighDateTime;
@@ -98,7 +101,7 @@ bool solarMinutes(const SYSTEMTIME& date, const Settings& settings,
     };
     sunrise = normalizedMinute(center - 4 * hourAngle);
     sunset = normalizedMinute(center + 4 * hourAngle);
-    return true;
+    return SolarCondition::Normal;
 }
 
 DWORD secondsUntil(unsigned eventMinute, unsigned minuteNow, unsigned secondsNow) {
@@ -263,8 +266,16 @@ ScheduleState evaluateSchedule(const Settings& s, const SYSTEMTIME& now) {
     if (!s.scheduleEnabled) return state;
     unsigned light = s.lightMinute, dark = s.darkMinute;
     if (s.scheduleMode == ScheduleMode::Solar) {
-        if (!s.locationConfigured || !solarMinutes(now, s, light, dark))
+        if (!s.locationConfigured) return state;
+        const auto condition = solarMinutes(now, s, light, dark);
+        if (condition == SolarCondition::Invalid) return state;
+        if (condition != SolarCondition::Normal) {
+            state.valid = true;
+            state.dark = condition == SolarCondition::PolarNight;
+            state.millisecondsUntilChange = ((23U - now.wHour) * 3600U +
+                (59U - now.wMinute) * 60U + (60U - now.wSecond)) * 1000U;
             return state;
+        }
     }
     if (light == dark) return state;
     const unsigned minuteNow = now.wHour * 60U + now.wMinute;
