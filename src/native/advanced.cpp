@@ -174,16 +174,6 @@ void AdvancedWindow::updateFonts() {
     }
 }
 
-HWND AdvancedWindow::add(const wchar_t* kind,const std::wstring& caption,DWORD style,int id) {
-    HWND child=CreateWindowExW(0,kind,caption.c_str(),
-        WS_CHILD|WS_VISIBLE|style,0,0,10,10,window_,
-        reinterpret_cast<HMENU>(static_cast<INT_PTR>(id)),instance_,nullptr);
-    if (child) {
-        SendMessageW(child,WM_SETFONT,reinterpret_cast<WPARAM>(font_),TRUE);
-        children_.push_back(child);
-    }
-    return child;
-}
 bool AdvancedWindow::visible() const {
     return window_ && IsWindowVisible(window_);
 }
