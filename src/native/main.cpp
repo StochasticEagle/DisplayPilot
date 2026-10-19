@@ -156,6 +156,41 @@ std::wstring restoreKey(const Monitor& monitor) {
     return monitor.persistentPath.empty() ?
         legacyRestoreKey(monitor) : monitor.persistentPath;
 }
+void handleAsyncResult(ControlResult* result) {
+        if(result) {
+            bool matched=false;
+            for(auto& monitor:app.monitors) {
+                if(restoreKey(monitor)!=result->key) continue;
+                matched=true;
+                if(result->succeeded) {
+                    switch(result->operation) {
+                    case ControlOperation::Brightness: monitor.brightness=result->value; break;
+                    case ControlOperation::Contrast: monitor.contrast=result->value; break;
+                    case ControlOperation::Color: monitor.colorPreset=result->value; break;
+                    case ControlOperation::Rotation: monitor.rotation=result->value; break;
+                    }
+                }
+            }
+            if(result->succeeded) {
+                if(result->operation==ControlOperation::Rotation)
+                    SetTimer(app.owner,refreshTimer,350,nullptr);
+                else {
+                    app.flyout.repaint();
+                    app.advanced.synchronizeMonitorControls();
+                }
+                if(result->synchronizeShell)
+                    syncWindowsBrightness(result->value);
+            } else if(matched) queueRefresh();
+            delete result;
+        }
+}
+void drainAsyncControls() {
+    app.controls.drain();
+    MSG pending{};
+    while(PeekMessageW(&pending,app.owner,AsyncControls::completionMessage,
+                       AsyncControls::completionMessage,PM_REMOVE))
+        handleAsyncResult(reinterpret_cast<ControlResult*>(pending.lParam));
+}
 void restoreMonitorBrightness() {
     bool pending = false;
     bool changed = false;
@@ -215,6 +250,8 @@ DWORD untilTomorrow(const SYSTEMTIME& now) {
     return std::max(1000UL, seconds * 1000UL);
 }
 void applySchedule(bool force) {
+    // Complete and reconcile user writes before modifying scheduled brightness.
+    drainAsyncControls();
     KillTimer(app.owner, scheduleTimer);
     SYSTEMTIME now{};
     GetLocalTime(&now);
@@ -265,7 +302,10 @@ void manualTheme(bool dark) {
         }
     } else {
         app.manualThemeOverride = false;
-        if (app.savedBrightness) restoreMonitorBrightness();
+        if (app.savedBrightness) {
+            drainAsyncControls();
+            restoreMonitorBrightness();
+        }
         app.scheduleApplied = false;
     }
     setWindowsTheme(dark);
@@ -392,36 +432,9 @@ LRESULT CALLBACK ownerProcedure(HWND hwnd, UINT msg, WPARAM w, LPARAM l) {
         return 0;
     }
     switch (msg) {
-    case AsyncControls::completionMessage: {
-        auto* result=reinterpret_cast<ControlResult*>(l);
-        if(result) {
-            bool matched=false;
-            for(auto& monitor:app.monitors) {
-                if(restoreKey(monitor)!=result->key) continue;
-                matched=true;
-                if(result->succeeded) {
-                    switch(result->operation) {
-                    case ControlOperation::Brightness: monitor.brightness=result->value; break;
-                    case ControlOperation::Contrast: monitor.contrast=result->value; break;
-                    case ControlOperation::Color: monitor.colorPreset=result->value; break;
-                    case ControlOperation::Rotation: monitor.rotation=result->value; break;
-                    }
-                }
-            }
-            if(result->succeeded) {
-                if(result->operation==ControlOperation::Rotation)
-                    SetTimer(hwnd,refreshTimer,350,nullptr);
-                else {
-                    app.flyout.repaint();
-                    app.advanced.synchronizeMonitorControls();
-                }
-                if(result->synchronizeShell)
-                    syncWindowsBrightness(result->value);
-            } else if(matched) queueRefresh();
-            delete result;
-        }
+    case AsyncControls::completionMessage:
+        handleAsyncResult(reinterpret_cast<ControlResult*>(l));
         return 0;
-    }
     case activateExisting:
         showAdvanced();
         return 0;
