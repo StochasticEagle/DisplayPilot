@@ -26,6 +26,7 @@ constexpr UINT scheduleTimer = 3;
 constexpr UINT refreshTimer = 4;
 constexpr UINT brightnessEventTimer = 5;
 constexpr UINT rawBrightnessTimer = 6;
+constexpr UINT hardwareDebounceTimer = 7;
 constexpr UINT activateExisting = WM_APP + 90;
 constexpr UINT commandOpen = 101;
 constexpr UINT commandAdvanced = 102;
@@ -34,6 +35,11 @@ constexpr UINT commandLight = 104;
 constexpr UINT commandDark = 105;
 constexpr UINT commandSchedule = 106;
 
+struct PendingControlWrite {
+    std::wstring monitorKey;
+    unsigned value = 0;
+    bool contrast = false;
+};
 struct Application {
     HINSTANCE instance = nullptr;
     HWND owner = nullptr;
@@ -44,6 +50,7 @@ struct Application {
     LocationUpdates* location = nullptr;
     Settings settings;
     std::vector<Monitor> monitors;
+    std::vector<PendingControlWrite> pendingControls;
     UINT taskbarRestart = 0;
     DWORD lastNearIcon = 0;
     bool supportsThemes = false;
@@ -286,6 +293,16 @@ void changeBrightness(unsigned index, unsigned value) {
         app.flyout.repaint();
     } else queueRefresh();
 }
+void queueManualControl(unsigned index, unsigned value, bool contrast) {
+    if(index>=app.monitors.size()) return;
+    const auto key=restoreKey(app.monitors[index]);
+    auto found=std::find_if(app.pendingControls.begin(),app.pendingControls.end(),
+        [&](const PendingControlWrite& x) { return x.monitorKey==key && x.contrast==contrast; });
+    if(found==app.pendingControls.end())
+        app.pendingControls.push_back(PendingControlWrite{key,value,contrast});
+    else found->value=value;
+    SetTimer(app.owner,hardwareDebounceTimer,120,nullptr);
+}
 void changeContrast(unsigned index, unsigned value) {
     if (index >= app.monitors.size()) return;
     if (setContrast(app.monitors[index], value))
@@ -470,6 +487,18 @@ LRESULT CALLBACK ownerProcedure(HWND hwnd, UINT msg, WPARAM w, LPARAM l) {
                 hideFlyout();
         } else if (w == scheduleTimer) {
             applySchedule(false);
+        } else if (w == hardwareDebounceTimer) {
+            KillTimer(hwnd,hardwareDebounceTimer);
+            auto writes=std::move(app.pendingControls);
+            app.pendingControls.clear();
+            for(const auto& write:writes) {
+                for(unsigned i=0;i<app.monitors.size();++i)
+                    if(restoreKey(app.monitors[i])==write.monitorKey) {
+                        if(write.contrast) changeContrast(i,write.value);
+                        else changeBrightness(i,write.value);
+                        break;
+                    }
+            }
         } else if (w == rawBrightnessTimer) {
             KillTimer(hwnd,rawBrightnessTimer);
             const int delta=app.pendingBrightnessDelta;
@@ -492,6 +521,8 @@ LRESULT CALLBACK ownerProcedure(HWND hwnd, UINT msg, WPARAM w, LPARAM l) {
             if (!app.brightnessKeys.poll(updates)) {
                 KillTimer(hwnd, brightnessEventTimer);
         KillTimer(hwnd, rawBrightnessTimer);
+        KillTimer(hwnd, hardwareDebounceTimer);
+        app.pendingControls.clear();
             } else {
                 bool changed = false;
                 for (const auto& update : updates) {
@@ -616,8 +647,12 @@ int run(HINSTANCE instance) {
         CloseHandle(singleton);
         return 34;
     }
-    app.flyout.brightnessChanged = changeBrightness;
-    app.flyout.contrastChanged = changeContrast;
+    app.flyout.brightnessChanged = [](unsigned i,unsigned v) {
+        queueManualControl(i,v,false);
+    };
+    app.flyout.contrastChanged = [](unsigned i,unsigned v) {
+        queueManualControl(i,v,true);
+    };
     app.flyout.colorChanged = changeColor;
     app.flyout.rotationChanged = changeRotation;
     app.flyout.advancedRequested = showAdvanced;
@@ -630,8 +665,12 @@ int run(HINSTANCE instance) {
         syncLocation();
         applySchedule(true);
     };
-    app.advanced.brightnessChanged = changeBrightness;
-    app.advanced.contrastChanged = changeContrast;
+    app.advanced.brightnessChanged = [](unsigned i,unsigned v) {
+        queueManualControl(i,v,false);
+    };
+    app.advanced.contrastChanged = [](unsigned i,unsigned v) {
+        queueManualControl(i,v,true);
+    };
     app.advanced.colorChanged = changeColor;
     app.advanced.rotationChanged = changeRotation;
     app.advanced.themeChanged = manualTheme;
