@@ -171,6 +171,11 @@ void applyNightBrightness() {
     app.savedBrightness = any;
     queueRefresh();
 }
+DWORD untilTomorrow(const SYSTEMTIME& now) {
+    const DWORD seconds = (23U - now.wHour) * 3600U +
+        (59U - now.wMinute) * 60U + (60U - now.wSecond);
+    return std::max(1000UL, seconds * 1000UL);
+}
 void applySchedule(bool force) {
     KillTimer(app.owner, scheduleTimer);
     SYSTEMTIME now{};
@@ -179,7 +184,10 @@ void applySchedule(bool force) {
     if (!state.valid) {
         restoreMonitorBrightness();
         app.scheduleApplied = false;
-        SetTimer(app.owner, scheduleTimer, 60000, nullptr);
+        // Polar dates need a fresh calculation tomorrow; absent coordinates do not.
+        if (app.settings.scheduleEnabled && app.settings.scheduleMode == ScheduleMode::Solar &&
+            app.settings.locationConfigured)
+            SetTimer(app.owner, scheduleTimer, untilTomorrow(now), nullptr);
         updateAppearance();
         return;
     }
@@ -193,9 +201,11 @@ void applySchedule(bool force) {
     } else if (!state.dark || !app.settings.reduceBrightness) {
         restoreMonitorBrightness();
     }
-    // Re-evaluate every minute for system time/time-zone adjustments.
-    SetTimer(app.owner, scheduleTimer,
-             std::max(1000UL, std::min(60000UL, state.millisecondsUntilChange)), nullptr);
+    // One-shot transition timer, bounded by midnight when solar times change.
+    DWORD interval = state.millisecondsUntilChange;
+    if (app.settings.scheduleMode == ScheduleMode::Solar)
+        interval = std::min(interval, untilTomorrow(now));
+    SetTimer(app.owner, scheduleTimer, std::max(1000UL, interval), nullptr);
     updateAppearance();
 }
 void manualTheme(bool dark) {
