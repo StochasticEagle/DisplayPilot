@@ -401,13 +401,30 @@ LRESULT CALLBACK ownerProcedure(HWND hwnd, UINT msg, WPARAM w, LPARAM l) {
             } else {
                 bool changed = false;
                 for (const auto& update : updates) {
+                    bool sourcePresent = false;
                     for (auto& monitor : app.monitors) {
                         if (monitor.provider == ControlProvider::Wmi &&
+                            monitor.brightnessAvailable &&
                             _wcsicmp(monitor.wmiInstance.c_str(),
-                                     update.instance.c_str()) == 0 &&
-                            monitor.brightness != update.percent) {
-                            monitor.brightness = update.percent;
-                            changed = true;
+                                     update.instance.c_str()) == 0) {
+                            sourcePresent = true;
+                            if (monitor.brightness != update.percent) {
+                                monitor.brightness = update.percent;
+                                changed = true;
+                            }
+                        }
+                    }
+                    if (!sourcePresent) continue;
+                    POINT cursor{};
+                    if (!GetCursorPos(&cursor)) continue;
+                    const HMONITOR target = MonitorFromPoint(cursor, MONITOR_DEFAULTTONULL);
+                    if (!target) continue;
+                    for (unsigned i = 0; i < app.monitors.size(); ++i) {
+                        const auto& monitor = app.monitors[i];
+                        if (monitor.provider == ControlProvider::Ddc &&
+                            monitor.brightnessAvailable && monitor.handle == target) {
+                            if (monitor.brightness != update.percent)
+                                changeBrightness(i, update.percent);
                         }
                     }
                 }
