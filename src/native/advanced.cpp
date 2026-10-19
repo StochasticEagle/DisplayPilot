@@ -528,8 +528,23 @@ void AdvancedWindow::previewSchedule() {
     SetWindowTextW(status_,state.dark ? L"Preview: Dark mode" : L"Preview: Light mode");
 }
 void AdvancedWindow::copyDiagnostics() {
-    std::wstring report=L"DisplayPilot diagnostics\r\n";
+    std::wstring report=L"DisplayPilot active display-path report\r\n";
+    report+=L"Version: "+executableVersion()+L"\r\n";
     report+=L"Process: native Win32\r\n";
+    SYSTEMTIME captured{};
+    GetLocalTime(&captured);
+    wchar_t capturedText[80]{};
+    swprintf_s(capturedText,L"%04u-%02u-%02u %02u:%02u:%02u",
+        captured.wYear,captured.wMonth,captured.wDay,
+        captured.wHour,captured.wMinute,captured.wSecond);
+    report+=L"Captured: "+std::wstring(capturedText)+L"\r\n";
+    SYSTEM_INFO system{};
+    GetNativeSystemInfo(&system);
+    report+=L"Processor architecture: "+
+        std::to_wstring(system.wProcessorArchitecture)+L"\r\n";
+    report+=L"Startup registration: ";
+    report+=startupEnabled()?L"enabled":L"disabled";
+    report+=L"\r\n";
     if (monitors_) {
         report+=L"Monitor count: "+std::to_wstring(monitors_->size())+L"\r\n";
         for(const auto& m:*monitors_) {
@@ -537,7 +552,15 @@ void AdvancedWindow::copyDiagnostics() {
             report+=m.brightnessAvailable?std::to_wstring(m.brightness)+L"%":L"unavailable";
             report+=L" | contrast: ";
             report+=m.contrastAvailable?std::to_wstring(m.contrast)+L"%":L"unavailable";
-            report+=L" | rotation: "+rotationLabel(m.rotation)+L"\r\n";
+            report+=L" | rotation: "+rotationLabel(m.rotation);
+            report+=L" | provider: ";
+            report+=m.provider==ControlProvider::Wmi?L"WMI":L"DDC/CI";
+            report+=L" | color: ";
+            report+=m.colorAvailable?colorPresetLabel(m.colorPreset):L"unavailable";
+            report+=L" | supported colors: "+std::to_wstring(m.colorPresets.size());
+            report+=L" | verified brightness: ";
+            report+=m.brightnessAvailable?L"yes":L"no";
+            report+=L" | path: "+m.persistentPath+L"\r\n";
         }
     }
     if(settings_) {
@@ -560,6 +583,8 @@ void AdvancedWindow::copyDiagnostics() {
             report+=L"\r\nNext schedule evaluation in milliseconds: ";
             report+=std::to_wstring(next.millisecondsUntilChange);
         }
+        report+=L"\r\nSaved brightness restoration pending: ";
+        report+=anySavedBrightness()?L"yes":L"no";
         report+=L"\r\n";
     }
     if(!OpenClipboard(window_))return;
