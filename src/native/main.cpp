@@ -146,7 +146,7 @@ void restoreMonitorBrightness() {
             changed = true;
         } else pending = true;
     }
-    app.savedBrightness = pending;
+    app.savedBrightness = pending || anySavedBrightness();
     if (changed) queueRefresh();
 }
 void applyNightBrightness() {
@@ -162,14 +162,16 @@ void applyNightBrightness() {
                 key = legacy;
             } else {
                 baseline = monitor.brightness;
-                saveBrightness(key, baseline);
+                if (!saveBrightness(key, baseline)) continue;
             }
         }
-        const unsigned target = std::max(10U, baseline / 2);
-        if (setBrightness(monitor, target)) any = true;
-        else removeSavedBrightness(key);
+        // Never throw away a saved baseline if a hardware write fails:
+        // it might have reached the device despite failing verification.
+        any = true;
+        const unsigned target = baseline > 10U ? baseline / 2U : 0U;
+        setBrightness(monitor, target);
     }
-    app.savedBrightness = any;
+    app.savedBrightness = any || anySavedBrightness();
     queueRefresh();
 }
 DWORD untilTomorrow(const SYSTEMTIME& now) {
@@ -246,27 +248,29 @@ bool updateLocationNow() {
         app.settings.scheduleMode != ScheduleMode::Solar) return false;
     return app.location->updateNow();
 }
-void saveNewSettings(const Settings& next) {
+bool saveNewSettings(const Settings& next) {
+    if (!saveSettings(next)) return false;
     const bool previousEnabled = app.settings.scheduleEnabled;
     app.settings = next;
     app.manualThemeOverride = false;
-    saveSettings(app.settings);
     syncLocation();
     if (previousEnabled && !next.scheduleEnabled && app.savedBrightness)
         restoreMonitorBrightness();
     applySchedule(true);
     app.advanced.refresh();
+    return true;
 }
 void changeBrightness(unsigned index, unsigned value) {
     if (index >= app.monitors.size()) return;
-    // Manual control cancels pending schedule restoration for this monitor.
+    // Cancel restoration only after the manual hardware write succeeds.
     const auto key = restoreKey(app.monitors[index]);
-    if (app.savedBrightness) {
-        removeSavedBrightness(key);
-        if (key != legacyRestoreKey(app.monitors[index]))
-            removeSavedBrightness(legacyRestoreKey(app.monitors[index]));
-    }
     if (setBrightness(app.monitors[index], value)) {
+        if (app.savedBrightness) {
+            removeSavedBrightness(key);
+            if (key != legacyRestoreKey(app.monitors[index]))
+                removeSavedBrightness(legacyRestoreKey(app.monitors[index]));
+            app.savedBrightness = anySavedBrightness();
+        }
         app.monitors[index].brightness = value;
         app.flyout.repaint();
     } else queueRefresh();

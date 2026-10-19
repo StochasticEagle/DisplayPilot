@@ -25,7 +25,7 @@ public:
     std::function<void(unsigned, unsigned)> colorChanged;
     std::function<void(unsigned, unsigned)> rotationChanged;
     std::function<void(bool)> themeChanged;
-    std::function<void(const Settings&)> settingsChanged;
+    std::function<bool(const Settings&)> settingsChanged;
     std::function<bool()> locationUpdateRequested;
 
 private:

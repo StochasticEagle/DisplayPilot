@@ -460,6 +460,10 @@ bool AdvancedWindow::saveInput() {
         SetWindowTextW(status_,L"Invalid time: enter HH:MM (24-hour clock).");
         return false;
     }
+    if(next.lightMinute==next.darkMinute) {
+        SetWindowTextW(status_,L"Light and Dark transition times must be different.");
+        return false;
+    }
     const auto latitudeText=read(latitude_);
     const auto longitudeText=read(longitude_);
     if (!latitudeText.empty() && !longitudeText.empty()) {
@@ -471,7 +475,10 @@ bool AdvancedWindow::saveInput() {
         next.locationConfigured=true;
     } else next.locationConfigured=false;
     next.locationLabel=read(label_);
-    if(settingsChanged)settingsChanged(next);
+    if(!settingsChanged || !settingsChanged(next)) {
+        SetWindowTextW(status_,L"Schedule settings could not be saved; previous values retained.");
+        return false;
+    }
     SetWindowTextW(status_,L"Schedule and location settings saved.");
     return true;
 }

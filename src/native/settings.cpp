@@ -223,11 +223,11 @@ Settings loadSettings() {
     return s;
 }
 
-void saveSettings(const Settings& s) {
+bool saveSettings(const Settings& s) {
     JsonValue doc;
-    if (!json_settings::editable(doc) || !validRestoreValues(doc)) return;
+    if (!json_settings::editable(doc) || !validRestoreValues(doc)) return false;
     setScheduleFields(doc, s);
-    json_settings::write(doc);
+    return json_settings::write(doc);
 }
 
 bool supportsWindowsTheme() {
@@ -317,38 +317,44 @@ bool restoreBrightness(const std::wstring& keyName, unsigned& percent) {
     percent = value;
     return true;
 }
-void saveBrightness(const std::wstring& keyName, unsigned percent) {
+bool saveBrightness(const std::wstring& keyName, unsigned percent) {
     JsonValue doc;
     const auto result = json_settings::read(doc);
     if (result == json_settings::ReadResult::Missing) {
         doc = json_settings::newDocument();
         setScheduleFields(doc, loadRegistrySettings());
     } else if (result != json_settings::ReadResult::Valid ||
-               !json_settings::supported(doc) || !validRestoreValues(doc)) return;
+               !json_settings::supported(doc) || !validRestoreValues(doc)) return false;
     auto& values = doc.object["brightnessRestoreValues"];
     if (values.type == JsonValue::Type::Null) values = json_settings::object();
-    if (values.type != JsonValue::Type::Object) return;
+    if (values.type != JsonValue::Type::Object) return false;
     const auto existing = storedRestoreKey(values, keyName);
     values.object[existing.empty() ? json_settings::toUtf8(keyName) : existing] =
         json_settings::number(static_cast<int>(std::min(percent, 100U)));
     doc.object["brightnessReductionActive"] = json_settings::boolean(true);
-    json_settings::write(doc);
+    return json_settings::write(doc);
 }
-void removeSavedBrightness(const std::wstring& keyName) {
+bool removeSavedBrightness(const std::wstring& keyName) {
     JsonValue doc;
     const auto result = json_settings::read(doc);
     if (result == json_settings::ReadResult::Missing) {
         Key key(restorationPath, KEY_WRITE, false);
-        if (key) RegDeleteValueW(key.get(), keyName.c_str());
-        return;
+        return key && RegDeleteValueW(key.get(), keyName.c_str()) == ERROR_SUCCESS;
     }
     if (result != json_settings::ReadResult::Valid ||
-        !json_settings::supported(doc) || !validRestoreValues(doc)) return;
+        !json_settings::supported(doc) || !validRestoreValues(doc)) return false;
     auto* values = &doc.object["brightnessRestoreValues"];
-    if (values->type != JsonValue::Type::Object) return;
-    if (!values->object.erase(storedRestoreKey(*values, keyName))) return;
+    if (values->type != JsonValue::Type::Object) return false;
+    if (!values->object.erase(storedRestoreKey(*values, keyName))) return false;
     doc.object["brightnessReductionActive"] =
         json_settings::boolean(!values->object.empty());
-    json_settings::write(doc);
+    return json_settings::write(doc);
+}
+bool anySavedBrightness() {
+    JsonValue doc;
+    if (json_settings::read(doc) != json_settings::ReadResult::Valid ||
+        !json_settings::supported(doc) || !validRestoreValues(doc)) return false;
+    const auto* values = json_settings::field(doc, "brightnessRestoreValues");
+    return values && values->type == JsonValue::Type::Object && !values->object.empty();
 }
 }

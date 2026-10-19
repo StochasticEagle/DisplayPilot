@@ -28,12 +28,13 @@ struct ScheduleState {
 };
 
 Settings loadSettings();
-void saveSettings(const Settings& settings);
+bool saveSettings(const Settings& settings);
 bool supportsWindowsTheme();
 bool setWindowsTheme(bool dark);
 bool readWindowsTheme(bool& dark);
 ScheduleState evaluateSchedule(const Settings& settings, const SYSTEMTIME& now);
 bool restoreBrightness(const std::wstring& key, unsigned& percent);
-void saveBrightness(const std::wstring& key, unsigned percent);
-void removeSavedBrightness(const std::wstring& key);
+bool saveBrightness(const std::wstring& key, unsigned percent);
+bool removeSavedBrightness(const std::wstring& key);
+bool anySavedBrightness();
 }
