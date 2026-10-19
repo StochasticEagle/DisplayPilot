@@ -83,25 +83,29 @@ bool startupEnabled() {
     RegCloseKey(key);
     return enabled;
 }
-void setStartup(bool enabled) {
+bool setStartup(bool enabled) {
     HKEY key = nullptr;
     if (RegCreateKeyExW(HKEY_CURRENT_USER,
         L"Software\\Microsoft\\Windows\\CurrentVersion\\Run", 0, nullptr, 0,
-        KEY_SET_VALUE, nullptr, &key, nullptr) != ERROR_SUCCESS) return;
-    if (!enabled) RegDeleteValueW(key, L"DisplayPilot");
-    else {
+        KEY_SET_VALUE, nullptr, &key, nullptr) != ERROR_SUCCESS) return false;
+    LONG status=ERROR_INVALID_PARAMETER;
+    if (!enabled) {
+        status=RegDeleteValueW(key,L"DisplayPilot");
+        if(status==ERROR_FILE_NOT_FOUND) status=ERROR_SUCCESS;
+    } else {
         std::wstring executable(32768, L'\0');
-        DWORD bytes = GetModuleFileNameW(nullptr, &executable[0],
-                                          static_cast<DWORD>(executable.size()));
-        if (bytes && bytes < executable.size()) {
+        const DWORD bytes=GetModuleFileNameW(nullptr,executable.data(),
+                                              static_cast<DWORD>(executable.size()));
+        if(bytes && bytes<executable.size()) {
             executable.resize(bytes);
-            executable = L"\"" + executable + L"\"";
-            RegSetValueExW(key, L"DisplayPilot", 0, REG_SZ,
+            executable=L"\"" + executable + L"\"";
+            status=RegSetValueExW(key,L"DisplayPilot",0,REG_SZ,
                 reinterpret_cast<const BYTE*>(executable.c_str()),
                 static_cast<DWORD>((executable.size()+1)*sizeof(wchar_t)));
         }
     }
     RegCloseKey(key);
+    return status==ERROR_SUCCESS;
 }
 }
 
@@ -604,8 +608,12 @@ void AdvancedWindow::copyDiagnostics() {
 }
 void AdvancedWindow::onCommand(WORD id,WORD notification) {
     if(id==startupId && notification==BN_CLICKED) {
-        setStartup(SendMessageW(startup_,BM_GETCHECK,0,0)==BST_CHECKED);
-        SetWindowTextW(status_,L"Windows sign-in preference updated.");
+        const bool updated=setStartup(SendMessageW(startup_,BM_GETCHECK,0,0)==BST_CHECKED);
+        if(!updated)
+            SendMessageW(startup_,BM_SETCHECK,startupEnabled()?BST_CHECKED:BST_UNCHECKED,0);
+        SetWindowTextW(status_,updated ?
+            L"Windows sign-in preference updated." :
+            L"Windows sign-in preference could not be updated.");
     } else if(id==saveId && notification==BN_CLICKED) {
         saveInput();
     } else if(id==updateLocationId && notification==BN_CLICKED) {
