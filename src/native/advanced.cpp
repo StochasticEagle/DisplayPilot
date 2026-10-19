@@ -1,4 +1,5 @@
 #include "advanced.hpp"
+#include "resource.h"
 #include "ui_platform.hpp"
 #include <commctrl.h>
 #include <winver.h>
@@ -115,26 +116,21 @@ bool AdvancedWindow::create(HINSTANCE instance) {
     controls.dwSize = sizeof(controls);
     controls.dwICC = ICC_BAR_CLASSES;
     if (!InitCommonControlsEx(&controls)) return false;
-    WNDCLASSEXW cls{};
-    cls.cbSize=sizeof(cls);
-    cls.hInstance=instance;
-    cls.lpfnWndProc=procedure;
-    cls.hCursor=LoadCursorW(nullptr,IDC_ARROW);
-    cls.hbrBackground=reinterpret_cast<HBRUSH>(COLOR_WINDOW+1);
+    window_ = CreateDialogParamW(instance, MAKEINTRESOURCEW(IDD_DISPLAYPILOT_ADVANCED),
+        nullptr, [](HWND, UINT, WPARAM, LPARAM) -> INT_PTR { return FALSE; }, 0);
+    if (!window_) return false;
+    SetWindowLongPtrW(window_, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(this));
+    originalProcedure_ = reinterpret_cast<WNDPROC>(
+        SetWindowLongPtrW(window_, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(procedure)));
+    SetWindowPos(window_, nullptr, 0, 0, 860, 690,
+        SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
     appIcon_ = static_cast<HICON>(LoadImageW(instance, MAKEINTRESOURCEW(appIconId),
         IMAGE_ICON, 0, 0, LR_DEFAULTSIZE | LR_SHARED));
-    cls.hIcon = appIcon_;
-    cls.hIconSm = static_cast<HICON>(LoadImageW(instance, MAKEINTRESOURCEW(appIconId),
-        IMAGE_ICON, GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON), LR_SHARED));
-    cls.lpszClassName=L"DisplayPilotAdvanced";
-    if (!RegisterClassExW(&cls) && GetLastError()!=ERROR_CLASS_ALREADY_EXISTS)
-        return false;
-    window_=CreateWindowExW(0,cls.lpszClassName,L"DisplayPilot - Advanced",
-             WS_OVERLAPPEDWINDOW|WS_VSCROLL, CW_USEDEFAULT,CW_USEDEFAULT,
-             860,690,nullptr,nullptr,instance,this);
-    if (!window_) return false;
-    SendMessageW(window_, WM_SETICON, ICON_BIG, reinterpret_cast<LPARAM>(cls.hIcon));
-    SendMessageW(window_, WM_SETICON, ICON_SMALL, reinterpret_cast<LPARAM>(cls.hIconSm));
+    HICON smallIcon = static_cast<HICON>(LoadImageW(instance,
+        MAKEINTRESOURCEW(appIconId), IMAGE_ICON,
+        GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON), LR_SHARED));
+    SendMessageW(window_, WM_SETICON, ICON_BIG, reinterpret_cast<LPARAM>(appIcon_));
+    SendMessageW(window_, WM_SETICON, ICON_SMALL, reinterpret_cast<LPARAM>(smallIcon));
     applyNativeWindowChrome(window_);
     HDC dc=GetDC(window_);
     dpi_ = dc ? GetDeviceCaps(dc, LOGPIXELSY) : 96;
@@ -161,10 +157,10 @@ void AdvancedWindow::updateFonts() {
     title.lfWeight = FW_SEMIBOLD;
     HFONT heading = CreateFontIndirectW(&title);
     if (normal) {
-        for (auto* child : children_) {
-            if (IsWindow(child))
-                SendMessageW(child, WM_SETFONT, reinterpret_cast<WPARAM>(normal), TRUE);
-        }
+        EnumChildWindows(window_, [](HWND child, LPARAM font) -> BOOL {
+            SendMessageW(child, WM_SETFONT, static_cast<WPARAM>(font), TRUE);
+            return TRUE;
+        }, reinterpret_cast<LPARAM>(normal));
         HFONT old = font_;
         font_ = normal;
         if (old) DeleteObject(old);
@@ -217,12 +213,15 @@ void AdvancedWindow::rebuild() {
     brandIcon_=brandName_=brandVersion_=nullptr;
     lightCaption_=darkCaption_=latitudeCaption_=longitudeCaption_=locationCaption_=nullptr;
     if (!monitors_ || !settings_) return;
-    brandIcon_=add(L"STATIC",L"",SS_OWNERDRAW,brandIconId);
-    brandName_=add(L"STATIC",L"DisplayPilot",SS_LEFT,0);
-    brandVersion_=add(L"STATIC",executableVersion(),SS_LEFT,0);
+    brandIcon_=GetDlgItem(window_,IDC_ADV_ICON);
+    brandName_=GetDlgItem(window_,IDC_ADV_BRAND);
+    brandVersion_=GetDlgItem(window_,IDC_ADV_VERSION);
+    SetWindowTextW(brandVersion_,executableVersion().c_str());
+    ShowWindow(GetDlgItem(window_,themeLightId),themesAvailable_ ? SW_SHOW : SW_HIDE);
+    ShowWindow(GetDlgItem(window_,themeDarkId),themesAvailable_ ? SW_SHOW : SW_HIDE);
     if (brandName_ && titleFont_)
         SendMessageW(brandName_, WM_SETFONT, reinterpret_cast<WPARAM>(titleFont_), TRUE);
-    displaysHeading_=add(L"STATIC",L"Displays",SS_LEFT,0);
+    displaysHeading_=GetDlgItem(window_,IDC_ADV_DISPLAYS_HEADING);
     for (unsigned i=0;i<monitors_->size();++i) {
         auto& m=(*monitors_)[i];
         RowControls row;
@@ -277,55 +276,50 @@ void AdvancedWindow::rebuild() {
         rows_.push_back(std::move(row));
     }
     {
-        scheduleHeading_=add(L"STATIC",L"Appearance and scheduling",SS_LEFT,0);
+        scheduleHeading_=GetDlgItem(window_,IDC_ADV_SCHEDULE_HEADING);
         if (themesAvailable_) {
-            add(L"BUTTON",L"Light mode",BS_PUSHBUTTON|WS_TABSTOP,themeLightId);
-            add(L"BUTTON",L"Dark mode",BS_PUSHBUTTON|WS_TABSTOP,themeDarkId);
+            ShowWindow(GetDlgItem(window_,themeLightId),SW_SHOW);
+            ShowWindow(GetDlgItem(window_,themeDarkId),SW_SHOW);
         }
-        scheduleCheckbox_=add(L"BUTTON",L"Enable automatic schedule",
-                               BS_AUTOCHECKBOX|WS_TABSTOP,scheduleId);
-        brightnessCheckbox_=add(L"BUTTON",L"Reduce brightness during dark hours",
-                               BS_AUTOCHECKBOX|WS_TABSTOP,reduceId);
-        mode_=add(L"COMBOBOX",L"",CBS_DROPDOWNLIST|WS_VSCROLL|WS_TABSTOP,modeId);
+        scheduleCheckbox_=GetDlgItem(window_,scheduleId);
+        brightnessCheckbox_=GetDlgItem(window_,reduceId);
+        mode_=GetDlgItem(window_,modeId);
+        SendMessageW(mode_,CB_RESETCONTENT,0,0);
         SendMessageW(mode_,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(L"Fixed times"));
         SendMessageW(mode_,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(L"Sunrise / sunset"));
         SendMessageW(mode_,CB_SETCURSEL,
             settings_->scheduleMode==ScheduleMode::Solar?1:0,0);
-        lightCaption_=add(L"STATIC",L"Light at",SS_LEFT,0);
-        darkCaption_=add(L"STATIC",L"Dark at",SS_LEFT,0);
-        latitudeCaption_=add(L"STATIC",L"Latitude",SS_LEFT,0);
-        longitudeCaption_=add(L"STATIC",L"Longitude",SS_LEFT,0);
-        locationCaption_=add(L"STATIC",L"Location",SS_LEFT,0);
-        lightTime_=add(L"EDIT",formatMinute(settings_->lightMinute),
-                       WS_BORDER|ES_AUTOHSCROLL|WS_TABSTOP,lightId);
-        darkTime_=add(L"EDIT",formatMinute(settings_->darkMinute),
-                      WS_BORDER|ES_AUTOHSCROLL|WS_TABSTOP,darkId);
-        latitude_=add(L"EDIT",std::to_wstring(settings_->latitude),
-                       WS_BORDER|ES_AUTOHSCROLL|WS_TABSTOP,latitudeId);
-        longitude_=add(L"EDIT",std::to_wstring(settings_->longitude),
-                        WS_BORDER|ES_AUTOHSCROLL|WS_TABSTOP,longitudeId);
-        label_=add(L"EDIT",settings_->locationLabel,
-                   WS_BORDER|ES_AUTOHSCROLL|WS_TABSTOP,labelId);
-        automaticLocation_=add(L"BUTTON",L"Automatically update location when changed",
-            BS_AUTOCHECKBOX|WS_TABSTOP,automaticLocationId);
+        lightCaption_=GetDlgItem(window_,IDC_ADV_LIGHT_CAPTION);
+        darkCaption_=GetDlgItem(window_,IDC_ADV_DARK_CAPTION);
+        latitudeCaption_=GetDlgItem(window_,IDC_ADV_LATITUDE_CAPTION);
+        longitudeCaption_=GetDlgItem(window_,IDC_ADV_LONGITUDE_CAPTION);
+        locationCaption_=GetDlgItem(window_,IDC_ADV_LOCATION_CAPTION);
+        lightTime_=GetDlgItem(window_,lightId);
+        SetWindowTextW(lightTime_,formatMinute(settings_->lightMinute).c_str());
+        darkTime_=GetDlgItem(window_,darkId);
+        SetWindowTextW(darkTime_,formatMinute(settings_->darkMinute).c_str());
+        latitude_=GetDlgItem(window_,latitudeId);
+        SetWindowTextW(latitude_,std::to_wstring(settings_->latitude).c_str());
+        longitude_=GetDlgItem(window_,longitudeId);
+        SetWindowTextW(longitude_,std::to_wstring(settings_->longitude).c_str());
+        label_=GetDlgItem(window_,labelId);
+        SetWindowTextW(label_,settings_->locationLabel.c_str());
+        automaticLocation_=GetDlgItem(window_,automaticLocationId);
         SendMessageW(automaticLocation_, BM_SETCHECK,
             settings_->automaticLocation ? BST_CHECKED : BST_UNCHECKED, 0);
-        updateLocation_=add(L"BUTTON",L"Update location now",
-            BS_PUSHBUTTON|WS_TABSTOP,updateLocationId);
-        save_=add(L"BUTTON",L"Save schedule",BS_PUSHBUTTON|WS_TABSTOP,saveId);
+        updateLocation_=GetDlgItem(window_,updateLocationId);
+        save_=GetDlgItem(window_,saveId);
         SendMessageW(scheduleCheckbox_,BM_SETCHECK,
                      settings_->scheduleEnabled?BST_CHECKED:BST_UNCHECKED,0);
         SendMessageW(brightnessCheckbox_,BM_SETCHECK,
                      settings_->reduceBrightness?BST_CHECKED:BST_UNCHECKED,0);
     }
-    integrationHeading_=add(L"STATIC",L"Windows integration",SS_LEFT,0);
-    startup_=add(L"BUTTON",L"Start when signing into Windows",
-                   BS_AUTOCHECKBOX|WS_TABSTOP,startupId);
+    integrationHeading_=GetDlgItem(window_,IDC_ADV_INTEGRATION_HEADING);
+    startup_=GetDlgItem(window_,startupId);
     SendMessageW(startup_,BM_SETCHECK,
                  startupEnabled()?BST_CHECKED:BST_UNCHECKED,0);
-    diagnostics_=add(L"BUTTON",L"Copy diagnostics",BS_PUSHBUTTON|WS_TABSTOP,
-                     diagnosticsId);
-    status_=add(L"STATIC",L"",SS_LEFT,0);
+    diagnostics_=GetDlgItem(window_,diagnosticsId);
+    status_=GetDlgItem(window_,IDC_ADV_STATUS);
     scroll_=0;
     layout();
 }
@@ -624,7 +618,7 @@ LRESULT CALLBACK AdvancedWindow::procedure(HWND hwnd,UINT msg,WPARAM w,LPARAM l)
     }
     case WM_CLOSE:self->hide();return 0;
     case WM_DESTROY:self->window_=nullptr;return 0;
-    default:return DefWindowProcW(hwnd,msg,w,l);
+    default:return CallWindowProcW(self->originalProcedure_,hwnd,msg,w,l);
     }
 }
 }
