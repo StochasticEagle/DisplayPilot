@@ -61,7 +61,6 @@ private:
     int contentHeight_ = 0;
     int scroll_ = 0;
 
-    HWND add(const wchar_t* kind, const std::wstring& caption, DWORD style, int id);
     void rebuild();
     void updateFonts();
     void layout();
