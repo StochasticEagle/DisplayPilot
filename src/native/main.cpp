@@ -363,7 +363,9 @@ LRESULT CALLBACK ownerProcedure(HWND hwnd, UINT msg, WPARAM w, LPARAM l) {
                     app.settings.longitude = coordinates->longitude;
                     app.settings.locationConfigured = true;
                     saveSettings(app.settings);
-                    applySchedule(true);
+                    // A location update only changes solar transition timing.
+                    // Apply monitor/theme changes solely when the schedule state changes.
+                    applySchedule(false);
                     app.advanced.refresh();
                 }
             }
