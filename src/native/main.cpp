@@ -291,15 +291,9 @@ bool saveNewSettings(const Settings& next) {
 }
 void changeBrightness(unsigned index, unsigned value) {
     if (index >= app.monitors.size()) return;
-    // Cancel restoration only after the manual hardware write succeeds.
-    const auto key = restoreKey(app.monitors[index]);
+    // Preserve the pre-schedule baseline across manual changes; master
+    // restores it when the scheduled reduction ends.
     if (setBrightness(app.monitors[index], value)) {
-        if (app.savedBrightness) {
-            removeSavedBrightness(key);
-            if (key != legacyRestoreKey(app.monitors[index]))
-                removeSavedBrightness(legacyRestoreKey(app.monitors[index]));
-            app.savedBrightness = anySavedBrightness();
-        }
         app.monitors[index].brightness = value;
         app.flyout.repaint();
     } else queueRefresh();
