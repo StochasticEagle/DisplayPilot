@@ -158,7 +158,7 @@ void Flyout::layout() {
     };
     place(title_, margin, y, available, px(26));
     y += px(38);
-    if (empty_) {
+    if (empty_ && (!monitors_ || monitors_->empty())) {
         place(empty_, margin, y, available, px(30));
         y += px(42);
     }
