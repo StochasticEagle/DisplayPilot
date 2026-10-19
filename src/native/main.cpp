@@ -6,6 +6,7 @@
 #include "location.hpp"
 #include "raw_brightness.hpp"
 #include "power_brightness.hpp"
+#include "async_controls.hpp"
 #include <wtsapi32.h>
 #include <dbt.h>
 #include <windows.h>
@@ -47,6 +48,7 @@ struct Application {
     Flyout flyout;
     AdvancedWindow advanced;
     BrightnessEvents brightnessKeys;
+    AsyncControls controls;
     LocationUpdates* location = nullptr;
     Settings settings;
     std::vector<Monitor> monitors;
@@ -321,17 +323,15 @@ void changeContrast(unsigned index, unsigned value) {
 }
 void changeColor(unsigned index, unsigned preset) {
     if (index >= app.monitors.size()) return;
-    if (setColorPreset(app.monitors[index], preset))
-        app.monitors[index].colorPreset = preset;
-    else queueRefresh();
-    app.flyout.repaint();
+    if(!app.controls.enqueue(app.monitors[index],restoreKey(app.monitors[index]),
+                             ControlOperation::Color,preset))
+        queueRefresh();
 }
 void changeRotation(unsigned index, unsigned orientation) {
     if (index >= app.monitors.size()) return;
-    if (setRotation(app.monitors[index], orientation)) {
-        app.monitors[index].rotation = orientation;
-        SetTimer(app.owner, refreshTimer, 350, nullptr);
-    } else queueRefresh();
+    if(!app.controls.enqueue(app.monitors[index],restoreKey(app.monitors[index]),
+                             ControlOperation::Rotation,orientation))
+        queueRefresh();
 }
 
 void showFlyout() {
@@ -392,6 +392,36 @@ LRESULT CALLBACK ownerProcedure(HWND hwnd, UINT msg, WPARAM w, LPARAM l) {
         return 0;
     }
     switch (msg) {
+    case AsyncControls::completionMessage: {
+        auto* result=reinterpret_cast<ControlResult*>(l);
+        if(result) {
+            bool matched=false;
+            for(auto& monitor:app.monitors) {
+                if(restoreKey(monitor)!=result->key) continue;
+                matched=true;
+                if(result->succeeded) {
+                    switch(result->operation) {
+                    case ControlOperation::Brightness: monitor.brightness=result->value; break;
+                    case ControlOperation::Contrast: monitor.contrast=result->value; break;
+                    case ControlOperation::Color: monitor.colorPreset=result->value; break;
+                    case ControlOperation::Rotation: monitor.rotation=result->value; break;
+                    }
+                }
+            }
+            if(result->succeeded) {
+                if(result->operation==ControlOperation::Rotation)
+                    SetTimer(hwnd,refreshTimer,350,nullptr);
+                else {
+                    app.flyout.repaint();
+                    app.advanced.refresh();
+                }
+                if(result->synchronizeShell)
+                    syncWindowsBrightness(result->value);
+            } else if(matched) queueRefresh();
+            delete result;
+        }
+        return 0;
+    }
     case activateExisting:
         showAdvanced();
         return 0;
@@ -504,8 +534,12 @@ LRESULT CALLBACK ownerProcedure(HWND hwnd, UINT msg, WPARAM w, LPARAM l) {
             for(const auto& write:writes) {
                 for(unsigned i=0;i<app.monitors.size();++i)
                     if(restoreKey(app.monitors[i])==write.monitorKey) {
-                        if(write.contrast) changeContrast(i,write.value);
-                        else changeBrightness(i,write.value);
+                        const auto kind=write.contrast ?
+                            ControlOperation::Contrast : ControlOperation::Brightness;
+                        if(!app.controls.enqueue(app.monitors[i],write.monitorKey,kind,write.value)) {
+                            if(write.contrast) changeContrast(i,write.value);
+                            else changeBrightness(i,write.value);
+                        }
                         break;
                     }
             }
@@ -605,6 +639,11 @@ LRESULT CALLBACK ownerProcedure(HWND hwnd, UINT msg, WPARAM w, LPARAM l) {
         KillTimer(hwnd, refreshTimer);
         KillTimer(hwnd, brightnessEventTimer);
         app.brightnessKeys.stop();
+        app.controls.stop();
+        MSG completed{};
+        while(PeekMessageW(&completed,hwnd,AsyncControls::completionMessage,
+                            AsyncControls::completionMessage,PM_REMOVE))
+            delete reinterpret_cast<ControlResult*>(completed.lParam);
         unregisterBrightnessKeys();
         WTSUnRegisterSessionNotification(hwnd);
         if (app.location) {
@@ -651,6 +690,7 @@ int run(HINSTANCE instance) {
         nullptr, nullptr, instance, nullptr);
     if (!app.owner) { CloseHandle(singleton); return 32; }
     app.icon = LoadIconW(instance, MAKEINTRESOURCEW(1));
+    app.controls.start(app.owner);
     const int flyoutStage = app.flyout.create(instance, app.owner);
     if (flyoutStage != 0) {
         DestroyWindow(app.owner);
