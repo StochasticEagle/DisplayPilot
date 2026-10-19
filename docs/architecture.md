@@ -18,8 +18,10 @@ A single Win32 message loop handles the tray, native popup menu, flyout, and Adv
 The fixed Advanced/flyout controls are instantiated from the Visual Studio editable
 dialog templates in `src/native/app.rc` (`IDD_DISPLAYPILOT_ADVANCED` and
 `IDD_DISPLAYPILOT_FLYOUT`), with IDs in `src/native/resource.h`.
-Native C++ code continues to generate only capability-dependent monitor rows and
-to apply adaptive, DPI-aware layout to the dialog controls. The flyout uses native trackbars, combo boxes, radio buttons, and checkboxes, with system fonts and Windows-version-specific window chrome. WMI brightness notifications are polled without blocking the message loop.
+Monitor rows are instantiated from reusable designer-editable dialog templates
+(`IDD_ADVANCED_MONITOR` and `IDD_FLYOUT_MONITOR`) and the applicable controls
+are attached to their host window. The number and visibility of rows still depend
+on monitor capabilities, and the existing adaptive, DPI-aware C++ layout positions them. The flyout uses native trackbars, combo boxes, radio buttons, and checkboxes, with system fonts and Windows-version-specific window chrome. WMI brightness notifications are polled without blocking the message loop.
 
 External monitors are controlled using the DXVA2 physical-monitor APIs. Internal-panel brightness uses COM and `ROOT\WMI`. Display orientation is applied after validating the proposed mode with Windows display configuration functions.
 
