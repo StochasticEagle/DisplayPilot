@@ -14,7 +14,12 @@ DisplayPilot is a native C++17 desktop program built from `DisplayPilot.sln` and
 | `src/native/settings.cpp` | WinUI-compatible JSON settings, time calculations, brightness restoration |\n| `src/native/location.hpp` | Opt-in COM Windows Location API event subscription and one-time location refresh |
 | `src/native/app.rc` | Embedded icon, version information, manifest |
 
-A single Win32 message loop handles the tray, native popup menu, flyout, and Advanced window. The flyout uses native trackbars, combo boxes, radio buttons, and checkboxes, with system fonts and Windows-version-specific window chrome. WMI brightness notifications are polled without blocking the message loop.
+A single Win32 message loop handles the tray, native popup menu, flyout, and Advanced window.
+The fixed Advanced/flyout controls are instantiated from the Visual Studio editable
+dialog templates in `src/native/app.rc` (`IDD_DISPLAYPILOT_ADVANCED` and
+`IDD_DISPLAYPILOT_FLYOUT`), with IDs in `src/native/resource.h`.
+Native C++ code continues to generate only capability-dependent monitor rows and
+to apply adaptive, DPI-aware layout to the dialog controls. The flyout uses native trackbars, combo boxes, radio buttons, and checkboxes, with system fonts and Windows-version-specific window chrome. WMI brightness notifications are polled without blocking the message loop.
 
 External monitors are controlled using the DXVA2 physical-monitor APIs. Internal-panel brightness uses COM and `ROOT\WMI`. Display orientation is applied after validating the proposed mode with Windows display configuration functions.
 
