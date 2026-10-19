@@ -252,7 +252,7 @@
     <ClInclude Include="src\native\settings.hpp" />
     <ClInclude Include="src\native\json_settings.hpp" />
     <ClInclude Include="src\native\advanced.hpp" />
-    <ClInclude Include="src\native\wmi_events.hpp" />
+    <ClInclude Include="src\native\resource.h" />\n    <ClInclude Include="src\native\wmi_events.hpp" />
     <ClInclude Include="src\native\location.hpp" />
   </ItemGroup>
   <ItemGroup>
