@@ -42,14 +42,14 @@ The **Advanced** window and notification-area **flyout** are defined in
 `src/native/app.rc` as native dialog resources. In Visual Studio, open
 **View → Other Windows → Resource View**, expand `app.rc`, then **Dialog**,
 and open `IDD_DISPLAYPILOT_ADVANCED` or `IDD_DISPLAYPILOT_FLYOUT` to edit
-the fixed labels, buttons, edits, and combo boxes.
+the main layouts. Monitor-control templates are also editable as
+`IDD_ADVANCED_MONITOR` and `IDD_FLYOUT_MONITOR`.
 
-Monitor-specific rows are generated at runtime because their count and supported
-controls depend on the connected hardware. The native layout code also
-repositions resource controls for DPI, window resizing, and scrolling; changes
-to resource control positions or sizes must be reflected in the corresponding
-layout routines to affect those runtime positions. Resource text, control types,
-styles, and tab order are editable directly in the designer.
+Monitor rows are instantiated from their editable templates for each connected
+display; unsupported controls are omitted. The native layout code then repositions
+controls for monitor count, DPI, window resizing, and scrolling. Resource text,
+styles, control types, and tab order are editable directly; changes to coordinates
+or dimensions also need corresponding changes to the adaptive layout routines.
 
 ## Documentation
 
