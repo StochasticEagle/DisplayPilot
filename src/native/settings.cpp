@@ -9,6 +9,7 @@ namespace displaypilot {
 namespace {
 constexpr wchar_t settingsPath[] = L"Software\\DisplayPilot\\Settings";
 constexpr wchar_t restorationPath[] = L"Software\\DisplayPilot\\Restoration";
+constexpr wchar_t nativePreferencesPath[] = L"Software\\DisplayPilot\\NativePreferences";
 constexpr double pi = 3.14159265358979323846;
 constexpr double deg2rad = pi / 180.0;
 
@@ -154,7 +155,8 @@ Settings loadRegistrySettings() {
     s.locationConfigured = key.getDword(L"LocationConfigured", 0) != 0 &&
         std::abs(s.latitude) <= 90 && std::abs(s.longitude) <= 180;
     s.locationLabel = key.getString(L"LocationLabel");
-    s.automaticLocation = false;
+    Key preferences(nativePreferencesPath,KEY_READ,false);
+    s.automaticLocation = preferences.getDword(L"AutomaticLocation",0)!=0;
     return s;
 }
 
@@ -206,6 +208,9 @@ Settings loadSettings() {
     }
     s.scheduleMode = mode == 1 ? ScheduleMode::Solar : ScheduleMode::Fixed;
     s.automaticLocation = json_settings::asBoolean(json_settings::field(doc, "automaticLocation"), false);
+    Key preferences(nativePreferencesPath,KEY_READ,false);
+    if(preferences) s.automaticLocation = preferences.getDword(
+        L"AutomaticLocation",s.automaticLocation ? 1 : 0)!=0;
     const auto* savedLatitude = json_settings::field(doc, "latitude");
     const auto* savedLongitude = json_settings::field(doc, "longitude");
     if (savedLatitude && savedLongitude &&
@@ -227,7 +232,12 @@ bool saveSettings(const Settings& s) {
     JsonValue doc;
     if (!json_settings::editable(doc) || !validRestoreValues(doc)) return false;
     setScheduleFields(doc, s);
-    return json_settings::write(doc);
+    if (!json_settings::write(doc)) return false;
+    // Keep the native-only preference independently of the WinUI v4 JSON
+    // schema, which legitimately omits unknown fields when rewriting settings.
+    Key preferences(nativePreferencesPath,KEY_WRITE,true);
+    preferences.putDword(L"AutomaticLocation",s.automaticLocation ? 1 : 0);
+    return true;
 }
 
 bool supportsWindowsTheme() {
