@@ -327,6 +327,10 @@ void AdvancedWindow::rebuild() {
                  startupEnabled()?BST_CHECKED:BST_UNCHECKED,0);
     diagnostics_=GetDlgItem(window_,diagnosticsId);
     status_=GetDlgItem(window_,IDC_ADV_STATUS);
+    rescan_=GetDlgItem(window_,IDC_ADV_RESCAN);
+    probe_=GetDlgItem(window_,IDC_ADV_PROBE);
+    preview_=GetDlgItem(window_,IDC_ADV_PREVIEW);
+    solarTimes_=GetDlgItem(window_,IDC_ADV_SOLAR_TIMES);
     scroll_=0;
     layout();
 }
@@ -358,6 +362,8 @@ void AdvancedWindow::layout() {
           std::max(0, full - (textX - margin)), px(22));
     y += px(64);
     heading(displaysHeading_);
+    place(rescan_, margin + std::max(0,full - px(290)), y - px(36), px(135), px(29));
+    place(probe_, margin + std::max(0,full - px(145)), y - px(36), px(145), px(29));
     if (rows_.empty()) {
         y += px(10);
     }
@@ -412,7 +418,9 @@ void AdvancedWindow::layout() {
     y += px(34);
     place(updateLocation_, margin, y, px(170), px(32));
     y += px(42);
-    place(save_, margin, y, px(170), px(32));
+    place(save_, margin, y, px(155), px(32));
+    place(preview_, margin + px(165), y, px(160), px(32));
+    place(solarTimes_, margin + px(335), y + px(3), std::max(px(130),full - px(335)), px(40));
     y += px(57);
     heading(integrationHeading_);
     place(startup_, margin, y, std::min(full, px(340)), px(30));
@@ -482,6 +490,43 @@ bool AdvancedWindow::saveInput() {
     SetWindowTextW(status_,L"Schedule and location settings saved.");
     return true;
 }
+void AdvancedWindow::previewSchedule() {
+    if (!settings_) return;
+    Settings candidate = *settings_;
+    if (!parseMinute(read(lightTime_), candidate.lightMinute) ||
+        !parseMinute(read(darkTime_), candidate.darkMinute) ||
+        candidate.lightMinute == candidate.darkMinute) {
+        SetWindowTextW(status_,L"Enter distinct valid Light and Dark times to preview.");
+        return;
+    }
+    candidate.scheduleMode = SendMessageW(mode_,CB_GETCURSEL,0,0)==1 ?
+        ScheduleMode::Solar : ScheduleMode::Fixed;
+    // Preview is read-only, and does not persist the entered coordinates.
+    const auto lat = read(latitude_), lon = read(longitude_);
+    if (!lat.empty() && !lon.empty() &&
+        readDecimal(latitude_,candidate.latitude,90) &&
+        readDecimal(longitude_,candidate.longitude,180))
+        candidate.locationConfigured = true;
+    else if(candidate.scheduleMode==ScheduleMode::Solar)
+        candidate.locationConfigured = false;
+    candidate.scheduleEnabled = true;
+    SYSTEMTIME now{};
+    GetLocalTime(&now);
+    const auto state = evaluateSchedule(candidate,now);
+    if (!state.valid) {
+        SetWindowTextW(solarTimes_,L"No valid schedule (location optional).");
+        return;
+    }
+    auto time=[](unsigned value)->std::wstring {
+        wchar_t buffer[16]{};
+        swprintf_s(buffer,L"%02u:%02u",value/60,value%60);
+        return buffer;
+    };
+    const std::wstring result = L"Light " + time(state.lightMinute) +
+        L", Dark " + time(state.darkMinute);
+    SetWindowTextW(solarTimes_,result.c_str());
+    SetWindowTextW(status_,state.dark ? L"Preview: Dark mode" : L"Preview: Light mode");
+}
 void AdvancedWindow::copyDiagnostics() {
     std::wstring report=L"DisplayPilot diagnostics\r\n";
     report+=L"Process: native Win32\r\n";
@@ -545,6 +590,12 @@ void AdvancedWindow::onCommand(WORD id,WORD notification) {
                 L"Location update received. Processing valid coordinates." :
                 L"Location unavailable or permission denied. Saved coordinates unchanged.");
         }
+    } else if((id==IDC_ADV_RESCAN || id==IDC_ADV_PROBE) &&
+              notification==BN_CLICKED) {
+        if(displaysRefreshRequested) displaysRefreshRequested();
+        SetWindowTextW(status_,L"Display controls refreshed.");
+    } else if(id==IDC_ADV_PREVIEW && notification==BN_CLICKED) {
+        previewSchedule();
     } else if(id==diagnosticsId && notification==BN_CLICKED) {
         copyDiagnostics();
     } else if(id==themeLightId && notification==BN_CLICKED && themeChanged) {

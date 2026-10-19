@@ -616,6 +616,7 @@ int run(HINSTANCE instance) {
     app.flyout.contrastChanged = changeContrast;
     app.flyout.colorChanged = changeColor;
     app.flyout.advancedRequested = showAdvanced;
+    app.flyout.refreshRequested = refreshMonitors;
     app.flyout.themeChanged = manualTheme;
     app.flyout.scheduleChanged = [](bool enabled) {
         app.settings.scheduleEnabled = enabled;
@@ -631,6 +632,7 @@ int run(HINSTANCE instance) {
     app.advanced.themeChanged = manualTheme;
     app.advanced.settingsChanged = saveNewSettings;
     app.advanced.locationUpdateRequested = updateLocationNow;
+    app.advanced.displaysRefreshRequested = refreshMonitors;
     app.location = new (std::nothrow) LocationUpdates(app.owner);
 
     WTSRegisterSessionNotification(app.owner,NOTIFY_FOR_THIS_SESSION);

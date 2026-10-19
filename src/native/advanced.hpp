@@ -27,6 +27,7 @@ public:
     std::function<void(bool)> themeChanged;
     std::function<bool(const Settings&)> settingsChanged;
     std::function<bool()> locationUpdateRequested;
+    std::function<void()> displaysRefreshRequested;
 
 private:
     struct RowControls {
@@ -53,6 +54,7 @@ private:
     HWND automaticLocation_ = nullptr, updateLocation_ = nullptr;
     HWND startup_ = nullptr, status_ = nullptr;
     HWND save_ = nullptr, diagnostics_ = nullptr;
+    HWND rescan_ = nullptr, probe_ = nullptr, preview_ = nullptr, solarTimes_ = nullptr;
     HWND displaysHeading_ = nullptr, scheduleHeading_ = nullptr, integrationHeading_ = nullptr;
     HWND lightCaption_ = nullptr, darkCaption_ = nullptr;
     HWND latitudeCaption_ = nullptr, longitudeCaption_ = nullptr, locationCaption_ = nullptr;
@@ -68,6 +70,7 @@ private:
     void onCommand(WORD id, WORD notification);
     void onScroll(HWND control);
     bool saveInput();
+    void previewSchedule();
     void copyDiagnostics();
     static LRESULT CALLBACK procedure(HWND hwnd, UINT message, WPARAM w, LPARAM l);
 };

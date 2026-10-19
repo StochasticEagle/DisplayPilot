@@ -81,6 +81,7 @@ void Flyout::rebuild() {
     rows_.clear();
     title_ = empty_ = themeLight_ = themeDarkButton_ = schedule_ = advanced_ = nullptr;
     title_ = GetDlgItem(window_, IDC_FLY_TITLE);
+    refresh_ = GetDlgItem(window_, IDC_FLY_REFRESH);
     empty_ = GetDlgItem(window_, IDC_FLY_EMPTY);
     ShowWindow(empty_, (!monitors_ || monitors_->empty()) ? SW_SHOW : SW_HIDE);
     if (monitors_) for (size_t i = 0; i < monitors_->size(); ++i) {
@@ -154,7 +155,8 @@ void Flyout::layout() {
     auto place = [](HWND child, int x, int top, int w, int h) {
         if (child) MoveWindow(child, x, top, w, h, TRUE);
     };
-    place(title_, margin, y, available, px(26));
+    place(title_, margin, y, std::max(px(100), available-px(90)), px(26));
+    place(refresh_, margin + available - px(85), y, px(85), px(28));
     y += px(38);
     if (empty_ && (!monitors_ || monitors_->empty())) {
         place(empty_, margin, y, available, px(30));
@@ -312,6 +314,7 @@ void Flyout::onCommand(WORD id, WORD notification) {
         else if (id == scheduleId && scheduleChanged)
             scheduleChanged(SendMessageW(schedule_, BM_GETCHECK, 0, 0) == BST_CHECKED);
         else if (id == advancedId && advancedRequested) advancedRequested();
+        else if (id == IDC_FLY_REFRESH && refreshRequested) refreshRequested();
     }
     if (notification == CBN_SELCHANGE && id >= firstMonitor && monitors_) {
         const size_t index = static_cast<size_t>((id - firstMonitor) / 10);

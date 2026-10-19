@@ -24,6 +24,7 @@ public:
     std::function<void(unsigned, unsigned)> contrastChanged;
     std::function<void(unsigned, unsigned)> colorChanged;
     std::function<void()> advancedRequested;
+    std::function<void()> refreshRequested;
     std::function<void(bool)> themeChanged;
     std::function<void(bool)> scheduleChanged;
 
@@ -50,6 +51,7 @@ private:
     HWND themeDarkButton_ = nullptr;
     HWND schedule_ = nullptr;
     HWND advanced_ = nullptr;
+    HWND refresh_ = nullptr;
     int scroll_ = 0;
     int contentHeight_ = 0;
     int dpi_ = 96;
