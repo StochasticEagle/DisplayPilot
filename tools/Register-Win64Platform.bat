@@ -7,9 +7,10 @@ set "VSROOT="
 rem CALL handles the quoted executable path (including Program Files (x86)).
 for /f "usebackq delims=" %%V in (`call "%VSWHERE%" -latest -products * -version "[18.0,19.0)" -property installationPath`) do if not defined VSROOT set "VSROOT=%%V"
 if not defined VSROOT goto :missing_vs
-set "PLATFORMS="
-for /d %%D in ("%VSROOT%\MSBuild\Microsoft\VC\*") do call :check_root "%%~fD"
-if not defined PLATFORMS goto :missing_platforms
+rem VS 2026 uses v180 C++ targets. The older v160 tree can coexist,
+rem but registering only there leaves Win64 without v145 toolset files.
+set "PLATFORMS=%VSROOT%\MSBuild\Microsoft\VC\v180\Platforms"
+if not exist "%PLATFORMS%\x64\Platform.default.props" goto :missing_platforms
 set "NATIVE=%PLATFORMS%\x64"
 set "REGISTERED=%PLATFORMS%\Win64"
 if not exist "%NATIVE%\Platform.default.props" goto :missing_native
@@ -20,11 +21,6 @@ if errorlevel 1 goto :create_failed
 :verify
 for %%F in (Platform.default.props Platform.props Platform.targets) do if not exist "%REGISTERED%\%%F" goto :incomplete
 echo Win64 platform registered: "%REGISTERED%"
-exit /b 0
-
-:check_root
-if defined PLATFORMS exit /b 0
-if exist "%~1\Platforms\Win32\Platform.default.props" set "PLATFORMS=%~1\Platforms"
 exit /b 0
 
 :missing_vswhere
