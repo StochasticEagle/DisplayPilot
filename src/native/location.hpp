@@ -34,20 +34,24 @@ public:
         postCoordinates(report, false);
         return S_OK;
     }
-    void postCoordinates(ILocationReport* report, bool manual) {
+    bool postCoordinates(ILocationReport* report, bool manual) {
         ILatLongReport* coordinates = nullptr;
         if (FAILED(report->QueryInterface(IID_ILatLongReport,
-                        reinterpret_cast<void**>(&coordinates)))) return;
+                        reinterpret_cast<void**>(&coordinates)))) return false;
         double latitude = 0, longitude = 0;
         const bool valid = SUCCEEDED(coordinates->GetLatitude(&latitude)) &&
             SUCCEEDED(coordinates->GetLongitude(&longitude)) &&
             std::isfinite(latitude) && std::isfinite(longitude) &&
             std::abs(latitude) <= 90 && std::abs(longitude) <= 180;
         coordinates->Release();
-        if (!valid) return;
+        if (!valid) return false;
         auto* next = new (std::nothrow) LocationCoordinates{latitude, longitude};
-        if (next && !PostMessageW(owner_, message, manual ? 1 : 0, reinterpret_cast<LPARAM>(next)))
+        if (!next) return false;
+        if (!PostMessageW(owner_, message, manual ? 1 : 0, reinterpret_cast<LPARAM>(next))) {
             delete next;
+            return false;
+        }
+        return true;
     }
     HRESULT STDMETHODCALLTYPE OnStatusChanged(REFIID, LOCATION_REPORT_STATUS) override {
         return S_OK;
@@ -90,12 +94,13 @@ public:
             if (SUCCEEDED(service->RequestPermissions(owner_, &kind, 1, TRUE)))
                 result = service->GetReport(IID_ILatLongReport, &report);
         }
+        bool queued = false;
         if (SUCCEEDED(result) && report) {
-            postCoordinates(report, true);
+            queued = postCoordinates(report, true);
             report->Release();
         }
         if (temporary) temporary->Release();
-        return SUCCEEDED(result) && report != nullptr;
+        return queued;
     }
 private:
     ~LocationUpdates() { stop(); }
