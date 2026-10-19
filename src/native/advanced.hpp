@@ -26,7 +26,7 @@ public:
     std::function<void(unsigned, unsigned)> rotationChanged;
     std::function<void(bool)> themeChanged;
     std::function<void(const Settings&)> settingsChanged;
-    std::function<void()> locationUpdateRequested;
+    std::function<bool()> locationUpdateRequested;
 
 private:
     struct RowControls {
