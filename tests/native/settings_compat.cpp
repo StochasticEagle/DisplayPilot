@@ -51,22 +51,22 @@ int main() {
     unsigned brightness = 0;
     if (!restoreBrightness(L"DISPLAY\\ONE", brightness) || brightness != 73) return 3;
     if (!restoreBrightness(L"display\\one", brightness) || brightness != 73) return 20;
-    saveBrightness(L"display\\one", 73);
+    if (!saveBrightness(L"display\\one", 73)) return 28;
     json_settings::Value caseDoc;
     if (json_settings::read(caseDoc) != json_settings::ReadResult::Valid ||
         json_settings::field(caseDoc, "brightnessRestoreValues")->object.size() != 1)
         return 21;
     s.lightMinute = 495;
-    saveSettings(s);
+    if (!saveSettings(s)) return 29;
     json_settings::Value doc;
     if (json_settings::read(doc) != json_settings::ReadResult::Valid) return 4;
     int minute = 0;
     if (!json_settings::asInteger(json_settings::field(doc, "lightMinutes"), minute) ||
         minute != 495 || !json_settings::field(doc, "futureField")) return 5;
     if (!restoreBrightness(L"DISPLAY\\ONE", brightness) || brightness != 73) return 6;
-    saveBrightness(L"Monitor-123", 46);
+    if (!saveBrightness(L"Monitor-123", 46)) return 30;
     if (!restoreBrightness(L"Monitor-123", brightness) || brightness != 46) return 7;
-    removeSavedBrightness(L"Monitor-123");
+    if (!removeSavedBrightness(L"Monitor-123")) return 31;
     if (restoreBrightness(L"Monitor-123", brightness) ||
         !restoreBrightness(L"DISPLAY\\ONE", brightness) || brightness != 73) return 8;
     if (json_settings::read(doc) != json_settings::ReadResult::Valid ||
@@ -129,7 +129,8 @@ int main() {
     if (!fixture("{not valid JSON")) return 16;
     s = loadSettings();
     if (s.scheduleEnabled || s.lightMinute != 420) return 17;
-    saveSettings(s);
+    if (saveSettings(s) || saveBrightness(L"failure", 50) ||
+        removeSavedBrightness(L"failure")) return 32;
     HANDLE h = CreateFileW(json_settings::path().c_str(), GENERIC_READ, FILE_SHARE_READ,
         nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (h == INVALID_HANDLE_VALUE) return 18;
