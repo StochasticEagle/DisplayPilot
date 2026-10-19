@@ -94,7 +94,7 @@ void Flyout::rebuild() {
     title_ = GetDlgItem(window_, IDC_FLY_TITLE);
     empty_ = GetDlgItem(window_, IDC_FLY_EMPTY);
     ShowWindow(empty_, (!monitors_ || monitors_->empty()) ? SW_SHOW : SW_HIDE);
-    else for (size_t i = 0; i < monitors_->size(); ++i) {
+    if (monitors_) for (size_t i = 0; i < monitors_->size(); ++i) {
         const auto& monitor = (*monitors_)[i];
         const int base = firstMonitor + static_cast<int>(i) * 10;
         MonitorControls row{};
@@ -337,6 +337,18 @@ LRESULT CALLBACK Flyout::procedure(HWND hwnd, UINT message, WPARAM w, LPARAM l) 
     }
     if (!self) return DefWindowProcW(hwnd, message, w, l);
     switch (message) {
+    case WM_ERASEBKGND: {
+        RECT bounds{};
+        GetClientRect(hwnd, &bounds);
+        FillRect(reinterpret_cast<HDC>(w), &bounds, GetSysColorBrush(COLOR_WINDOW));
+        return TRUE;
+    }
+    case WM_CTLCOLORDLG:
+        return reinterpret_cast<LRESULT>(GetSysColorBrush(COLOR_WINDOW));
+    case WM_CTLCOLORSTATIC:
+        SetBkMode(reinterpret_cast<HDC>(w), TRANSPARENT);
+        SetTextColor(reinterpret_cast<HDC>(w), GetSysColor(COLOR_WINDOWTEXT));
+        return reinterpret_cast<LRESULT>(GetSysColorBrush(COLOR_WINDOW));
     case WM_COMMAND:
         self->onCommand(LOWORD(w), HIWORD(w));
         return 0;
