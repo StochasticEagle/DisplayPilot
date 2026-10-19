@@ -88,6 +88,44 @@ int main() {
     if (!s.scheduleEnabled || !s.reduceBrightness ||
         !restoreBrightness(L"old", brightness) || brightness != 100) return 15;
 
+    // Solar scheduling is optional: a missing location must not reject settings.
+    if (!fixture(R"({"version":4,"lightMinutes":420,"darkMinutes":1140,
+        "automationEnabled":true,"reduceBrightness":false,"scheduleMode":1,
+        "latitude":null,"longitude":null,"automaticLocation":true})")) return 22;
+    s = loadSettings();
+    if (!s.scheduleEnabled || s.scheduleMode != ScheduleMode::Solar ||
+        s.locationConfigured || !s.automaticLocation) return 23;
+    saveSettings(s);
+    json_settings::Value optionalDoc;
+    if (json_settings::read(optionalDoc) != json_settings::ReadResult::Valid ||
+        !json_settings::asBoolean(
+            json_settings::field(optionalDoc, "automaticLocation"), false))
+        return 24;
+    s.automaticLocation = false;
+    saveSettings(s);
+    s = loadSettings();
+    if (s.automaticLocation || s.locationConfigured) return 25;
+
+    // High-latitude summer and winter remain active, with no fictitious
+    // sunrise or sunset: Light during polar day, Dark during polar night.
+    s.scheduleEnabled = true;
+    s.scheduleMode = ScheduleMode::Solar;
+    s.locationConfigured = true;
+    s.latitude = 89.9;
+    s.longitude = 0.0;
+    SYSTEMTIME summer{};
+    summer.wYear = 2026;
+    summer.wMonth = 6;
+    summer.wDay = 21;
+    summer.wHour = 12;
+    auto polar = evaluateSchedule(s, summer);
+    if (!polar.valid || polar.dark) return 26;
+    SYSTEMTIME winter = summer;
+    winter.wMonth = 12;
+    winter.wDay = 21;
+    polar = evaluateSchedule(s, winter);
+    if (!polar.valid || !polar.dark) return 27;
+
     if (!fixture("{not valid JSON")) return 16;
     s = loadSettings();
     if (s.scheduleEnabled || s.lightMinute != 420) return 17;
