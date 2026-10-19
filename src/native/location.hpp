@@ -84,6 +84,12 @@ public:
         }
         ILocationReport* report = nullptr;
         HRESULT result = service->GetReport(IID_ILatLongReport, &report);
+        if (FAILED(result)) {
+            // Consent can be requested only after the user presses Update Location.
+            IID kind = IID_ILatLongReport;
+            if (SUCCEEDED(service->RequestPermissions(owner_, &kind, 1, TRUE)))
+                result = service->GetReport(IID_ILatLongReport, &report);
+        }
         if (SUCCEEDED(result) && report) {
             postCoordinates(report, true);
             report->Release();
