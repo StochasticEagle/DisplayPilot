@@ -160,7 +160,8 @@ void restoreMonitorBrightness() {
     if (changed) queueRefresh();
 }
 void applyNightBrightness() {
-    if (app.savedBrightness) return;
+    // Process each monitor independently: an already-dimmed display must not
+    // prevent a newly connected monitor from receiving scheduled reduction.
     bool any = false;
     for (const auto& monitor : app.monitors) {
         if (!monitor.brightnessAvailable) continue;
