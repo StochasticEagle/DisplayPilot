@@ -271,7 +271,7 @@ void Flyout::show(const RECT& anchor, std::vector<Monitor>* monitors) {
     rebuild();
     RECT client{};
     GetClientRect(window_, &client);
-    const int width = px(400);
+    const int width = px(304);
     // The first layout computes the required content height.
     const int desiredHeight = contentHeight_ + px(4);
     const POINT center{(anchor.left + anchor.right) / 2,
