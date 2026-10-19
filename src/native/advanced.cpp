@@ -515,8 +515,10 @@ void AdvancedWindow::onCommand(WORD id,WORD notification) {
         saveInput();
     } else if(id==updateLocationId && notification==BN_CLICKED) {
         if (locationUpdateRequested) {
-            locationUpdateRequested();
-            SetWindowTextW(status_,L"Location update requested. Current coordinates retained until a valid result.");
+            const bool success = locationUpdateRequested();
+            SetWindowTextW(status_, success ?
+                L"Location update received. Processing valid coordinates." :
+                L"Location unavailable or permission denied. Saved coordinates unchanged.");
         }
     } else if(id==diagnosticsId && notification==BN_CLICKED) {
         copyDiagnostics();
