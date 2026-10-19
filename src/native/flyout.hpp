@@ -20,6 +20,7 @@ public:
     HWND handle() const { return window_; }
     void setAppearance(bool supported, bool dark, bool scheduled);
     void repaint() const;
+    void refreshLocation();
 
     std::function<void(unsigned, unsigned)> brightnessChanged;
     std::function<void(unsigned, unsigned)> contrastChanged;
