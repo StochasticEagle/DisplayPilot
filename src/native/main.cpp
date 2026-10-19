@@ -5,6 +5,7 @@
 #include "wmi_events.hpp"
 #include "location.hpp"
 #include "raw_brightness.hpp"
+#include "power_brightness.hpp"
 #include <wtsapi32.h>
 #include <dbt.h>
 #include <windows.h>
@@ -480,6 +481,8 @@ LRESULT CALLBACK ownerProcedure(HWND hwnd, UINT msg, WPARAM w, LPARAM l) {
                     if(m.handle==target && m.brightnessAvailable) {
                         const int percent=std::clamp(static_cast<int>(m.brightness)+delta,0,100);
                         changeBrightness(i,static_cast<unsigned>(percent));
+                        if(app.monitors[i].brightness==static_cast<unsigned>(percent))
+                            syncWindowsBrightness(static_cast<unsigned>(percent));
                     }
                 }
             }
