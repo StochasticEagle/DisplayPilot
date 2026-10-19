@@ -3,6 +3,8 @@
 #include <windows.h>
 #include <condition_variable>
 #include <deque>
+#include <map>
+#include <cstdint>
 #include <mutex>
 #include <thread>
 #include <string>
@@ -16,6 +18,7 @@ struct ControlResult {
     unsigned value = 0;
     bool succeeded = false;
     bool synchronizeShell = false;
+    std::uint64_t generation = 0;
 };
 
 // Serializes verified monitor writes off the UI thread. The UI owns monitor
@@ -41,18 +44,27 @@ public:
                  ControlOperation kind, unsigned value, bool shellSync=false) {
         std::lock_guard<std::mutex> guard(mutex_);
         if (!worker_.joinable() || stopping_) return false;
+        const std::uint64_t generation=++serial_;
+        latest_[{key,kind}]=generation;
         for (auto& queued : jobs_) {
             if (queued.key==key && queued.kind==kind) {
                 queued.monitor=monitor;
                 queued.value=value;
                 queued.shellSync=queued.shellSync || shellSync;
+                queued.generation=generation;
                 signal_.notify_one();
                 return true;
             }
         }
-        jobs_.push_back(Job{monitor,key,kind,value,shellSync});
+        jobs_.push_back(Job{monitor,key,kind,value,shellSync,generation});
         signal_.notify_one();
         return true;
+    }
+    bool isLatest(const std::wstring& key,ControlOperation operation,
+                  std::uint64_t generation) {
+        std::lock_guard<std::mutex> guard(mutex_);
+        const auto found=latest_.find({key,operation});
+        return found!=latest_.end() && found->second==generation;
     }
     void stop() {
         {
@@ -75,6 +87,7 @@ private:
         ControlOperation kind;
         unsigned value;
         bool shellSync;
+        std::uint64_t generation;
     };
     void run() {
         const HRESULT com=CoInitializeEx(nullptr,COINIT_MULTITHREADED);
@@ -100,7 +113,7 @@ private:
                 success=setRotation(job.monitor,job.value); break;
             }
             auto* result=new (std::nothrow) ControlResult{
-                job.key,job.kind,job.value,success,job.shellSync};
+                job.key,job.kind,job.value,success,job.shellSync,job.generation};
             if(result && !PostMessageW(owner_,completionMessage,0,
                                      reinterpret_cast<LPARAM>(result)))
                 delete result;
@@ -122,6 +135,8 @@ private:
     std::condition_variable signal_;
     std::condition_variable idle_;
     std::deque<Job> jobs_;
+    std::map<std::pair<std::wstring,ControlOperation>,std::uint64_t> latest_;
+    std::uint64_t serial_ = 0;
     std::thread worker_;
     bool stopping_ = false;
     bool busy_ = false;
