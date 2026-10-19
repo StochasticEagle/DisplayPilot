@@ -16,6 +16,7 @@ public:
     bool create(HINSTANCE instance);
     void show(std::vector<Monitor>* monitors, Settings* settings, bool appearance);
     void refresh();
+    void synchronizeMonitorControls();
     void hide();
     bool visible() const;
     HWND handle() const { return window_; }
