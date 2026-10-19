@@ -13,6 +13,8 @@ BEGIN
     LTEXT           "DisplayPilot",IDC_ADV_BRAND,45,14,220,17
     LTEXT           "Version",IDC_ADV_VERSION,45,32,220,13
     LTEXT           "Displays",IDC_ADV_DISPLAYS_HEADING,16,60,340,20
+    PUSHBUTTON      "Rescan displays",IDC_ADV_RESCAN,370,60,90,21
+    PUSHBUTTON      "Refresh controls",IDC_ADV_PROBE,466,60,90,21
     LTEXT           "Appearance and scheduling",IDC_ADV_SCHEDULE_HEADING,16,90,340,20
     PUSHBUTTON      "Light mode",IDC_ADV_THEME_LIGHT,16,116,90,21
     PUSHBUTTON      "Dark mode",IDC_ADV_THEME_DARK,115,116,90,21
@@ -32,6 +34,8 @@ BEGIN
     AUTOCHECKBOX    "Automatically update location when changed",IDC_ADV_AUTO_LOCATION,16,279,290,18
     PUSHBUTTON      "Update location now",IDC_ADV_UPDATE_LOCATION,16,303,115,22
     PUSHBUTTON      "Save schedule",IDC_ADV_SAVE,16,335,115,22
+    PUSHBUTTON      "Preview schedule",IDC_ADV_PREVIEW,139,335,115,22
+    LTEXT           "",IDC_ADV_SOLAR_TIMES,265,335,292,30
     LTEXT           "Windows integration",IDC_ADV_INTEGRATION_HEADING,16,371,340,18
     AUTOCHECKBOX    "Start when signing into Windows",IDC_ADV_STARTUP,16,394,226,19
     PUSHBUTTON      "Copy diagnostics",IDC_ADV_DIAGNOSTICS,250,394,106,22
@@ -44,7 +48,8 @@ EXSTYLE WS_EX_TOOLWINDOW
 CAPTION "DisplayPilot"
 FONT 9, "Segoe UI"
 BEGIN
-    LTEXT           "DisplayPilot",IDC_FLY_TITLE,12,10,176,19
+    LTEXT           "DisplayPilot",IDC_FLY_TITLE,12,10,135,19
+    PUSHBUTTON      "Refresh",IDC_FLY_REFRESH,150,9,48,21
     LTEXT           "No controllable monitors detected",IDC_FLY_EMPTY,12,35,176,19
     AUTORADIOBUTTON "Light",IDC_FLY_LIGHT,12,66,82,20,WS_GROUP | WS_TABSTOP
     AUTORADIOBUTTON "Dark",IDC_FLY_DARK,100,66,82,20,WS_TABSTOP
