@@ -225,54 +225,71 @@ void AdvancedWindow::rebuild() {
     for (unsigned i=0;i<monitors_->size();++i) {
         auto& m=(*monitors_)[i];
         RowControls row;
-        row.label=add(L"STATIC",m.name,SS_LEFT,static_cast<int>(monitorStart+i*10+9));
-        if (m.brightnessAvailable) {
-            row.members.push_back(add(L"STATIC",L"Brightness",0,0));
-            row.brightness=add(TRACKBAR_CLASSW,L"",TBS_HORZ|TBS_NOTICKS|WS_TABSTOP,
-                    static_cast<int>(monitorStart+i*10));
+        // The designer defines each monitor control exactly once; the resource
+        // is instantiated for every detected monitor. Detach the controls into
+        // the existing scrolling window so layout and event routing stay intact.
+        HWND templateRow=CreateDialogParamW(instance_,
+            MAKEINTRESOURCEW(IDD_ADVANCED_MONITOR),window_,
+            [](HWND,UINT,WPARAM,LPARAM)->INT_PTR { return FALSE; },0);
+        auto take=[&](int resourceId,int runtimeId)->HWND {
+            if(!templateRow) return nullptr;
+            HWND child=GetDlgItem(templateRow,resourceId);
+            if(!child || !SetParent(child,window_)) return nullptr;
+            SetWindowLongPtrW(child,GWLP_ID,static_cast<LONG_PTR>(runtimeId));
+            SendMessageW(child,WM_SETFONT,reinterpret_cast<WPARAM>(font_),FALSE);
+            children_.push_back(child);
+            return child;
+        };
+        row.label=take(IDC_ADV_ROW_NAME,static_cast<int>(monitorStart+i*10+9));
+        if(row.label) SetWindowTextW(row.label,m.name.c_str());
+        if(m.brightnessAvailable) {
+            row.members.push_back(take(IDC_ADV_ROW_BRIGHTNESS_LABEL,0));
+            row.brightness=take(IDC_ADV_ROW_BRIGHTNESS,
+                                static_cast<int>(monitorStart+i*10));
             if(row.brightness) {
                 SendMessageW(row.brightness,TBM_SETRANGE,TRUE,MAKELPARAM(0,100));
                 SendMessageW(row.brightness,TBM_SETPOS,TRUE,m.brightness);
             }
         }
-        if (m.contrastAvailable) {
-            row.members.push_back(add(L"STATIC",L"Contrast",0,0));
-            row.contrast=add(TRACKBAR_CLASSW,L"",TBS_HORZ|TBS_NOTICKS|WS_TABSTOP,
-                    static_cast<int>(monitorStart+i*10+1));
+        if(m.contrastAvailable) {
+            row.members.push_back(take(IDC_ADV_ROW_CONTRAST_LABEL,0));
+            row.contrast=take(IDC_ADV_ROW_CONTRAST,
+                              static_cast<int>(monitorStart+i*10+1));
             if(row.contrast) {
                 SendMessageW(row.contrast,TBM_SETRANGE,TRUE,MAKELPARAM(0,100));
                 SendMessageW(row.contrast,TBM_SETPOS,TRUE,m.contrast);
             }
         }
-        if (m.colorAvailable) {
-            row.members.push_back(add(L"STATIC",L"Color preset",0,0));
-            row.color=add(L"COMBOBOX",L"",CBS_DROPDOWNLIST|WS_VSCROLL|WS_TABSTOP,
-                    static_cast<int>(monitorStart+i*10+2));
-            for(unsigned p=0;p<m.colorPresets.size();++p) {
-                auto text=colorPresetLabel(m.colorPresets[p]);
-                auto idx=SendMessageW(row.color,CB_ADDSTRING,0,
-                                      reinterpret_cast<LPARAM>(text.c_str()));
+        if(m.colorAvailable) {
+            row.members.push_back(take(IDC_ADV_ROW_COLOR_LABEL,0));
+            row.color=take(IDC_ADV_ROW_COLOR,
+                           static_cast<int>(monitorStart+i*10+2));
+            if(row.color) for(unsigned p=0;p<m.colorPresets.size();++p) {
+                const auto name=colorPresetLabel(m.colorPresets[p]);
+                const auto idx=SendMessageW(row.color,CB_ADDSTRING,0,
+                                             reinterpret_cast<LPARAM>(name.c_str()));
                 SendMessageW(row.color,CB_SETITEMDATA,idx,m.colorPresets[p]);
                 if(m.colorPresets[p]==m.colorPreset)
                     SendMessageW(row.color,CB_SETCURSEL,idx,0);
             }
-            row.colorApply=add(L"BUTTON",L"Apply",BS_PUSHBUTTON|WS_TABSTOP,
-                    static_cast<int>(monitorStart+i*10+3));
+            row.colorApply=take(IDC_ADV_ROW_COLOR_APPLY,
+                                static_cast<int>(monitorStart+i*10+3));
         }
-        if (m.rotationAvailable) {
-            row.members.push_back(add(L"STATIC",L"Orientation",0,0));
-            row.rotation=add(L"COMBOBOX",L"",CBS_DROPDOWNLIST|WS_VSCROLL|WS_TABSTOP,
-                    static_cast<int>(monitorStart+i*10+4));
-            for(unsigned p=0;p<4;++p) {
-                auto text=rotationLabel(p);
-                auto idx=SendMessageW(row.rotation,CB_ADDSTRING,0,
-                                      reinterpret_cast<LPARAM>(text.c_str()));
+        if(m.rotationAvailable) {
+            row.members.push_back(take(IDC_ADV_ROW_ROTATION_LABEL,0));
+            row.rotation=take(IDC_ADV_ROW_ROTATION,
+                              static_cast<int>(monitorStart+i*10+4));
+            if(row.rotation) for(unsigned p=0;p<4;++p) {
+                const auto name=rotationLabel(p);
+                const auto idx=SendMessageW(row.rotation,CB_ADDSTRING,0,
+                                             reinterpret_cast<LPARAM>(name.c_str()));
                 SendMessageW(row.rotation,CB_SETITEMDATA,idx,p);
                 if(p==m.rotation) SendMessageW(row.rotation,CB_SETCURSEL,idx,0);
             }
-            row.rotationApply=add(L"BUTTON",L"Apply",BS_PUSHBUTTON|WS_TABSTOP,
-                    static_cast<int>(monitorStart+i*10+5));
+            row.rotationApply=take(IDC_ADV_ROW_ROTATION_APPLY,
+                                   static_cast<int>(monitorStart+i*10+5));
         }
+        if(templateRow) DestroyWindow(templateRow);
         rows_.push_back(std::move(row));
     }
     {
