@@ -34,6 +34,10 @@
 #define IDC_ADV_LONGITUDE_CAPTION 138
 #define IDC_ADV_LOCATION_CAPTION 139
 #define IDC_ADV_STATUS 140
+#define IDC_ADV_RESCAN 141
+#define IDC_ADV_PROBE 142
+#define IDC_ADV_PREVIEW 143
+#define IDC_ADV_SOLAR_TIMES 144
 
 // Flyout fixed controls retain their existing command IDs.
 #define IDC_FLY_LIGHT 100
@@ -42,6 +46,7 @@
 #define IDC_FLY_ADVANCED 103
 #define IDC_FLY_TITLE 150
 #define IDC_FLY_EMPTY 151
+#define IDC_FLY_REFRESH 152
 
 // Reusable monitor-row controls (instantiated for each active monitor).
 #define IDC_ADV_ROW_NAME 400
