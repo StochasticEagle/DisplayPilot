@@ -4,6 +4,9 @@
 #include "settings.hpp"
 #include "wmi_events.hpp"
 #include "location.hpp"
+#include "raw_brightness.hpp"
+#include <wtsapi32.h>
+#include <dbt.h>
 #include <windows.h>
 #include <shellapi.h>
 #include <algorithm>
@@ -21,6 +24,8 @@ constexpr UINT leaveTimer = 2;
 constexpr UINT scheduleTimer = 3;
 constexpr UINT refreshTimer = 4;
 constexpr UINT brightnessEventTimer = 5;
+constexpr UINT rawBrightnessTimer = 6;
+constexpr UINT activateExisting = WM_APP + 90;
 constexpr UINT commandOpen = 101;
 constexpr UINT commandAdvanced = 102;
 constexpr UINT commandExit = 103;
@@ -45,6 +50,10 @@ struct Application {
     bool lastDark = false;
     bool savedBrightness = false;
     bool manualThemeOverride = false;
+    bool sessionActive = true;
+    HMONITOR pendingBrightnessMonitor = nullptr;
+    int pendingBrightnessDelta = 0;
+    DWORD lastRawBrightnessEvent = 0;
 } app;
 void syncLocation();
 
@@ -355,6 +364,49 @@ LRESULT CALLBACK ownerProcedure(HWND hwnd, UINT msg, WPARAM w, LPARAM l) {
         return 0;
     }
     switch (msg) {
+    case activateExisting:
+        showAdvanced();
+        return 0;
+    case WM_WTSSESSION_CHANGE:
+        if (w==WTS_SESSION_LOCK || w==WTS_CONSOLE_DISCONNECT ||
+            w==WTS_REMOTE_DISCONNECT || w==WTS_SESSION_LOGOFF) {
+            app.sessionActive=false;
+            hideFlyout();
+            app.advanced.hide();
+            app.brightnessKeys.stop();
+            KillTimer(hwnd,brightnessEventTimer);
+            KillTimer(hwnd,rawBrightnessTimer);
+            app.pendingBrightnessDelta=0;
+            KillTimer(hwnd,scheduleTimer);
+        } else if (w==WTS_SESSION_UNLOCK || w==WTS_CONSOLE_CONNECT ||
+                   w==WTS_REMOTE_CONNECT || w==WTS_SESSION_LOGON ||
+                   w==WTS_SESSION_DESKTOP_READY) {
+            app.sessionActive=true;
+            refreshMonitors();
+            applySchedule(true);
+        }
+        return 0;
+    case WM_DEVICECHANGE:
+        if(w==DBT_DEVNODES_CHANGED) SetTimer(hwnd,refreshTimer,350,nullptr);
+        return 0;
+    case WM_INPUT: {
+        const int delta=rawBrightnessDelta(l);
+        if (app.sessionActive && delta) {
+            POINT cursor{};
+            if (GetCursorPos(&cursor)) {
+                HMONITOR target=MonitorFromPoint(cursor,MONITOR_DEFAULTTONULL);
+                if(target) {
+                    if(app.pendingBrightnessMonitor!=target)
+                        app.pendingBrightnessDelta=0;
+                    app.pendingBrightnessMonitor=target;
+                    app.pendingBrightnessDelta=std::clamp(app.pendingBrightnessDelta+delta,-100,100);
+                    app.lastRawBrightnessEvent=GetTickCount();
+                    SetTimer(hwnd,rawBrightnessTimer,120,nullptr);
+                }
+            }
+        }
+        return DefWindowProcW(hwnd,msg,w,l);
+    }
     case LocationUpdates::message: {
         auto* coordinates = reinterpret_cast<LocationCoordinates*>(l);
         if (coordinates) {
@@ -416,10 +468,26 @@ LRESULT CALLBACK ownerProcedure(HWND hwnd, UINT msg, WPARAM w, LPARAM l) {
                 hideFlyout();
         } else if (w == scheduleTimer) {
             applySchedule(false);
+        } else if (w == rawBrightnessTimer) {
+            KillTimer(hwnd,rawBrightnessTimer);
+            const int delta=app.pendingBrightnessDelta;
+            const HMONITOR target=app.pendingBrightnessMonitor;
+            app.pendingBrightnessDelta=0;
+            app.pendingBrightnessMonitor=nullptr;
+            if(app.sessionActive && delta) {
+                for(unsigned i=0;i<app.monitors.size();++i) {
+                    const auto& m=app.monitors[i];
+                    if(m.handle==target && m.brightnessAvailable) {
+                        const int percent=std::clamp(static_cast<int>(m.brightness)+delta,0,100);
+                        changeBrightness(i,static_cast<unsigned>(percent));
+                    }
+                }
+            }
         } else if (w == brightnessEventTimer) {
             std::vector<BrightnessKeyEvent> updates;
             if (!app.brightnessKeys.poll(updates)) {
                 KillTimer(hwnd, brightnessEventTimer);
+        KillTimer(hwnd, rawBrightnessTimer);
             } else {
                 bool changed = false;
                 for (const auto& update : updates) {
@@ -436,7 +504,7 @@ LRESULT CALLBACK ownerProcedure(HWND hwnd, UINT msg, WPARAM w, LPARAM l) {
                             }
                         }
                     }
-                    if (!sourcePresent) continue;
+                    if (!sourcePresent || GetTickCount()-app.lastRawBrightnessEvent<500) continue;
                     POINT cursor{};
                     if (!GetCursorPos(&cursor)) continue;
                     const HMONITOR target = MonitorFromPoint(cursor, MONITOR_DEFAULTTONULL);
@@ -487,6 +555,8 @@ LRESULT CALLBACK ownerProcedure(HWND hwnd, UINT msg, WPARAM w, LPARAM l) {
         KillTimer(hwnd, refreshTimer);
         KillTimer(hwnd, brightnessEventTimer);
         app.brightnessKeys.stop();
+        unregisterBrightnessKeys();
+        WTSUnRegisterSessionNotification(hwnd);
         if (app.location) {
             app.location->stop();
             app.location->Release();
@@ -511,6 +581,8 @@ LRESULT CALLBACK ownerProcedure(HWND hwnd, UINT msg, WPARAM w, LPARAM l) {
 int run(HINSTANCE instance) {
     HANDLE singleton = CreateMutexW(nullptr, TRUE, L"Local\\DisplayPilot.Native.SingleInstance");
     if (!singleton || GetLastError() == ERROR_ALREADY_EXISTS) {
+        HWND active=FindWindowW(L"DisplayPilotMessageOwner",nullptr);
+        if(active) PostMessageW(active,activateExisting,0,0);
         if (singleton) CloseHandle(singleton);
         return 0;
     }
@@ -561,6 +633,8 @@ int run(HINSTANCE instance) {
     app.advanced.locationUpdateRequested = updateLocationNow;
     app.location = new (std::nothrow) LocationUpdates(app.owner);
 
+    WTSRegisterSessionNotification(app.owner,NOTIFY_FOR_THIS_SESSION);
+    registerBrightnessKeys(app.owner);
     refreshMonitors();
     syncLocation();
     applySchedule(true);
