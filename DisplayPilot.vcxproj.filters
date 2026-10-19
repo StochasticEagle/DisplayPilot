@@ -48,7 +48,10 @@
     <ClInclude Include="src\native\advanced.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\native\resource.h">\n      <Filter>Resources</Filter>\n    </ClInclude>\n    <ClInclude Include="src\native\wmi_events.hpp">
+    <ClInclude Include="src\native\resource.h">
+      <Filter>Resources</Filter>
+    </ClInclude>
+    <ClInclude Include="src\native\wmi_events.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ResourceCompile Include="src\native\app.rc">
