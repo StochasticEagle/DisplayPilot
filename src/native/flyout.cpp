@@ -53,7 +53,7 @@ int Flyout::create(HINSTANCE instance, HWND owner) {
         return 2;
     window_ = CreateWindowExW(WS_EX_TOOLWINDOW,
         cls.lpszClassName, L"DisplayPilot", WS_POPUP | WS_BORDER | WS_VSCROLL |
-        WS_CLIPCHILDREN, 0, 0, 400, 200, owner, nullptr, instance, this);
+        WS_CLIPCHILDREN, 0, 0, 304, 200, owner, nullptr, instance, this);
     if (!window_) return 3;
     dpi_ = windowDpi(window_);
     NONCLIENTMETRICSW metrics{};
